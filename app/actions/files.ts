@@ -3,6 +3,7 @@
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { files, user } from '@/lib/db/schema'
+import { ensureCredits, CREDIT_COSTS, getCredits } from '@/lib/credits'
 import { and, desc, eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
@@ -35,6 +36,7 @@ export async function getPresignedUploadUrl(
   isPublic: boolean,
 ) {
   const userId = await getUserId()
+  await ensureCredits(userId, CREDIT_COSTS.UPLOAD)
 
   const fileId = uuidv4()
   const ext = fileName.split('.').pop()
@@ -69,6 +71,7 @@ export async function getPresignedUploadUrl(
 
 export async function deleteFile(fileId: string) {
   const userId = await getUserId()
+  await ensureCredits(userId, CREDIT_COSTS.DELETE)
 
   const [file] = await db
     .select()
@@ -85,6 +88,7 @@ export async function deleteFile(fileId: string) {
 
 export async function toggleFileVisibility(fileId: string) {
   const userId = await getUserId()
+  await ensureCredits(userId, CREDIT_COSTS.TOGGLE_VISIBILITY)
 
   const [file] = await db
     .select()
@@ -129,4 +133,9 @@ export async function getStorageLimit() {
     .where(eq(user.id, session.user.id))
 
   return u?.storageLimit ?? 15 * 1024 * 1024 * 1024
+}
+
+export async function getCreditsInfo() {
+  const userId = await getUserId()
+  return getCredits(userId)
 }

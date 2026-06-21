@@ -96,6 +96,10 @@ const statements = [
 
   `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "agreedToTerms" BOOLEAN NOT NULL DEFAULT FALSE`,
 
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "creditsRemaining" REAL NOT NULL DEFAULT 100`,
+
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "creditsPeriodStart" TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
+
   `CREATE TABLE IF NOT EXISTS "storage_requests" (
     "id"         TEXT PRIMARY KEY,
     "userId"     TEXT NOT NULL,

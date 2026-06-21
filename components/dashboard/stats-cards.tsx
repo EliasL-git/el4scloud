@@ -1,4 +1,4 @@
-import { Files, Globe, HardDrive, Lock } from 'lucide-react'
+import { Files, Globe, HardDrive, Lock, Coins } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 
 interface Stats {
@@ -51,7 +51,7 @@ const statDefs = [
   },
 ]
 
-export function StatsCards({ stats, storageLimit }: { stats: Stats; storageLimit: number }) {
+export function StatsCards({ stats, storageLimit, credits }: { stats: Stats; storageLimit: number; credits: { remaining: number } }) {
   const formatUsage = (totalSize: number) => {
     const pct = Math.round((totalSize / storageLimit) * 100)
     return `${formatBytes(totalSize)} / ${formatBytes(storageLimit)} (${pct}%)`
@@ -80,6 +80,20 @@ export function StatsCards({ stats, storageLimit }: { stats: Stats; storageLimit
           </CardContent>
         </Card>
       ))}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="text-xs text-muted-foreground">Credits Remaining</p>
+              <p className="text-2xl font-semibold tracking-tight mt-1">{credits.remaining}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">resets monthly</p>
+            </div>
+            <div className="size-8 rounded-lg flex items-center justify-center bg-yellow-100 dark:bg-yellow-950">
+              <Coins className="size-4 text-yellow-600 dark:text-yellow-400" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

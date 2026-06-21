@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, bigint, integer } from 'drizzle-orm/pg-core'
+import { pgTable, text, timestamp, boolean, bigint, integer, real } from 'drizzle-orm/pg-core'
 
 // --- Better Auth required tables -------------------------------------------
 
@@ -12,6 +12,8 @@ export const user = pgTable('user', {
   banned: boolean('banned').notNull().default(false),
   agreedToTerms: boolean('agreedToTerms').notNull().default(false),
   storageLimit: bigint('storageLimit', { mode: 'number' }).notNull().default(15 * 1024 * 1024 * 1024),
+  creditsRemaining: real('creditsRemaining').notNull().default(100),
+  creditsPeriodStart: timestamp('creditsPeriodStart').notNull().defaultNow(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
