@@ -1,0 +1,112 @@
+'use server'
+
+import { auth } from '@/lib/auth'
+import { headers } from 'next/headers'
+import { db } from '@/lib/db'
+import { user, files, apiKeys, storageRequests, tickets, ticketReplies } from '@/lib/db/schema'
+import { eq, desc } from 'drizzle-orm'
+
+export async function acceptTerms() {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) throw new Error('Unauthorized')
+
+  await db
+    .update(user)
+    .set({ agreedToTerms: true })
+    .where(eq(user.id, session.user.id))
+
+  return { ok: true }
+}
+
+export async function exportMyData() {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) throw new Error('Unauthorized')
+
+  const userId = session.user.id
+
+  const [u] = await db
+    .select({
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      storageLimit: user.storageLimit,
+      createdAt: user.createdAt,
+    })
+    .from(user)
+    .where(eq(user.id, userId))
+
+  const userFiles = await db
+    .select({
+      name: files.name,
+      originalName: files.originalName,
+      size: files.size,
+      mimeType: files.mimeType,
+      isPublic: files.isPublic,
+      createdAt: files.createdAt,
+    })
+    .from(files)
+    .where(eq(files.userId, userId))
+    .orderBy(desc(files.createdAt))
+
+  const userKeys = await db
+    .select({
+      name: apiKeys.name,
+      keyPrefix: apiKeys.keyPrefix,
+      lastUsedAt: apiKeys.lastUsedAt,
+      createdAt: apiKeys.createdAt,
+    })
+    .from(apiKeys)
+    .where(eq(apiKeys.userId, userId))
+    .orderBy(desc(apiKeys.createdAt))
+
+  const userRequests = await db
+    .select({
+      amount: storageRequests.amount,
+      reason: storageRequests.reason,
+      status: storageRequests.status,
+      adminNote: storageRequests.adminNote,
+      approvedAmount: storageRequests.approvedAmount,
+      createdAt: storageRequests.createdAt,
+    })
+    .from(storageRequests)
+    .where(eq(storageRequests.userId, userId))
+    .orderBy(desc(storageRequests.createdAt))
+
+  const userTickets = await db
+    .select({
+      subject: tickets.subject,
+      message: tickets.message,
+      status: tickets.status,
+      createdAt: tickets.createdAt,
+    })
+    .from(tickets)
+    .where(eq(tickets.userId, userId))
+    .orderBy(desc(tickets.createdAt))
+
+  const userTicketIds = (await db
+    .select({ id: tickets.id })
+    .from(tickets)
+    .where(eq(tickets.userId, userId))).map((t) => t.id)
+
+  let userReplies: any[] = []
+  if (userTicketIds.length > 0) {
+    userReplies = await db
+      .select({
+        message: ticketReplies.message,
+        createdAt: ticketReplies.createdAt,
+      })
+      .from(ticketReplies)
+      .where(eq(ticketReplies.userId, userId))
+      .orderBy(desc(ticketReplies.createdAt))
+  }
+
+  return {
+    exportedAt: new Date().toISOString(),
+    profile: u,
+    files: userFiles,
+    apiKeys: userKeys,
+    storageRequests: userRequests,
+    tickets: userTickets,
+    ticketReplies: userReplies,
+  }
+}
