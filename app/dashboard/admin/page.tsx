@@ -8,6 +8,7 @@ import {
   rejectRequest,
   lockUser,
   unlockUser,
+  suspendUser,
   resetStorageLimit,
   setStorageLimit,
   revokePublicFiles,
@@ -16,16 +17,33 @@ import {
   adminReplyToTicket,
   adminCloseTicket,
   adminReopenTicket,
+  getAppeals,
+  approveAppeal,
+  rejectAppeal,
+  searchFiles,
+  flagHash,
+  getDeletionRequests,
+  approveDeletionRequest,
+  rejectDeletionRequest,
 } from '@/app/actions/admin'
+import {
+  getCreditRequests,
+  approveCreditRequest,
+  rejectCreditRequest,
+  issueCredits,
+} from '@/app/actions/credits'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle } from 'lucide-react'
+import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Coins, Search, Ban } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 
 type UserRecord = Awaited<ReturnType<typeof getUsers>>[number]
 type RequestRecord = Awaited<ReturnType<typeof getRequests>>[number]
+type CreditRequestRecord = Awaited<ReturnType<typeof getCreditRequests>>[number]
+type AppealRecord = Awaited<ReturnType<typeof getAppeals>>[number]
+type DeletionRequestRecord = Awaited<ReturnType<typeof getDeletionRequests>>[number]
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -45,13 +63,25 @@ function formatBytes(bytes: number) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
 }
 
+const SUSPENSION_REASONS = [
+  'Flagged file upload',
+  'Terms of service violation',
+  'Abusive behavior',
+  'Copyright infringement',
+  'Spam or phishing',
+  'Unauthorized access',
+  'Other',
+]
+
+type FileResult = Awaited<ReturnType<typeof searchFiles>>
+
 const statusBadge: Record<string, { label: string; variant: 'outline' | 'secondary' | 'default' | 'destructive' }> = {
   pending: { label: 'Pending', variant: 'secondary' },
   approved: { label: 'Approved', variant: 'default' },
   rejected: { label: 'Rejected', variant: 'destructive' },
 }
 
-type Tab = 'requests' | 'users' | 'tickets'
+type Tab = 'requests' | 'credits' | 'users' | 'tickets' | 'appeals' | 'files' | 'deletions'
 
 type AdminTicket = Awaited<ReturnType<typeof adminGetTickets>>[number]
 type AdminReply = Awaited<ReturnType<typeof adminGetTicketReplies>>[number]
@@ -60,29 +90,93 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('requests')
   const [users, setUsers] = useState<UserRecord[]>([])
   const [requests, setRequests] = useState<RequestRecord[]>([])
+  const [creditRequests, setCreditRequests] = useState<CreditRequestRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [approvedAmounts, setApprovedAmounts] = useState<Record<string, string>>({})
+  const [creditApprovedAmounts, setCreditApprovedAmounts] = useState<Record<string, string>>({})
+  const [creditNotes, setCreditNotes] = useState<Record<string, string>>({})
+  const [issueCreditAmounts, setIssueCreditAmounts] = useState<Record<string, string>>({})
   const [customStorage, setCustomStorage] = useState<Record<string, string>>({})
+  const [deletionRequestsList, setDeletionRequestsList] = useState<DeletionRequestRecord[]>([])
+  const [hashInput, setHashInput] = useState('')
+  const [hashSubmitting, setHashSubmitting] = useState(false)
   const [processing, setProcessing] = useState<Record<string, boolean>>({})
   const [adminTickets, setAdminTickets] = useState<AdminTicket[]>([])
+  const [appealsList, setAppealsList] = useState<AppealRecord[]>([])
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null)
   const [ticketReplies, setTicketReplies] = useState<AdminReply[]>([])
   const [adminReplyText, setAdminReplyText] = useState('')
   const [adminReplySending, setAdminReplySending] = useState(false)
+  const [appealNotes, setAppealNotes] = useState<Record<string, string>>({})
+  const [deletionNotes, setDeletionNotes] = useState<Record<string, string>>({})
+  const [fileQuery, setFileQuery] = useState('')
+  const [fileResults, setFileResults] = useState<FileResult>([])
+  const [fileSearching, setFileSearching] = useState(false)
+  const [suspendModal, setSuspendModal] = useState<{ userId: string; userName: string } | null>(null)
+  const [suspendReason, setSuspendReason] = useState(SUSPENSION_REASONS[0])
+  const [suspendCustomReason, setSuspendCustomReason] = useState('')
+  const [suspendAppealable, setSuspendAppealable] = useState(true)
+  const [suspendType, setSuspendType] = useState<'suspended' | 'terminated'>('suspended')
+  const [suspendSending, setSuspendSending] = useState(false)
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [u, r, t] = await Promise.all([getUsers(), getRequests(), adminGetTickets()])
+    const [u, r, t, cr, ap, dr] = await Promise.all([getUsers(), getRequests(), adminGetTickets(), getCreditRequests(), getAppeals(), getDeletionRequests()])
     setUsers(u)
     setRequests(r)
     setAdminTickets(t)
+    setCreditRequests(cr)
+    setAppealsList(ap)
+    setDeletionRequestsList(dr)
     setLoading(false)
   }, [])
 
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  const handleCreditApprove = async (id: string, defaultAmount: number) => {
+    setProcessing((p) => ({ ...p, [id]: true }))
+    try {
+      await approveCreditRequest(id, parseFloat(creditApprovedAmounts[id]) || defaultAmount, creditNotes[id] || undefined)
+      toast.success('Credit request approved')
+      await refresh()
+    } catch {
+      toast.error('Failed to approve credit request')
+    } finally {
+      setProcessing((p) => ({ ...p, [id]: false }))
+    }
+  }
+
+  const handleCreditReject = async (id: string) => {
+    setProcessing((p) => ({ ...p, [id]: true }))
+    try {
+      await rejectCreditRequest(id, creditNotes[id] || undefined)
+      toast.success('Credit request rejected')
+      await refresh()
+    } catch {
+      toast.error('Failed to reject credit request')
+    } finally {
+      setProcessing((p) => ({ ...p, [id]: false }))
+    }
+  }
+
+  const handleIssueCredits = async (userId: string) => {
+    const amount = parseFloat(issueCreditAmounts[userId])
+    if (!amount || amount <= 0) return
+    setProcessing((p) => ({ ...p, [`issue-${userId}`]: true }))
+    try {
+      await issueCredits(userId, amount)
+      toast.success(`Issued ${amount} credits`)
+      setIssueCreditAmounts((s) => ({ ...s, [userId]: '' }))
+      await refresh()
+    } catch {
+      toast.error('Failed to issue credits')
+    } finally {
+      setProcessing((p) => ({ ...p, [`issue-${userId}`]: false }))
+    }
+  }
 
   const handleApprove = async (id: string, defaultAmount: string) => {
     setProcessing((p) => ({ ...p, [id]: true }))
@@ -133,6 +227,76 @@ export default function AdminPage() {
     }
   }
 
+  const handleAppealApprove = async (id: string) => {
+    setProcessing((p) => ({ ...p, [id]: true }))
+    try {
+      await approveAppeal(id, appealNotes[id] || undefined)
+      toast.success('Appeal approved')
+      await refresh()
+    } catch {
+      toast.error('Failed to approve appeal')
+    } finally {
+      setProcessing((p) => ({ ...p, [id]: false }))
+    }
+  }
+
+  const handleAppealReject = async (id: string) => {
+    setProcessing((p) => ({ ...p, [id]: true }))
+    try {
+      await rejectAppeal(id, appealNotes[id] || undefined)
+      toast.success('Appeal rejected')
+      await refresh()
+    } catch {
+      toast.error('Failed to reject appeal')
+    } finally {
+      setProcessing((p) => ({ ...p, [id]: false }))
+    }
+  }
+
+  const handleFlagHash = async () => {
+    if (!hashInput.trim()) return
+    setHashSubmitting(true)
+    try {
+      await flagHash(hashInput.trim())
+      toast.success('Hash flagged')
+      setHashInput('')
+    } catch {
+      toast.error('Failed to flag hash (may already exist)')
+    } finally {
+      setHashSubmitting(false)
+    }
+  }
+
+  const handleFileSearch = async () => {
+    if (!fileQuery.trim()) { setFileResults([]); return }
+    setFileSearching(true)
+    try {
+      const res = await searchFiles(fileQuery.trim())
+      setFileResults(res)
+    } catch {
+      toast.error('Search failed')
+    } finally {
+      setFileSearching(false)
+    }
+  }
+
+  const handleSuspend = async () => {
+    if (!suspendModal) return
+    const reason = suspendReason === 'Other' ? suspendCustomReason.trim() : suspendReason
+    if (!reason) { toast.error('Enter a reason'); return }
+    setSuspendSending(true)
+    try {
+      await suspendUser(suspendModal.userId, reason, suspendAppealable, suspendType)
+      toast.success(suspendType === 'terminated' ? 'User terminated' : 'User suspended')
+      setSuspendModal(null)
+      await refresh()
+    } catch {
+      toast.error('Failed to suspend user')
+    } finally {
+      setSuspendSending(false)
+    }
+  }
+
   const handleAction = async (userId: string, action: string, fn: () => Promise<any>, successMsg: string) => {
     setProcessing((p) => ({ ...p, [`${action}-${userId}`]: true }))
     try {
@@ -157,6 +321,7 @@ export default function AdminPage() {
   }
 
   const pendingRequests = requests.filter((r) => r.request.status === 'pending')
+  const pendingCreditRequests = creditRequests.filter((r) => r.request.status === 'pending')
 
   return (
     <div className="flex flex-col gap-6 max-w-5xl">
@@ -177,7 +342,17 @@ export default function AdminPage() {
               : 'border-transparent text-muted-foreground hover:text-foreground'
           }`}
         >
-          Requests {pendingRequests.length > 0 && `(${pendingRequests.length})`}
+          Storage Requests {pendingRequests.length > 0 && `(${pendingRequests.length})`}
+        </button>
+        <button
+          onClick={() => setTab('credits')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
+            tab === 'credits'
+              ? 'border-foreground text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Credit Requests {pendingCreditRequests.length > 0 && `(${pendingCreditRequests.length})`}
         </button>
         <button
           onClick={() => setTab('users')}
@@ -198,6 +373,36 @@ export default function AdminPage() {
           }`}
         >
           Tickets ({adminTickets.length})
+        </button>
+        <button
+          onClick={() => setTab('appeals')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
+            tab === 'appeals'
+              ? 'border-foreground text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Appeals {appealsList.filter((a) => a.appeal.status === 'pending').length > 0 && `(${appealsList.filter((a) => a.appeal.status === 'pending').length})`}
+        </button>
+        <button
+          onClick={() => setTab('files')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
+            tab === 'files'
+              ? 'border-foreground text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Files
+        </button>
+        <button
+          onClick={() => setTab('deletions')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
+            tab === 'deletions'
+              ? 'border-foreground text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Deletion Requests {deletionRequestsList.filter((d) => d.request.status === 'pending').length > 0 && `(${deletionRequestsList.filter((d) => d.request.status === 'pending').length})`}
         </button>
       </div>
 
@@ -324,6 +529,354 @@ export default function AdminPage() {
                   </Card>
                 ))}
             </div>
+          )}
+        </section>
+      )}
+
+      {/* Credit Requests tab */}
+      {tab === 'credits' && (
+        <section className="flex flex-col gap-4">
+          {pendingCreditRequests.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                No pending credit requests.
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {pendingCreditRequests.map(({ request, userName, userEmail }) => (
+                <Card key={request.id}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <CardTitle className="text-sm font-medium">{userName}</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">{userEmail}</p>
+                      </div>
+                      <Badge variant="secondary">Pending</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-xs text-muted-foreground">Requested credits</span>
+                        <p className="font-medium">{request.amount}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted-foreground">Submitted</span>
+                        <p className="font-medium">{formatDate(request.createdAt)}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted-foreground">Reason</span>
+                      <p className="text-sm mt-0.5 whitespace-pre-wrap">{request.reason}</p>
+                    </div>
+                    <div className="flex flex-col gap-2 pt-1">
+                      <div className="flex gap-3">
+                        <div className="flex-1 flex flex-col gap-1.5">
+                          <label className="text-xs text-muted-foreground">Approve amount</label>
+                          <input
+                            type="number"
+                            step="any"
+                            min="1"
+                            placeholder={String(request.amount)}
+                            value={creditApprovedAmounts[request.id] ?? ''}
+                            onChange={(e) =>
+                              setCreditApprovedAmounts((a) => ({ ...a, [request.id]: e.target.value }))
+                            }
+                            className="h-8 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                        <div className="flex-1 flex flex-col gap-1.5">
+                          <label className="text-xs text-muted-foreground">Note to user</label>
+                          <input
+                            type="text"
+                            placeholder="Optional note"
+                            value={creditNotes[request.id] ?? ''}
+                            onChange={(e) =>
+                              setCreditNotes((n) => ({ ...n, [request.id]: e.target.value }))
+                            }
+                            className="h-8 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className="gap-1.5"
+                          style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+                          onClick={() => handleCreditApprove(request.id, request.amount)}
+                          disabled={processing[request.id]}
+                        >
+                          <Check className="size-3.5" />
+                          {processing[request.id] ? 'Approving...' : 'Approve'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10"
+                          onClick={() => handleCreditReject(request.id)}
+                          disabled={processing[request.id]}
+                        >
+                          <X className="size-3.5" />
+                          {processing[request.id] ? 'Rejecting...' : 'Reject'}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* History */}
+          {creditRequests.filter((r) => r.request.status !== 'pending').length > 0 && (
+            <div className="flex flex-col gap-3 pt-4">
+              <h3 className="text-sm font-medium text-muted-foreground">History</h3>
+              {creditRequests
+                .filter((r) => r.request.status !== 'pending')
+                .map(({ request, userName, userEmail }) => (
+                  <Card key={request.id}>
+                    <CardContent className="p-4 flex items-center justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium truncate">{userName}</p>
+                          <span className="text-xs text-muted-foreground">({userEmail})</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Requested {request.amount} credits &middot; {formatDate(request.createdAt)}
+                        </p>
+                        {request.adminNote && (
+                          <p className="text-xs text-muted-foreground mt-1 italic">
+                            Note: {request.adminNote}
+                          </p>
+                        )}
+                      </div>
+                      <Badge variant={statusBadge[request.status]?.variant as any}>
+                        {statusBadge[request.status]?.label}
+                      </Badge>
+                    </CardContent>
+                  </Card>
+                ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Appeals tab */}
+      {tab === 'appeals' && (
+        <section className="flex flex-col gap-3">
+          {appealsList.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                No appeals yet.
+              </CardContent>
+            </Card>
+          ) : (
+            appealsList.map(({ appeal, userName, userEmail }) => (
+              <Card key={appeal.id}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{userName}</p>
+                        <span className="text-xs text-muted-foreground">({userEmail})</span>
+                        <Badge variant={statusBadge[appeal.status]?.variant as any}>
+                          {statusBadge[appeal.status]?.label}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{formatDate(appeal.createdAt)}</p>
+                      <p className="text-sm mt-2 whitespace-pre-wrap">{appeal.reason}</p>
+                      {appeal.adminNote && (
+                        <p className="text-xs text-muted-foreground mt-1 italic">
+                          Note: {appeal.adminNote}
+                        </p>
+                      )}
+                    </div>
+                    {appeal.status === 'pending' && (
+                      <div className="flex flex-col gap-2 shrink-0">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Note"
+                            value={appealNotes[appeal.id] ?? ''}
+                            onChange={(e) =>
+                              setAppealNotes((n) => ({ ...n, [appeal.id]: e.target.value }))
+                            }
+                            className="h-8 w-28 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            className="gap-1.5"
+                            style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+                            onClick={() => handleAppealApprove(appeal.id)}
+                            disabled={processing[appeal.id]}
+                          >
+                            <Check className="size-3.5" />
+                            {processing[appeal.id] ? '...' : 'Approve'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10"
+                            onClick={() => handleAppealReject(appeal.id)}
+                            disabled={processing[appeal.id]}
+                          >
+                            <X className="size-3.5" />
+                            {processing[appeal.id] ? '...' : 'Reject'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </section>
+      )}
+
+      {/* Deletion Requests tab */}
+      {tab === 'deletions' && (
+        <section className="flex flex-col gap-3">
+          {deletionRequestsList.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                No deletion requests.
+              </CardContent>
+            </Card>
+          ) : (
+            deletionRequestsList.map(({ request, userName, userEmail }) => (
+              <Card key={request.id}>
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{userName}</p>
+                        <span className="text-xs text-muted-foreground">({userEmail})</span>
+                        <Badge variant={statusBadge[request.status]?.variant as any}>
+                          {statusBadge[request.status]?.label}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">{formatDate(request.createdAt)}</p>
+                      {request.reason && (
+                        <p className="text-sm mt-2 whitespace-pre-wrap">{request.reason}</p>
+                      )}
+                      {request.adminNote && (
+                        <p className="text-xs text-muted-foreground mt-1 italic">Note: {request.adminNote}</p>
+                      )}
+                    </div>
+                    {request.status === 'pending' && (
+                      <div className="flex flex-col gap-2 shrink-0">
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="Note"
+                            value={deletionNotes[request.id] ?? ''}
+                            onChange={(e) =>
+                              setDeletionNotes((n) => ({ ...n, [request.id]: e.target.value }))
+                            }
+                            className="h-8 w-28 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            className="gap-1.5"
+                            style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+                            onClick={async () => { await approveDeletionRequest(request.id, deletionNotes[request.id] || undefined); toast.success('Deletion approved'); await refresh() }}
+                            disabled={processing[request.id]}
+                          >
+                            {processing[request.id] ? '...' : 'Approve & delete'}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10"
+                            onClick={async () => { await rejectDeletionRequest(request.id, deletionNotes[request.id] || undefined); toast.success('Deletion rejected'); await refresh() }}
+                            disabled={processing[request.id]}
+                          >
+                            {processing[request.id] ? '...' : 'Reject'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </section>
+      )}
+
+      {/* Files tab */}
+      {tab === 'files' && (
+        <section className="flex flex-col gap-3">
+          {/* Flag hash */}
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <input
+                type="text"
+                placeholder="Paste a hash to flag..."
+                value={hashInput}
+                onChange={(e) => setHashInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleFlagHash()}
+                className="flex-1 h-8 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
+              />
+              <Button size="sm" className="gap-1.5 shrink-0" onClick={handleFlagHash} disabled={hashSubmitting || !hashInput.trim()}>
+                <Ban className="size-3.5" />
+                {hashSubmitting ? 'Flagging...' : 'Flag hash'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Search files by name..."
+              value={fileQuery}
+              onChange={(e) => setFileQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleFileSearch()}
+              className="flex-1 h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <Button size="sm" className="gap-1.5" onClick={handleFileSearch} disabled={fileSearching}>
+              <Search className="size-3.5" />
+              {fileSearching ? 'Searching...' : 'Search'}
+            </Button>
+          </div>
+          {fileResults.length === 0 && fileQuery && !fileSearching && (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                No files found matching "{fileQuery}".
+              </CardContent>
+            </Card>
+          )}
+          {fileResults.map((f) => (
+            <Card key={f.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium truncate">{f.originalName}</p>
+                      {f.isPublic && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Public</Badge>}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {f.userName} ({f.userEmail}) &middot; {formatBytes(f.size)} &middot; {formatDate(f.createdAt)}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5 font-mono">{f.name}</p>
+                  </div>
+                  <Badge variant="outline">{f.mimeType}</Badge>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+          {!fileQuery && (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                Enter a file name to search.
+              </CardContent>
+            </Card>
           )}
         </section>
       )}
@@ -457,14 +1010,28 @@ export default function AdminPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium truncate">{u.name}</p>
-                      {u.banned && <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Banned</Badge>}
+                      {u.banned && (
+                        <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                          {u.suspensionType === 'terminated' ? 'Terminated' : 'Suspended'}
+                        </Badge>
+                      )}
+                      {u.banned && !u.appealable && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Not appealable</Badge>}
                       {u.role === 'admin' && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Admin</Badge>}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">{u.email}</p>
                     <div className="flex gap-4 mt-1.5 text-xs text-muted-foreground">
                       <span>Limit: {formatBytes(u.storageLimit)}</span>
+                      <span>Credits: {u.creditsRemaining}</span>
                       <span>Joined: {formatDate(u.createdAt)}</span>
                     </div>
+                    {u.suspensionReason && (
+                      <p className="text-xs text-destructive mt-1 italic truncate">
+                        {u.suspensionReason}
+                        {u.suspensionType === 'terminated' && u.terminatedAt && (
+                          <> &middot; Terminated {formatDate(u.terminatedAt)}</>
+                        )}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-col gap-1.5 shrink-0 items-end">
                     <div className="flex gap-1.5">
@@ -484,11 +1051,10 @@ export default function AdminPage() {
                           size="sm"
                           variant="outline"
                           className="gap-1 h-7 text-xs text-destructive border-destructive/40 hover:bg-destructive/10"
-                          onClick={() => handleAction(u.id, 'lock', () => lockUser(u.id), 'User locked')}
-                          disabled={processing[`lock-${u.id}`]}
+                          onClick={() => setSuspendModal({ userId: u.id, userName: u.name })}
                         >
-                          <Lock className="size-3" />
-                          {processing[`lock-${u.id}`] ? '...' : 'Lock'}
+                          <Ban className="size-3" />
+                          Suspend
                         </Button>
                       ) : null}
                       <Button
@@ -541,6 +1107,30 @@ export default function AdminPage() {
                         {processing[`reset-${u.id}`] ? '...' : 'Reset'}
                       </Button>
                     </div>
+                    <div className="flex gap-1.5 items-center mt-1">
+                      <Coins className="size-3 text-yellow-600 dark:text-yellow-400" />
+                      <input
+                        type="number"
+                        step="any"
+                        min="1"
+                        placeholder="Credits"
+                        value={issueCreditAmounts[u.id] ?? ''}
+                        onChange={(e) =>
+                          setIssueCreditAmounts((s) => ({ ...s, [u.id]: e.target.value }))
+                        }
+                        className="h-7 w-20 rounded border border-input bg-transparent px-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1 h-7 text-xs"
+                        onClick={() => handleIssueCredits(u.id)}
+                        disabled={processing[`issue-${u.id}`] || !issueCreditAmounts[u.id]?.trim()}
+                      >
+                        <Coins className="size-3" />
+                        {processing[`issue-${u.id}`] ? '...' : 'Issue'}
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -555,6 +1145,91 @@ export default function AdminPage() {
             </Card>
           )}
         </section>
+      )}
+
+      {/* Suspend modal */}
+      {suspendModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setSuspendModal(null)}>
+          <div className="bg-background rounded-xl shadow-lg max-w-md w-full mx-4 p-6 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold">Suspend {suspendModal.userName}</h3>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-muted-foreground">Reason</label>
+                <select
+                  value={suspendReason}
+                  onChange={(e) => setSuspendReason(e.target.value)}
+                  className="h-8 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {SUSPENSION_REASONS.map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </div>
+              {suspendReason === 'Other' && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs text-muted-foreground">Custom reason</label>
+                  <input
+                    type="text"
+                    value={suspendCustomReason}
+                    onChange={(e) => setSuspendCustomReason(e.target.value)}
+                    placeholder="Enter custom reason..."
+                    className="h-8 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-muted-foreground">Type</label>
+                <div className="flex gap-3">
+                  <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      name="suspendType"
+                      value="suspended"
+                      checked={suspendType === 'suspended'}
+                      onChange={() => setSuspendType('suspended')}
+                      className="accent-[var(--brand)]"
+                    />
+                    <span className={suspendType === 'suspended' ? 'text-foreground font-medium' : 'text-muted-foreground'}>Suspended</span>
+                    <span className="text-xs text-muted-foreground">(data stored)</span>
+                  </label>
+                  <label className="flex items-center gap-1.5 text-sm cursor-pointer">
+                    <input
+                      type="radio"
+                      name="suspendType"
+                      value="terminated"
+                      checked={suspendType === 'terminated'}
+                      onChange={() => setSuspendType('terminated')}
+                      className="accent-destructive"
+                    />
+                    <span className={suspendType === 'terminated' ? 'text-destructive font-medium' : 'text-muted-foreground'}>Terminated</span>
+                    <span className="text-xs text-muted-foreground">(data deleted in 30d)</span>
+                  </label>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="appealable"
+                  checked={suspendAppealable}
+                  onChange={(e) => setSuspendAppealable(e.target.checked)}
+                  className="size-4 rounded border-input accent-[var(--brand)]"
+                />
+                <label htmlFor="appealable" className="text-sm text-muted-foreground">
+                  Appealable
+                </label>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="outline" onClick={() => setSuspendModal(null)} disabled={suspendSending}>
+                Cancel
+              </Button>
+              <Button size="sm" className="gap-1.5" variant="outline" style={suspendType === 'terminated' ? { color: 'var(--destructive)', borderColor: 'color-mix(in srgb, var(--destructive) 40%, transparent)' } : { color: 'var(--destructive)', borderColor: 'color-mix(in srgb, var(--destructive) 40%, transparent)' }} onClick={handleSuspend} disabled={suspendSending}>
+                <Ban className="size-3.5" />
+                {suspendSending ? (suspendType === 'terminated' ? 'Terminating...' : 'Suspending...') : (suspendType === 'terminated' ? 'Terminate' : 'Suspend')}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       <Toaster />

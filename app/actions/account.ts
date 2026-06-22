@@ -3,8 +3,29 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, files, apiKeys, storageRequests, tickets, ticketReplies } from '@/lib/db/schema'
+import { user, files, apiKeys, storageRequests, tickets, ticketReplies, deletionRequests } from '@/lib/db/schema'
 import { eq, desc } from 'drizzle-orm'
+import { v4 as uuidv4 } from 'uuid'
+
+export async function requestAccountDeletion(reason?: string) {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) throw new Error('Unauthorized')
+
+  const [existing] = await db
+    .select({ id: deletionRequests.id })
+    .from(deletionRequests)
+    .where(eq(deletionRequests.userId, session.user.id))
+
+  if (existing) throw new Error('Deletion request already submitted')
+
+  await db.insert(deletionRequests).values({
+    id: uuidv4(),
+    userId: session.user.id,
+    reason: reason ?? null,
+  })
+
+  return { ok: true }
+}
 
 export async function acceptTerms() {
   const session = await auth.api.getSession({ headers: await headers() })

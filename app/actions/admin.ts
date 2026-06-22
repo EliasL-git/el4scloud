@@ -3,8 +3,9 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, storageRequests, files, tickets, ticketReplies } from '@/lib/db/schema'
-import { eq, desc } from 'drizzle-orm'
+import { user, storageRequests, files, tickets, ticketReplies, appeals, flaggedHashes, deletionRequests, apiKeys, creditRequests } from '@/lib/db/schema'
+import { eq, desc, ilike } from 'drizzle-orm'
+import { v4 as uuidv4 } from 'uuid'
 import { Resend } from 'resend'
 import { StorageApprovedEmail } from '@/components/emails/storage-approved'
 import { StorageRejectedEmail } from '@/components/emails/storage-rejected'
@@ -233,5 +234,187 @@ export async function adminReopenTicket(ticketId: string) {
     .update(tickets)
     .set({ status: 'open', updatedAt: new Date() })
     .where(eq(tickets.id, ticketId))
+  return { ok: true }
+}
+
+export async function suspendUser(userId: string, reason: string, appealable: boolean, type: 'suspended' | 'terminated' = 'suspended') {
+  await assertAdmin()
+  const now = new Date()
+  await db
+    .update(user)
+    .set({
+      banned: true,
+      suspensionReason: reason,
+      appealable,
+      suspensionType: type,
+      terminatedAt: type === 'terminated' ? now : null,
+    })
+    .where(eq(user.id, userId))
+  return { ok: true }
+}
+
+export async function searchFiles(query: string) {
+  await assertAdmin()
+  if (!query?.trim()) return []
+  return db
+    .select({
+      id: files.id,
+      name: files.name,
+      originalName: files.originalName,
+      size: files.size,
+      mimeType: files.mimeType,
+      isPublic: files.isPublic,
+      createdAt: files.createdAt,
+      userId: files.userId,
+      userName: user.name,
+      userEmail: user.email,
+    })
+    .from(files)
+    .innerJoin(user, eq(files.userId, user.id))
+    .where(ilike(files.name, `%${query.trim()}%`))
+    .orderBy(desc(files.createdAt))
+    .limit(50)
+}
+
+export async function flagHash(hash: string) {
+  await assertAdmin()
+  if (!hash?.trim()) throw new Error('Hash is required')
+  await db.insert(flaggedHashes).values({
+    id: uuidv4(),
+    hash: hash.trim().toLowerCase(),
+    fileId: 'manual',
+    flaggedBy: 'admin',
+  }).catch(() => { throw new Error('Hash already exists') })
+  return { ok: true }
+}
+
+export async function getDeletionRequests() {
+  await assertAdmin()
+  return db
+    .select({
+      request: deletionRequests,
+      userName: user.name,
+      userEmail: user.email,
+    })
+    .from(deletionRequests)
+    .innerJoin(user, eq(deletionRequests.userId, user.id))
+    .orderBy(desc(deletionRequests.createdAt))
+}
+
+export async function approveDeletionRequest(requestId: string, adminNote?: string) {
+  await assertAdmin()
+
+  const [req] = await db
+    .select()
+    .from(deletionRequests)
+    .where(eq(deletionRequests.id, requestId))
+  if (!req) throw new Error('Request not found')
+
+  const uid = req.userId
+
+  const userFiles = await db
+    .select({ key: files.key })
+    .from(files)
+    .where(eq(files.userId, uid))
+
+  const s3 = process.env.S3_ENDPOINT
+    ? new (await import('@aws-sdk/client-s3')).S3Client({
+        region: process.env.S3_REGION ?? 'default',
+        endpoint: process.env.S3_ENDPOINT,
+        credentials: {
+          accessKeyId: process.env.S3_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
+        },
+        forcePathStyle: true,
+      })
+    : null
+
+  for (const f of userFiles) {
+    try {
+      if (s3) {
+        await s3.send(new (await import('@aws-sdk/client-s3')).DeleteObjectCommand({
+          Bucket: process.env.S3_BUCKET!,
+          Key: f.key,
+        }))
+      }
+    } catch { /* best-effort */ }
+  }
+
+  await db.delete(files).where(eq(files.userId, uid))
+  await db.delete(appeals).where(eq(appeals.userId, uid))
+  await db.delete(apiKeys).where(eq(apiKeys.userId, uid))
+  await db.delete(creditRequests).where(eq(creditRequests.userId, uid))
+  await db.delete(storageRequests).where(eq(storageRequests.userId, uid))
+  await db.delete(tickets).where(eq(tickets.userId, uid))
+  await db.delete(user).where(eq(user.id, uid))
+
+  await db
+    .update(deletionRequests)
+    .set({ status: 'approved', adminNote: adminNote ?? null, updatedAt: new Date() })
+    .where(eq(deletionRequests.id, requestId))
+
+  return { ok: true }
+}
+
+export async function rejectDeletionRequest(requestId: string, adminNote?: string) {
+  await assertAdmin()
+  await db
+    .update(deletionRequests)
+    .set({ status: 'rejected', adminNote: adminNote ?? null, updatedAt: new Date() })
+    .where(eq(deletionRequests.id, requestId))
+  return { ok: true }
+}
+
+export async function getAppeals() {
+  await assertAdmin()
+  return db
+    .select({
+      appeal: appeals,
+      userName: user.name,
+      userEmail: user.email,
+    })
+    .from(appeals)
+    .innerJoin(user, eq(appeals.userId, user.id))
+    .orderBy(desc(appeals.createdAt))
+}
+
+export async function approveAppeal(appealId: string, adminNote?: string) {
+  await assertAdmin()
+
+  const [a] = await db
+    .select()
+    .from(appeals)
+    .where(eq(appeals.id, appealId))
+
+  if (!a) throw new Error('Appeal not found')
+
+  await db
+    .update(appeals)
+    .set({ status: 'approved', adminNote: adminNote ?? null, updatedAt: new Date() })
+    .where(eq(appeals.id, appealId))
+
+  await db
+    .update(user)
+    .set({ banned: false, suspensionReason: null, suspensionType: null, terminatedAt: null, appealable: true })
+    .where(eq(user.id, a.userId))
+
+  return { ok: true }
+}
+
+export async function rejectAppeal(appealId: string, adminNote?: string) {
+  await assertAdmin()
+
+  const [a] = await db
+    .select()
+    .from(appeals)
+    .where(eq(appeals.id, appealId))
+
+  if (!a) throw new Error('Appeal not found')
+
+  await db
+    .update(appeals)
+    .set({ status: 'rejected', adminNote: adminNote ?? null, updatedAt: new Date() })
+    .where(eq(appeals.id, appealId))
+
   return { ok: true }
 }

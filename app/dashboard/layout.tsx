@@ -15,14 +15,19 @@ export default async function DashboardLayout({
   if (!session?.user) redirect('/sign-in')
 
   const [u] = await db
-    .select({ role: user.role, banned: user.banned, agreedToTerms: user.agreedToTerms })
+    .select({
+      role: user.role,
+      banned: user.banned,
+      suspensionReason: user.suspensionReason,
+      suspensionType: user.suspensionType,
+      terminatedAt: user.terminatedAt,
+      appealable: user.appealable,
+      agreedToTerms: user.agreedToTerms,
+    })
     .from(user)
     .where(eq(user.id, session.user.id))
 
-  if (u?.banned) {
-    await auth.api.signOut({ headers: await headers() })
-    redirect('/sign-in?banned=1')
-  }
+  if (!u) redirect('/sign-in')
 
   if (!u?.agreedToTerms) {
     await db
@@ -31,10 +36,13 @@ export default async function DashboardLayout({
       .where(eq(user.id, session.user.id))
   }
 
+  const suspensionType = u?.suspensionType as 'suspended' | 'terminated' | null | undefined
   const isAdmin = u?.role === 'admin'
+  const suspended = !!(u?.banned && u?.suspensionReason)
+  const appealable = u?.appealable
 
   return (
-    <DashboardShell user={session.user} isAdmin={isAdmin}>
+    <DashboardShell user={session.user} isAdmin={isAdmin} suspended={suspended} suspensionReason={u?.suspensionReason ?? undefined} appealable={appealable} suspensionType={suspensionType}>
       {children}
     </DashboardShell>
   )

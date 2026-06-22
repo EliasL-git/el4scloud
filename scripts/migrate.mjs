@@ -1,8 +1,18 @@
 import pg from 'pg'
+import { readFileSync } from 'fs'
+
+const env = Object.fromEntries(
+  readFileSync('./.env', 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map(l => l.split('='))
+    .map(([k, ...v]) => [k, v.join('=')])
+)
+
 const { Pool } = pg
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 })
 
@@ -124,6 +134,16 @@ const statements = [
     "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
 
+  `CREATE TABLE IF NOT EXISTS "deletion_requests" (
+    "id"          TEXT PRIMARY KEY,
+    "userId"      TEXT NOT NULL,
+    "reason"      TEXT,
+    "status"      TEXT NOT NULL DEFAULT 'pending',
+    "adminNote"   TEXT,
+    "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+
   `CREATE TABLE IF NOT EXISTS "ticket_replies" (
     "id"        TEXT PRIMARY KEY,
     "ticketId"  TEXT NOT NULL REFERENCES "tickets"("id") ON DELETE CASCADE,
@@ -131,6 +151,48 @@ const statements = [
     "message"   TEXT NOT NULL,
     "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
+
+  `CREATE TABLE IF NOT EXISTS "credit_requests" (
+    "id"          TEXT PRIMARY KEY,
+    "userId"      TEXT NOT NULL,
+    "amount"      REAL NOT NULL,
+    "reason"      TEXT NOT NULL,
+    "status"      TEXT NOT NULL DEFAULT 'pending',
+    "adminNote"   TEXT,
+    "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+
+  `ALTER TABLE "files" ADD COLUMN IF NOT EXISTS "fileHash" TEXT`,
+
+  `CREATE TABLE IF NOT EXISTS "flagged_hashes" (
+    "id"          TEXT PRIMARY KEY,
+    "hash"        TEXT NOT NULL UNIQUE,
+    "fileId"      TEXT NOT NULL,
+    "flaggedBy"   TEXT NOT NULL,
+    "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "suspensionReason" TEXT`,
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "appealable" BOOLEAN NOT NULL DEFAULT TRUE`,
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "suspensionType" TEXT`,
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "terminatedAt" TIMESTAMPTZ`,
+  `UPDATE "user" SET "suspensionType" = 'suspended' WHERE "banned" = TRUE AND "suspensionType" IS NULL`,
+
+  `CREATE TABLE IF NOT EXISTS "appeals" (
+    "id"          TEXT PRIMARY KEY,
+    "userId"      TEXT NOT NULL,
+    "reason"      TEXT NOT NULL,
+    "status"      TEXT NOT NULL DEFAULT 'pending',
+    "adminNote"   TEXT,
+    "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+
+  // Ensure creditsRemaining is NOT NULL for all existing rows
+  `UPDATE "user" SET "creditsRemaining" = 100 WHERE "creditsRemaining" IS NULL`,
+
+  // Now safe to drop any ALTER that relied on IF NOT EXISTS (already applied via UPDATE)
 ]
 
 async function migrate() {
@@ -149,6 +211,6 @@ async function migrate() {
 }
 
 migrate().catch((err) => {
-  console.error('[migrate] FAILED:', err.message)
+  console.error('[migrate] FAILED:', err.message || err.code || err)
   process.exit(1)
 })

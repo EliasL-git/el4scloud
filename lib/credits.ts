@@ -1,19 +1,13 @@
 import { db } from '@/lib/db'
 import { user } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
+import { CREDIT_COSTS, FREE_CREDITS, CREDIT_PERIOD_DAYS, CREDIT_RATE_PER_KB } from '@/lib/credit-constants'
 
-export const CREDIT_COSTS = {
-  UPLOAD: 0.5,
-  DOWNLOAD: 0.1,
-  DELETE: 0.1,
-  TOGGLE_VISIBILITY: 0.1,
-  CREATE_API_KEY: 0.2,
-} as const
+export function creditCostForTraffic(sizeBytes: number): number {
+  return Math.ceil((sizeBytes / 1024) * CREDIT_RATE_PER_KB)
+}
 
-export const FREE_CREDITS = 100
-export const CREDIT_PERIOD_DAYS = 30
-
-export async function ensureCredits(userId: string, cost: number): Promise<void> {
+async function getCreditsRow(userId: string) {
   const [u] = await db
     .select({
       creditsRemaining: user.creditsRemaining,
@@ -21,10 +15,15 @@ export async function ensureCredits(userId: string, cost: number): Promise<void>
     })
     .from(user)
     .where(eq(user.id, userId))
-
   if (!u) throw new Error('User not found')
+  return u
+}
+
+export async function ensureCredits(userId: string, cost: number): Promise<void> {
+  const u = await getCreditsRow(userId)
 
   const now = new Date()
+  const remaining = u.creditsRemaining ?? FREE_CREDITS
   const periodStart = new Date(u.creditsPeriodStart)
   const daysSinceReset = (now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)
 
@@ -36,30 +35,23 @@ export async function ensureCredits(userId: string, cost: number): Promise<void>
     return
   }
 
-  if (u.creditsRemaining < cost) {
+  if (remaining < cost) {
     throw new Error(
-      `You need ${cost} credits but only have ${u.creditsRemaining} remaining. Credits reset every ${CREDIT_PERIOD_DAYS} days.`,
+      `You need ${cost} credits but only have ${remaining} remaining. Credits reset every ${CREDIT_PERIOD_DAYS} days.`,
     )
   }
 
   await db
     .update(user)
-    .set({ creditsRemaining: u.creditsRemaining - cost })
+    .set({ creditsRemaining: remaining - cost })
     .where(eq(user.id, userId))
 }
 
 export async function getCredits(userId: string): Promise<{ remaining: number; periodStart: Date }> {
-  const [u] = await db
-    .select({
-      creditsRemaining: user.creditsRemaining,
-      creditsPeriodStart: user.creditsPeriodStart,
-    })
-    .from(user)
-    .where(eq(user.id, userId))
-
-  if (!u) throw new Error('User not found')
+  const u = await getCreditsRow(userId)
 
   const now = new Date()
+  const remaining = u.creditsRemaining ?? FREE_CREDITS
   const periodStart = new Date(u.creditsPeriodStart)
   const daysSinceReset = (now.getTime() - periodStart.getTime()) / (1000 * 60 * 60 * 24)
 
@@ -67,5 +59,5 @@ export async function getCredits(userId: string): Promise<{ remaining: number; p
     return { remaining: FREE_CREDITS, periodStart: now }
   }
 
-  return { remaining: u.creditsRemaining, periodStart }
+  return { remaining, periodStart }
 }

@@ -11,6 +11,13 @@ import { cn } from '@/lib/utils'
 import { getPresignedUploadUrl } from '@/app/actions/files'
 import { toast } from 'sonner'
 
+async function computeFileHash(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer()
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+}
+
 interface PendingFile {
   file: File
   id: string
@@ -59,11 +66,13 @@ export function FileUploader({ onUploadComplete }: { onUploadComplete: () => voi
       )
 
       try {
+        const fileHash = await computeFileHash(pf.file)
         const { presignedUrl } = await getPresignedUploadUrl(
           pf.file.name,
           pf.file.type || 'application/octet-stream',
           pf.file.size,
           isPublic,
+          fileHash,
         )
 
         await new Promise<void>((resolve, reject) => {

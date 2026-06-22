@@ -2,11 +2,14 @@
 
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { files, user } from '@/lib/db/schema'
-import { ensureCredits, CREDIT_COSTS, getCredits } from '@/lib/credits'
+import { files, user, flaggedHashes } from '@/lib/db/schema'
+import { ensureCredits, getCredits, creditCostForTraffic } from '@/lib/credits'
+import { CREDIT_COSTS } from '@/lib/credit-constants'
 import { and, desc, eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
+import { s3, S3_BUCKET } from '@/lib/s3'
+import { isBadHash } from '@/lib/hash-check'
 import {
   DeleteObjectCommand,
   PutObjectCommand,
@@ -34,9 +37,14 @@ export async function getPresignedUploadUrl(
   mimeType: string,
   size: number,
   isPublic: boolean,
+  fileHash: string,
 ) {
   const userId = await getUserId()
-  await ensureCredits(userId, CREDIT_COSTS.UPLOAD)
+  await ensureCredits(userId, creditCostForTraffic(size))
+
+  if (await isBadHash(fileHash)) {
+    throw new Error('This file is blocked due to a known malicious hash')
+  }
 
   const fileId = uuidv4()
   const ext = fileName.split('.').pop()
@@ -64,6 +72,7 @@ export async function getPresignedUploadUrl(
     size,
     mimeType,
     isPublic,
+    fileHash,
   })
 
   return { presignedUrl, fileId, key }
@@ -138,4 +147,35 @@ export async function getStorageLimit() {
 export async function getCreditsInfo() {
   const userId = await getUserId()
   return getCredits(userId)
+}
+
+export async function flagFile(fileId: string) {
+  const userId = await getUserId()
+
+  const [file] = await db
+    .select()
+    .from(files)
+    .where(eq(files.id, fileId))
+
+  if (!file) throw new Error('File not found')
+  if (!file.fileHash) throw new Error('File hash not available')
+
+  await db.insert(flaggedHashes).values({
+    id: uuidv4(),
+    hash: file.fileHash,
+    fileId: file.id,
+    flaggedBy: userId,
+  }).catch(() => {
+    throw new Error('Hash was already flagged')
+  })
+
+  await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: file.key }))
+  await db.delete(files).where(eq(files.id, fileId))
+
+  await db
+    .update(user)
+    .set({ banned: true, suspensionReason: `Flagged file: ${file.originalName} (${file.fileHash.slice(0, 12)}...)`, suspensionType: 'suspended', terminatedAt: null, appealable: true })
+    .where(eq(user.id, file.userId))
+
+  revalidatePath('/dashboard')
 }

@@ -14,6 +14,7 @@ import {
   Copy,
   Check,
   MoreHorizontal,
+  Flag,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -35,7 +36,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { deleteFile, toggleFileVisibility } from '@/app/actions/files'
+import { deleteFile, toggleFileVisibility, flagFile } from '@/app/actions/files'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -112,6 +113,7 @@ export function FileList({
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [flaggingId, setFlaggingId] = useState<string | null>(null)
 
   const handleCopy = (url: string, id: string) => {
     navigator.clipboard.writeText(url)
@@ -143,6 +145,19 @@ export function FileList({
     } finally {
       setDeletingId(null)
       setConfirmDelete(null)
+    }
+  }
+
+  const handleFlag = async (id: string) => {
+    setFlaggingId(id)
+    try {
+      await flagFile(id)
+      onRefresh?.()
+      toast.success('File flagged and removed')
+    } catch {
+      toast.error('Failed to flag file')
+    } finally {
+      setFlaggingId(null)
     }
   }
 
@@ -258,6 +273,14 @@ export function FileList({
                     Copy URL
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem
+                  onClick={() => handleFlag(file.id)}
+                  disabled={flaggingId === file.id}
+                  className="text-destructive focus:text-destructive gap-2 cursor-pointer"
+                >
+                  <Flag className="size-3.5" />
+                  {flaggingId === file.id ? 'Flagging...' : 'Flag as malicious'}
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => setConfirmDelete(file.id)}

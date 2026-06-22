@@ -1,5 +1,6 @@
-import { Files, Globe, HardDrive, Lock, Coins } from 'lucide-react'
+import { Files, Globe, HardDrive, Lock, Coins, Info } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
+import { CREDIT_COSTS, FREE_CREDITS, CREDIT_PERIOD_DAYS, CREDIT_RATE_PER_KB } from '@/lib/credit-constants'
 
 interface Stats {
   totalFiles: number
@@ -51,6 +52,21 @@ const statDefs = [
   },
 ]
 
+const CREDIT_RATE_PER_MB = CREDIT_RATE_PER_KB * 1024
+
+function formatCreditRate() {
+  if (CREDIT_RATE_PER_MB >= 1) {
+    return `${CREDIT_RATE_PER_MB} credits per MB`
+  }
+  return `${CREDIT_RATE_PER_KB} credits per KB`
+}
+
+const costLabels: Record<string, string> = {
+  DELETE: 'Delete a file',
+  TOGGLE_VISIBILITY: 'Toggle visibility',
+  CREATE_API_KEY: 'Create an API key',
+}
+
 export function StatsCards({ stats, storageLimit, credits }: { stats: Stats; storageLimit: number; credits: { remaining: number } }) {
   const formatUsage = (totalSize: number) => {
     const pct = Math.round((totalSize / storageLimit) * 100)
@@ -86,7 +102,25 @@ export function StatsCards({ stats, storageLimit, credits }: { stats: Stats; sto
             <div>
               <p className="text-xs text-muted-foreground">Credits Remaining</p>
               <p className="text-2xl font-semibold tracking-tight mt-1">{credits.remaining}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">resets monthly</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {FREE_CREDITS} free &middot; resets every {CREDIT_PERIOD_DAYS} days
+              </p>
+              <details className="mt-2 group">
+                <summary className="flex items-center gap-1 text-[11px] text-muted-foreground cursor-pointer hover:text-foreground">
+                  <Info className="size-3" />
+                  Credits usage
+                </summary>
+                <div className="mt-1.5 flex flex-col gap-0.5">
+                  <span className="text-[11px] text-muted-foreground">
+                    Traffic: {formatCreditRate()}
+                  </span>
+                  {Object.entries(CREDIT_COSTS).map(([key, cost]) => (
+                    <span key={key} className="text-[11px] text-muted-foreground">
+                      {costLabels[key] ?? key}: {cost} credits
+                    </span>
+                  ))}
+                </div>
+              </details>
             </div>
             <div className="size-8 rounded-lg flex items-center justify-center bg-yellow-100 dark:bg-yellow-950">
               <Coins className="size-4 text-yellow-600 dark:text-yellow-400" />

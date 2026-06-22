@@ -14,6 +14,20 @@ export const user = pgTable('user', {
   storageLimit: bigint('storageLimit', { mode: 'number' }).notNull().default(15 * 1024 * 1024 * 1024),
   creditsRemaining: real('creditsRemaining').notNull().default(100),
   creditsPeriodStart: timestamp('creditsPeriodStart').notNull().defaultNow(),
+  suspensionReason: text('suspensionReason'),
+  suspensionType: text('suspensionType'),  // 'suspended' | 'terminated'
+  terminatedAt: timestamp('terminatedAt'),
+  appealable: boolean('appealable').notNull().default(true),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+})
+
+export const appeals = pgTable('appeals', {
+  id: text('id').primaryKey(),
+  userId: text('userId').notNull(),
+  reason: text('reason').notNull(),
+  status: text('status').notNull().default('pending'),
+  adminNote: text('adminNote'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
@@ -70,8 +84,17 @@ export const files = pgTable('files', {
   mimeType: text('mimeType').notNull(),
   publicUrl: text('publicUrl'),
   isPublic: boolean('isPublic').notNull().default(false),
+  fileHash: text('fileHash'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+})
+
+export const flaggedHashes = pgTable('flagged_hashes', {
+  id: text('id').primaryKey(),
+  hash: text('hash').notNull().unique(),
+  fileId: text('fileId').notNull(),
+  flaggedBy: text('flaggedBy').notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 
 export const apiKeys = pgTable('api_keys', {
@@ -103,6 +126,27 @@ export const tickets = pgTable('tickets', {
   subject: text('subject').notNull(),
   message: text('message').notNull(),
   status: text('status').notNull().default('open'), // open | closed
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+})
+
+export const creditRequests = pgTable('credit_requests', {
+  id: text('id').primaryKey(),
+  userId: text('userId').notNull(),
+  amount: real('amount').notNull(),
+  reason: text('reason').notNull(),
+  status: text('status').notNull().default('pending'),
+  adminNote: text('adminNote'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+})
+
+export const deletionRequests = pgTable('deletion_requests', {
+  id: text('id').primaryKey(),
+  userId: text('userId').notNull(),
+  reason: text('reason'),
+  status: text('status').notNull().default('pending'),
+  adminNote: text('adminNote'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })

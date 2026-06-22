@@ -2,12 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Files, Key, LogOut, HardDrive, Shield, MessageSquare, Settings } from 'lucide-react'
+import { Files, Key, LogOut, HardDrive, Shield, MessageSquare, Settings, ShieldAlert } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { StorageRequestDialog } from '@/components/dashboard/storage-request-dialog'
+import { CreditRequestDialog } from '@/components/dashboard/credit-request-dialog'
+import { SuspensionBanner } from '@/components/dashboard/suspension-banner'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,13 +42,27 @@ export function DashboardShell({
   children,
   user,
   isAdmin = false,
+  suspended = false,
+  suspensionReason,
+  suspensionType,
+  appealable,
 }: {
   children: React.ReactNode
   user: User
   isAdmin?: boolean
+  suspended?: boolean
+  suspensionReason?: string
+  suspensionType?: 'suspended' | 'terminated' | null
+  appealable?: boolean
 }) {
   const pathname = usePathname()
   const router = useRouter()
+
+  const isSupportRoute = pathname.startsWith('/dashboard/support')
+
+  const visibleNavItems = suspended
+    ? navItems.filter((item) => item.href === '/dashboard/support')
+    : navItems
 
   const handleSignOut = async () => {
     await authClient.signOut()
@@ -80,7 +96,7 @@ export function DashboardShell({
 
             {/* Nav links */}
             <nav className="flex items-center gap-1">
-              {navItems.map((item) => {
+              {visibleNavItems.map((item) => {
                 const Icon = item.icon
                 const active = item.href === '/dashboard'
                   ? pathname === '/dashboard'
@@ -101,7 +117,7 @@ export function DashboardShell({
                   </Link>
                 )
               })}
-              {isAdmin && adminNavItems.map((item) => {
+              {isAdmin && !suspended && adminNavItems.map((item) => {
                 const Icon = item.icon
                 const active = pathname.startsWith(item.href)
                 return (
@@ -154,13 +170,22 @@ export function DashboardShell({
 
       {/* Page content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
+        {suspended && !isSupportRoute ? (
+          <SuspensionBanner reason={suspensionReason ?? 'Account suspended'} appealable={appealable} suspensionType={suspensionType ?? undefined} />
+        ) : (
+          children
+        )}
       </main>
 
       {/* Footer */}
       <footer className="border-t border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-center">
-          <StorageRequestDialog />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-center gap-6">
+          {!suspended && (
+            <>
+              <StorageRequestDialog />
+              <CreditRequestDialog />
+            </>
+          )}
         </div>
       </footer>
     </div>
