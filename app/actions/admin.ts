@@ -359,20 +359,18 @@ export async function approveDeletionRequest(requestId: string, adminNote?: stri
     .where(eq(deletionRequests.id, requestId))
 
   if (process.env.RESEND_API_KEY) {
-    try {
-      await resend.emails.send({
-        from: process.env.RESEND_FROM ?? 'noreply@example.com',
-        to: u.email,
-        subject: 'Account deletion approved',
-        react: DeletionApprovedEmail({
-          name: u.name,
-          approvedDate,
-          fileCount: Number(count),
-          scheduledDate,
-          adminNote: adminNote ?? undefined,
-        }),
-      })
-    } catch { /* best-effort */ }
+    await resend.emails.send({
+      from: process.env.RESEND_FROM ?? 'noreply@example.com',
+      to: u.email,
+      subject: 'Account deletion approved',
+      react: DeletionApprovedEmail({
+        name: u.name,
+        approvedDate,
+        fileCount: Number(count),
+        scheduledDate,
+        adminNote: adminNote ?? undefined,
+      }),
+    })
   }
 
   await logAuditEventWithHeaders(adminId, 'admin.deletion_approved', JSON.stringify({ requestId, targetUserId: uid }))

@@ -1,5 +1,5 @@
 import { db } from '@/lib/db'
-import { user, files, appeals, apiKeys, creditRequests, storageRequests, tickets, auditLog } from '@/lib/db/schema'
+import { user, files, appeals, apiKeys, storageRequests, tickets, auditLog } from '@/lib/db/schema'
 import { eq, lt, inArray } from 'drizzle-orm'
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { v4 as uuidv4 } from 'uuid'
@@ -66,7 +66,6 @@ export async function GET(req: Request) {
 
   await db.delete(appeals).where(inArray(appeals.userId, userIds))
   await db.delete(apiKeys).where(inArray(apiKeys.userId, userIds))
-  await db.delete(creditRequests).where(inArray(creditRequests.userId, userIds))
   await db.delete(storageRequests).where(inArray(storageRequests.userId, userIds))
   await db.delete(tickets).where(inArray(tickets.userId, userIds))
   await db.delete(files).where(inArray(files.userId, userIds))

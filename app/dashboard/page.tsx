@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { getFiles, getFileStats, getStorageLimit, getCreditsInfo } from '@/app/actions/files'
+import { getFiles, getFileStats, getStorageLimit } from '@/app/actions/files'
 import { FileUploader } from '@/components/dashboard/file-uploader'
 import { FileList } from '@/components/dashboard/file-list'
 import { StatsCards } from '@/components/dashboard/stats-cards'
@@ -20,16 +20,14 @@ export default function DashboardPage() {
     privateFiles: 0,
   })
   const [storageLimit, setStorageLimit] = useState(15 * 1024 * 1024 * 1024)
-  const [credits, setCredits] = useState({ remaining: 0, periodStart: new Date() })
   const [loading, setLoading] = useState(true)
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [f, s, limit, c] = await Promise.all([getFiles(), getFileStats(), getStorageLimit(), getCreditsInfo()])
+    const [f, s, limit] = await Promise.all([getFiles(), getFileStats(), getStorageLimit()])
     setFiles(f)
     setStats(s)
     setStorageLimit(limit)
-    setCredits(c)
     setLoading(false)
   }, [])
 
@@ -46,7 +44,7 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <StatsCards stats={stats} storageLimit={storageLimit} credits={credits} />
+      <StatsCards stats={stats} storageLimit={storageLimit} />
 
       <div className="flex flex-col gap-4">
         <h2 className="text-sm font-medium text-foreground">Upload files</h2>

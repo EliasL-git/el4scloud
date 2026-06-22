@@ -28,22 +28,16 @@ import {
   getAuditLogs,
   getLastCronRun,
 } from '@/app/actions/admin'
-import {
-  getCreditRequests,
-  approveCreditRequest,
-  rejectCreditRequest,
-  issueCredits,
-} from '@/app/actions/credits'
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Coins, Search, Ban, Download, CheckCircle2 } from 'lucide-react'
+import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Search, Ban, Download, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 
 type UserRecord = Awaited<ReturnType<typeof getUsers>>[number]
 type RequestRecord = Awaited<ReturnType<typeof getRequests>>[number]
-type CreditRequestRecord = Awaited<ReturnType<typeof getCreditRequests>>[number]
 type AppealRecord = Awaited<ReturnType<typeof getAppeals>>[number]
 type DeletionRequestRecord = Awaited<ReturnType<typeof getDeletionRequests>>[number]
 
@@ -84,7 +78,7 @@ const statusBadge: Record<string, { label: string; variant: 'outline' | 'seconda
 }
 
 type AuditEntry = Awaited<ReturnType<typeof getAuditLogs>>[number]
-type Tab = 'requests' | 'credits' | 'users' | 'tickets' | 'appeals' | 'files' | 'deletions' | 'audit'
+type Tab = 'requests' | 'users' | 'tickets' | 'appeals' | 'files' | 'deletions' | 'audit'
 
 type AdminTicket = Awaited<ReturnType<typeof adminGetTickets>>[number]
 type AdminReply = Awaited<ReturnType<typeof adminGetTicketReplies>>[number]
@@ -93,14 +87,10 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('requests')
   const [users, setUsers] = useState<UserRecord[]>([])
   const [requests, setRequests] = useState<RequestRecord[]>([])
-  const [creditRequests, setCreditRequests] = useState<CreditRequestRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [lastCronRun, setLastCronRun] = useState<AuditEntry | null>(null)
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [approvedAmounts, setApprovedAmounts] = useState<Record<string, string>>({})
-  const [creditApprovedAmounts, setCreditApprovedAmounts] = useState<Record<string, string>>({})
-  const [creditNotes, setCreditNotes] = useState<Record<string, string>>({})
-  const [issueCreditAmounts, setIssueCreditAmounts] = useState<Record<string, string>>({})
   const [customStorage, setCustomStorage] = useState<Record<string, string>>({})
   const [deletionRequestsList, setDeletionRequestsList] = useState<DeletionRequestRecord[]>([])
   const [hashInput, setHashInput] = useState('')
@@ -130,11 +120,10 @@ export default function AdminPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [u, r, t, cr, ap, dr, al, cron] = await Promise.all([getUsers(), getRequests(), adminGetTickets(), getCreditRequests(), getAppeals(), getDeletionRequests(), getAuditLogs({ limit: 200 }), getLastCronRun()])
+    const [u, r, t, ap, dr, al, cron] = await Promise.all([getUsers(), getRequests(), adminGetTickets(), getAppeals(), getDeletionRequests(), getAuditLogs({ limit: 200 }), getLastCronRun()])
     setUsers(u)
     setRequests(r)
     setAdminTickets(t)
-    setCreditRequests(cr)
     setAppealsList(ap)
     setDeletionRequestsList(dr)
     setAuditLogs(al)
@@ -145,48 +134,6 @@ export default function AdminPage() {
   useEffect(() => {
     refresh()
   }, [refresh])
-
-  const handleCreditApprove = async (id: string, defaultAmount: number) => {
-    setProcessing((p) => ({ ...p, [id]: true }))
-    try {
-      await approveCreditRequest(id, parseFloat(creditApprovedAmounts[id]) || defaultAmount, creditNotes[id] || undefined)
-      toast.success('Credit request approved')
-      await refresh()
-    } catch {
-      toast.error('Failed to approve credit request')
-    } finally {
-      setProcessing((p) => ({ ...p, [id]: false }))
-    }
-  }
-
-  const handleCreditReject = async (id: string) => {
-    setProcessing((p) => ({ ...p, [id]: true }))
-    try {
-      await rejectCreditRequest(id, creditNotes[id] || undefined)
-      toast.success('Credit request rejected')
-      await refresh()
-    } catch {
-      toast.error('Failed to reject credit request')
-    } finally {
-      setProcessing((p) => ({ ...p, [id]: false }))
-    }
-  }
-
-  const handleIssueCredits = async (userId: string) => {
-    const amount = parseFloat(issueCreditAmounts[userId])
-    if (!amount || amount <= 0) return
-    setProcessing((p) => ({ ...p, [`issue-${userId}`]: true }))
-    try {
-      await issueCredits(userId, amount)
-      toast.success(`Issued ${amount} credits`)
-      setIssueCreditAmounts((s) => ({ ...s, [userId]: '' }))
-      await refresh()
-    } catch {
-      toast.error('Failed to issue credits')
-    } finally {
-      setProcessing((p) => ({ ...p, [`issue-${userId}`]: false }))
-    }
-  }
 
   const handleApprove = async (id: string, defaultAmount: string) => {
     setProcessing((p) => ({ ...p, [id]: true }))
@@ -331,7 +278,6 @@ export default function AdminPage() {
   }
 
   const pendingRequests = requests.filter((r) => r.request.status === 'pending')
-  const pendingCreditRequests = creditRequests.filter((r) => r.request.status === 'pending')
 
   return (
     <div className="flex flex-col gap-6 max-w-5xl">
@@ -372,16 +318,6 @@ export default function AdminPage() {
           }`}
         >
           Storage Requests {pendingRequests.length > 0 && `(${pendingRequests.length})`}
-        </button>
-        <button
-          onClick={() => setTab('credits')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
-            tab === 'credits'
-              ? 'border-foreground text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Credit Requests {pendingCreditRequests.length > 0 && `(${pendingCreditRequests.length})`}
         </button>
         <button
           onClick={() => setTab('users')}
@@ -554,135 +490,6 @@ export default function AdminPage() {
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           Requested {request.amount}{request.approvedAmount ? ` · Approved: ${request.approvedAmount}` : ''} &middot; {formatDate(request.createdAt)}
-                        </p>
-                        {request.adminNote && (
-                          <p className="text-xs text-muted-foreground mt-1 italic">
-                            Note: {request.adminNote}
-                          </p>
-                        )}
-                      </div>
-                      <Badge variant={statusBadge[request.status]?.variant as any}>
-                        {statusBadge[request.status]?.label}
-                      </Badge>
-                    </CardContent>
-                  </Card>
-                ))}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* Credit Requests tab */}
-      {tab === 'credits' && (
-        <section className="flex flex-col gap-4">
-          {pendingCreditRequests.length === 0 ? (
-            <Card>
-              <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                No pending credit requests.
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {pendingCreditRequests.map(({ request, userName, userEmail }) => (
-                <Card key={request.id}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <CardTitle className="text-sm font-medium">{userName}</CardTitle>
-                        <p className="text-xs text-muted-foreground mt-0.5">{userEmail}</p>
-                      </div>
-                      <Badge variant="secondary">Pending</Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-3">
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-xs text-muted-foreground">Requested credits</span>
-                        <p className="font-medium">{request.amount}</p>
-                      </div>
-                      <div>
-                        <span className="text-xs text-muted-foreground">Submitted</span>
-                        <p className="font-medium">{formatDate(request.createdAt)}</p>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-muted-foreground">Reason</span>
-                      <p className="text-sm mt-0.5 whitespace-pre-wrap">{request.reason}</p>
-                    </div>
-                    <div className="flex flex-col gap-2 pt-1">
-                      <div className="flex gap-3">
-                        <div className="flex-1 flex flex-col gap-1.5">
-                          <label className="text-xs text-muted-foreground">Approve amount</label>
-                          <input
-                            type="number"
-                            step="any"
-                            min="1"
-                            placeholder={String(request.amount)}
-                            value={creditApprovedAmounts[request.id] ?? ''}
-                            onChange={(e) =>
-                              setCreditApprovedAmounts((a) => ({ ...a, [request.id]: e.target.value }))
-                            }
-                            className="h-8 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          />
-                        </div>
-                        <div className="flex-1 flex flex-col gap-1.5">
-                          <label className="text-xs text-muted-foreground">Note to user</label>
-                          <input
-                            type="text"
-                            placeholder="Optional note"
-                            value={creditNotes[request.id] ?? ''}
-                            onChange={(e) =>
-                              setCreditNotes((n) => ({ ...n, [request.id]: e.target.value }))
-                            }
-                            className="h-8 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          className="gap-1.5"
-                          style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
-                          onClick={() => handleCreditApprove(request.id, request.amount)}
-                          disabled={processing[request.id]}
-                        >
-                          <Check className="size-3.5" />
-                          {processing[request.id] ? 'Approving...' : 'Approve'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10"
-                          onClick={() => handleCreditReject(request.id)}
-                          disabled={processing[request.id]}
-                        >
-                          <X className="size-3.5" />
-                          {processing[request.id] ? 'Rejecting...' : 'Reject'}
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* History */}
-          {creditRequests.filter((r) => r.request.status !== 'pending').length > 0 && (
-            <div className="flex flex-col gap-3 pt-4">
-              <h3 className="text-sm font-medium text-muted-foreground">History</h3>
-              {creditRequests
-                .filter((r) => r.request.status !== 'pending')
-                .map(({ request, userName, userEmail }) => (
-                  <Card key={request.id}>
-                    <CardContent className="p-4 flex items-center justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium truncate">{userName}</p>
-                          <span className="text-xs text-muted-foreground">({userEmail})</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Requested {request.amount} credits &middot; {formatDate(request.createdAt)}
                         </p>
                         {request.adminNote && (
                           <p className="text-xs text-muted-foreground mt-1 italic">
