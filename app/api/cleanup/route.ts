@@ -3,7 +3,6 @@ import { user, files, appeals, apiKeys, storageRequests, tickets, auditLog, dele
 import { eq, lt, inArray } from 'drizzle-orm'
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { v4 as uuidv4 } from 'uuid'
-import { Resend } from 'resend'
 import { DeletionCompletedEmail } from '@/components/emails/deletion-completed'
 
 const s3 = process.env.S3_ENDPOINT
@@ -17,8 +16,6 @@ const s3 = process.env.S3_ENDPOINT
       forcePathStyle: true,
     })
   : null
-
-const resend = new Resend(process.env.RESEND_API_KEY ?? '')
 
 const DAYS = 30
 const CRON_SECRET = process.env.CRON_SECRET
@@ -116,6 +113,8 @@ export async function GET(req: Request) {
 
     if (process.env.RESEND_API_KEY) {
       try {
+        const { Resend } = await import('resend')
+        const resend = new Resend(process.env.RESEND_API_KEY)
         await resend.emails.send({
           from: process.env.RESEND_FROM ?? 'noreply@example.com',
           to: u.email,
