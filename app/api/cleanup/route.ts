@@ -1,7 +1,8 @@
 import { db } from '@/lib/db'
-import { user, files, appeals, apiKeys, creditRequests, storageRequests, tickets } from '@/lib/db/schema'
+import { user, files, appeals, apiKeys, creditRequests, storageRequests, tickets, auditLog } from '@/lib/db/schema'
 import { eq, lt, inArray } from 'drizzle-orm'
 import { S3Client, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { v4 as uuidv4 } from 'uuid'
 
 const s3 = process.env.S3_ENDPOINT
   ? new S3Client({
@@ -32,6 +33,14 @@ export async function GET(req: Request) {
     .where(lt(user.terminatedAt, cutoff))
 
   if (expiredUsers.length === 0) {
+    await db.insert(auditLog).values({
+      id: uuidv4(),
+      userId: 'cron',
+      action: 'cron.cleanup.completed',
+      details: JSON.stringify({ deleted: 0 }),
+      ipAddress: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+      userAgent: 'cron-job',
+    }).catch(() => {})
     return Response.json({ deleted: 0 })
   }
 
@@ -62,6 +71,15 @@ export async function GET(req: Request) {
   await db.delete(tickets).where(inArray(tickets.userId, userIds))
   await db.delete(files).where(inArray(files.userId, userIds))
   await db.delete(user).where(inArray(user.id, userIds))
+
+  await db.insert(auditLog).values({
+    id: uuidv4(),
+    userId: 'cron',
+    action: 'cron.cleanup.completed',
+    details: JSON.stringify({ deleted: userIds.length }),
+    ipAddress: req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null,
+    userAgent: 'cron-job',
+  }).catch(() => {})
 
   return Response.json({ deleted: userIds.length })
 }

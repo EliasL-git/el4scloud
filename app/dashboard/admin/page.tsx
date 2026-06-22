@@ -26,6 +26,7 @@ import {
   approveDeletionRequest,
   rejectDeletionRequest,
   getAuditLogs,
+  getLastCronRun,
 } from '@/app/actions/admin'
 import {
   getCreditRequests,
@@ -36,7 +37,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Coins, Search, Ban, Download } from 'lucide-react'
+import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Coins, Search, Ban, Download, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -94,6 +95,7 @@ export default function AdminPage() {
   const [requests, setRequests] = useState<RequestRecord[]>([])
   const [creditRequests, setCreditRequests] = useState<CreditRequestRecord[]>([])
   const [loading, setLoading] = useState(true)
+  const [lastCronRun, setLastCronRun] = useState<AuditEntry | null>(null)
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [approvedAmounts, setApprovedAmounts] = useState<Record<string, string>>({})
   const [creditApprovedAmounts, setCreditApprovedAmounts] = useState<Record<string, string>>({})
@@ -127,7 +129,7 @@ export default function AdminPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [u, r, t, cr, ap, dr, al] = await Promise.all([getUsers(), getRequests(), adminGetTickets(), getCreditRequests(), getAppeals(), getDeletionRequests(), getAuditLogs({ limit: 200 })])
+    const [u, r, t, cr, ap, dr, al, cron] = await Promise.all([getUsers(), getRequests(), adminGetTickets(), getCreditRequests(), getAppeals(), getDeletionRequests(), getAuditLogs({ limit: 200 }), getLastCronRun()])
     setUsers(u)
     setRequests(r)
     setAdminTickets(t)
@@ -135,6 +137,7 @@ export default function AdminPage() {
     setAppealsList(ap)
     setDeletionRequestsList(dr)
     setAuditLogs(al)
+    setLastCronRun(cron)
     setLoading(false)
   }, [])
 
@@ -334,9 +337,28 @@ export default function AdminPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Admin</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Manage users and storage upgrade requests.
+          Manage users, files, and system operations.
         </p>
       </div>
+
+      {/* Cron status */}
+      <Card className="border-green-500/20">
+        <CardContent className="p-3 flex items-center gap-3 text-sm">
+          <CheckCircle2 className="size-4 shrink-0 text-green-500" />
+          <span className="text-muted-foreground">
+            Last cleanup run:{' '}
+            {lastCronRun ? (
+              <span className="text-foreground font-medium">
+                {formatDate(lastCronRun.createdAt)}
+                {' — '}
+                {(() => { try { const d = JSON.parse(lastCronRun.details ?? '{}'); return `${d.deleted} user${d.deleted === 1 ? '' : 's'} deleted` } catch { return 'unknown' } })()}
+              </span>
+            ) : (
+              <span className="text-muted-foreground italic">Never run</span>
+            )}
+          </span>
+        </CardContent>
+      </Card>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">

@@ -382,6 +382,17 @@ export async function rejectDeletionRequest(requestId: string, adminNote?: strin
   return { ok: true }
 }
 
+export async function getLastCronRun() {
+  const adminId = await assertAdmin()
+  const [entry] = await db
+    .select()
+    .from(auditLog)
+    .where(eq(auditLog.action, 'cron.cleanup.completed'))
+    .orderBy(desc(auditLog.createdAt))
+    .limit(1)
+  return entry ?? null
+}
+
 export async function getAuditLogs(opts: { userId?: string; action?: string; limit?: number; offset?: number }) {
   const adminId = await assertAdmin()
   const conditions = []
