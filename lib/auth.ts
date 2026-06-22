@@ -47,12 +47,14 @@ export const auth = betterAuth({
             const data = await res.json() as Record<string, unknown>
             const identity = data.identity as Record<string, unknown> | undefined
             if (!identity?.ysws_eligible) return null
-            const firstName = String(identity.first_name ?? '')
-            const lastName = String(identity.last_name ?? '')
+            const displayName = String(identity.name ?? '')
+            const givenName = String(identity.given_name ?? identity.first_name ?? '')
+            const familyName = String(identity.family_name ?? identity.last_name ?? '')
+            const nickname = String(identity.nickname ?? '')
             return {
               id: String(identity.id),
               email: String(identity.primary_email ?? ''),
-              name: `${firstName} ${lastName}`.trim() || 'Hack Clubber',
+              name: displayName || `${givenName} ${familyName}`.trim() || nickname || String(identity.primary_email ?? '').split('@')[0] || 'User',
             }
           },
           mapProfileToUser: (userInfo: Record<string, unknown>) => {
