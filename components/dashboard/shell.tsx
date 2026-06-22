@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { StorageRequestDialog } from '@/components/dashboard/storage-request-dialog'
-import { CreditRequestDialog } from '@/components/dashboard/credit-request-dialog'
 import { SuspensionBanner } from '@/components/dashboard/suspension-banner'
 import {
   DropdownMenu,
@@ -183,7 +182,6 @@ export function DashboardShell({
           {!suspended && (
             <>
               <StorageRequestDialog />
-              <CreditRequestDialog />
             </>
           )}
         </div>

@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { apiKeys, files } from '@/lib/db/schema'
-import { ensureCredits, creditCostForTraffic } from '@/lib/credits'
+
 import { s3, S3_BUCKET } from '@/lib/s3'
 import { eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
@@ -53,12 +53,6 @@ export async function GET(
 
   if (!file.isPublic && file.userId !== userId) {
     return new Response('Forbidden', { status: 403 })
-  }
-
-  try {
-    await ensureCredits(file.userId, creditCostForTraffic(file.size))
-  } catch {
-    return new Response('Insufficient credits', { status: 429 })
   }
 
   const command = new GetObjectCommand({
