@@ -141,6 +141,16 @@ export const creditRequests = pgTable('credit_requests', {
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
 
+export const auditLog = pgTable('audit_log', {
+  id: text('id').primaryKey(),
+  userId: text('userId').notNull(),
+  action: text('action').notNull(),
+  details: text('details'),
+  ipAddress: text('ipAddress'),
+  userAgent: text('userAgent'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
 export const deletionRequests = pgTable('deletion_requests', {
   id: text('id').primaryKey(),
   userId: text('userId').notNull(),

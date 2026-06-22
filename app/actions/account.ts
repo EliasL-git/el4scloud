@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { user, files, apiKeys, storageRequests, tickets, ticketReplies, deletionRequests } from '@/lib/db/schema'
 import { eq, desc } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
+import { logAuditEventWithHeaders } from '@/lib/audit'
 
 export async function requestAccountDeletion(reason?: string) {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -24,6 +25,8 @@ export async function requestAccountDeletion(reason?: string) {
     reason: reason ?? null,
   })
 
+  await logAuditEventWithHeaders(session.user.id, 'account.deletion_requested', JSON.stringify({ reason: reason ?? '' }))
+
   return { ok: true }
 }
 
@@ -35,6 +38,8 @@ export async function acceptTerms() {
     .update(user)
     .set({ agreedToTerms: true })
     .where(eq(user.id, session.user.id))
+
+  await logAuditEventWithHeaders(session.user.id, 'account.terms_accepted', JSON.stringify({}))
 
   return { ok: true }
 }
@@ -120,6 +125,8 @@ export async function exportMyData() {
       .where(eq(ticketReplies.userId, userId))
       .orderBy(desc(ticketReplies.createdAt))
   }
+
+  await logAuditEventWithHeaders(userId, 'account.data_exported', JSON.stringify({}))
 
   return {
     exportedAt: new Date().toISOString(),

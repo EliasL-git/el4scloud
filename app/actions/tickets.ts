@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { tickets, ticketReplies, user } from '@/lib/db/schema'
 import { eq, and, desc } from 'drizzle-orm'
 import crypto from 'crypto'
+import { logAuditEventWithHeaders } from '@/lib/audit'
 
 export async function createTicket(subject: string, message: string) {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -13,6 +14,7 @@ export async function createTicket(subject: string, message: string) {
 
   const id = crypto.randomUUID()
   await db.insert(tickets).values({ id, userId: session.user.id, subject, message })
+  await logAuditEventWithHeaders(session.user.id, 'ticket.created', JSON.stringify({ ticketId: id, subject }))
   return id
 }
 
@@ -80,6 +82,8 @@ export async function replyToTicket(ticketId: string, message: string) {
     .update(tickets)
     .set({ updatedAt: new Date() })
     .where(eq(tickets.id, ticketId))
+
+  await logAuditEventWithHeaders(session.user.id, 'ticket.replied', JSON.stringify({ ticketId }))
 }
 
 export async function closeTicket(ticketId: string) {
@@ -90,4 +94,6 @@ export async function closeTicket(ticketId: string) {
     .update(tickets)
     .set({ status: 'closed', updatedAt: new Date() })
     .where(and(eq(tickets.id, ticketId), eq(tickets.userId, session.user.id)))
+
+  await logAuditEventWithHeaders(session.user.id, 'ticket.closed', JSON.stringify({ ticketId }))
 }

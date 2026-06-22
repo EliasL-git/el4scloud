@@ -16,6 +16,7 @@ import {
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { v4 as uuidv4 } from 'uuid'
+import { logAuditEvent, logAuditEventWithHeaders } from '@/lib/audit'
 
 async function getUserId() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -75,6 +76,8 @@ export async function getPresignedUploadUrl(
     fileHash,
   })
 
+  await logAuditEventWithHeaders(userId, 'file.upload_initiated', JSON.stringify({ fileId, fileName, size, mimeType, isPublic, fileHash }))
+
   return { presignedUrl, fileId, key }
 }
 
@@ -91,6 +94,8 @@ export async function deleteFile(fileId: string) {
 
   await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: file.key }))
   await db.delete(files).where(and(eq(files.id, fileId), eq(files.userId, userId)))
+
+  await logAuditEventWithHeaders(userId, 'file.deleted', JSON.stringify({ fileId, fileName: file.originalName, size: file.size }))
 
   revalidatePath('/dashboard')
 }
@@ -110,6 +115,8 @@ export async function toggleFileVisibility(fileId: string) {
     .update(files)
     .set({ isPublic: !file.isPublic, updatedAt: new Date() })
     .where(and(eq(files.id, fileId), eq(files.userId, userId)))
+
+  await logAuditEventWithHeaders(userId, `file.${file.isPublic ? 'made_private' : 'made_public'}`, JSON.stringify({ fileId, fileName: file.originalName }))
 
   revalidatePath('/dashboard')
 }
@@ -176,6 +183,8 @@ export async function flagFile(fileId: string) {
     .update(user)
     .set({ banned: true, suspensionReason: `Flagged file: ${file.originalName} (${file.fileHash.slice(0, 12)}...)`, suspensionType: 'suspended', terminatedAt: null, appealable: true })
     .where(eq(user.id, file.userId))
+
+  await logAuditEventWithHeaders(userId, 'file.flagged', JSON.stringify({ fileId, fileName: file.originalName, fileHash: file.fileHash, targetUserId: file.userId }))
 
   revalidatePath('/dashboard')
 }

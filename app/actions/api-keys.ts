@@ -10,6 +10,7 @@ import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { createHash, randomBytes } from 'crypto'
 import { v4 as uuidv4 } from 'uuid'
+import { logAuditEventWithHeaders } from '@/lib/audit'
 
 async function getUserId() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -55,6 +56,8 @@ export async function createApiKey(name: string) {
 
   revalidatePath('/dashboard/keys')
 
+  await logAuditEventWithHeaders(userId, 'apikey.created', JSON.stringify({ name }))
+
   // Return the raw key only once — it won't be retrievable again
   return rawKey
 }
@@ -62,5 +65,8 @@ export async function createApiKey(name: string) {
 export async function deleteApiKey(keyId: string) {
   const userId = await getUserId()
   await db.delete(apiKeys).where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)))
+
+  await logAuditEventWithHeaders(userId, 'apikey.deleted', JSON.stringify({ keyId }))
+
   revalidatePath('/dashboard/keys')
 }

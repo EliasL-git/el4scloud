@@ -3,9 +3,10 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, storageRequests, files, tickets, ticketReplies, appeals, flaggedHashes, deletionRequests, apiKeys, creditRequests } from '@/lib/db/schema'
-import { eq, desc, ilike } from 'drizzle-orm'
+import { user, storageRequests, files, tickets, ticketReplies, appeals, flaggedHashes, deletionRequests, apiKeys, creditRequests, auditLog } from '@/lib/db/schema'
+import { eq, desc, ilike, and } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
+import { logAuditEventWithHeaders } from '@/lib/audit'
 import { Resend } from 'resend'
 import { StorageApprovedEmail } from '@/components/emails/storage-approved'
 import { StorageRejectedEmail } from '@/components/emails/storage-rejected'
@@ -19,20 +20,21 @@ async function assertAdmin() {
   if (!session?.user) throw new Error('Forbidden')
 
   const [u] = await db
-    .select({ role: user.role })
+    .select({ role: user.role, id: user.id })
     .from(user)
     .where(eq(user.id, session.user.id))
 
   if (u?.role !== 'admin') throw new Error('Forbidden')
+  return u.id
 }
 
 export async function getUsers() {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   return db.select().from(user).orderBy(user.createdAt)
 }
 
 export async function getRequests() {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   return db
     .select({
       request: storageRequests,
@@ -45,7 +47,7 @@ export async function getRequests() {
 }
 
 export async function approveRequest(requestId: string, approvedAmount: string, adminNote?: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
 
   const [req] = await db
     .select()
@@ -87,11 +89,12 @@ export async function approveRequest(requestId: string, approvedAmount: string, 
     })
   }
 
+  await logAuditEventWithHeaders(adminId, 'admin.storage_request_approved', JSON.stringify({ requestId, approvedAmount, targetUserId: req.userId }))
   return { ok: true }
 }
 
 export async function rejectRequest(requestId: string, adminNote?: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
 
   const [req] = await db
     .select()
@@ -125,49 +128,55 @@ export async function rejectRequest(requestId: string, adminNote?: string) {
     })
   }
 
+  await logAuditEventWithHeaders(adminId, 'admin.storage_request_rejected', JSON.stringify({ requestId, targetUserId: req.userId }))
   return { ok: true }
 }
 
 export async function lockUser(userId: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   await db.update(user).set({ banned: true }).where(eq(user.id, userId))
+  await logAuditEventWithHeaders(adminId, 'admin.user_locked', JSON.stringify({ targetUserId: userId }))
   return { ok: true }
 }
 
 export async function unlockUser(userId: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   await db.update(user).set({ banned: false }).where(eq(user.id, userId))
+  await logAuditEventWithHeaders(adminId, 'admin.user_unlocked', JSON.stringify({ targetUserId: userId }))
   return { ok: true }
 }
 
 export async function resetStorageLimit(userId: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   await db
     .update(user)
     .set({ storageLimit: 15 * 1024 * 1024 * 1024 })
     .where(eq(user.id, userId))
+  await logAuditEventWithHeaders(adminId, 'admin.storage_reset', JSON.stringify({ targetUserId: userId }))
   return { ok: true }
 }
 
 export async function setStorageLimit(userId: string, amount: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   const bytes = parseStorageAmount(amount)
   if (bytes <= 0) throw new Error('Invalid amount')
   await db.update(user).set({ storageLimit: bytes }).where(eq(user.id, userId))
+  await logAuditEventWithHeaders(adminId, 'admin.storage_set', JSON.stringify({ targetUserId: userId, amount }))
   return { ok: true }
 }
 
 export async function revokePublicFiles(userId: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   await db
     .update(files)
     .set({ isPublic: false })
     .where(eq(files.userId, userId))
+  await logAuditEventWithHeaders(adminId, 'admin.public_files_revoked', JSON.stringify({ targetUserId: userId }))
   return { ok: true }
 }
 
 export async function adminGetTickets() {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   return db
     .select({
       id: tickets.id,
@@ -186,7 +195,7 @@ export async function adminGetTickets() {
 }
 
 export async function adminGetTicketReplies(ticketId: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   return db
     .select({
       id: ticketReplies.id,
@@ -203,7 +212,7 @@ export async function adminGetTicketReplies(ticketId: string) {
 }
 
 export async function adminReplyToTicket(ticketId: string, message: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
 
   await db.insert(ticketReplies).values({
     id: crypto.randomUUID(),
@@ -216,29 +225,32 @@ export async function adminReplyToTicket(ticketId: string, message: string) {
     .set({ updatedAt: new Date() })
     .where(eq(tickets.id, ticketId))
 
+  await logAuditEventWithHeaders(adminId, 'admin.ticket_replied', JSON.stringify({ ticketId }))
   return { ok: true }
 }
 
 export async function adminCloseTicket(ticketId: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   await db
     .update(tickets)
     .set({ status: 'closed', updatedAt: new Date() })
     .where(eq(tickets.id, ticketId))
+  await logAuditEventWithHeaders(adminId, 'admin.ticket_closed', JSON.stringify({ ticketId }))
   return { ok: true }
 }
 
 export async function adminReopenTicket(ticketId: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   await db
     .update(tickets)
     .set({ status: 'open', updatedAt: new Date() })
     .where(eq(tickets.id, ticketId))
+  await logAuditEventWithHeaders(adminId, 'admin.ticket_reopened', JSON.stringify({ ticketId }))
   return { ok: true }
 }
 
 export async function suspendUser(userId: string, reason: string, appealable: boolean, type: 'suspended' | 'terminated' = 'suspended') {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   const now = new Date()
   await db
     .update(user)
@@ -250,12 +262,14 @@ export async function suspendUser(userId: string, reason: string, appealable: bo
       terminatedAt: type === 'terminated' ? now : null,
     })
     .where(eq(user.id, userId))
+  await logAuditEventWithHeaders(adminId, `admin.user_${type}`, JSON.stringify({ targetUserId: userId, reason, appealable }))
   return { ok: true }
 }
 
 export async function searchFiles(query: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   if (!query?.trim()) return []
+  await logAuditEventWithHeaders(adminId, 'admin.files_searched', JSON.stringify({ query }))
   return db
     .select({
       id: files.id,
@@ -277,7 +291,7 @@ export async function searchFiles(query: string) {
 }
 
 export async function flagHash(hash: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   if (!hash?.trim()) throw new Error('Hash is required')
   await db.insert(flaggedHashes).values({
     id: uuidv4(),
@@ -285,11 +299,12 @@ export async function flagHash(hash: string) {
     fileId: 'manual',
     flaggedBy: 'admin',
   }).catch(() => { throw new Error('Hash already exists') })
+  await logAuditEventWithHeaders(adminId, 'admin.hash_flagged', JSON.stringify({ hash: hash.trim().toLowerCase() }))
   return { ok: true }
 }
 
 export async function getDeletionRequests() {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   return db
     .select({
       request: deletionRequests,
@@ -302,7 +317,7 @@ export async function getDeletionRequests() {
 }
 
 export async function approveDeletionRequest(requestId: string, adminNote?: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
 
   const [req] = await db
     .select()
@@ -353,20 +368,37 @@ export async function approveDeletionRequest(requestId: string, adminNote?: stri
     .set({ status: 'approved', adminNote: adminNote ?? null, updatedAt: new Date() })
     .where(eq(deletionRequests.id, requestId))
 
+  await logAuditEventWithHeaders(adminId, 'admin.deletion_approved', JSON.stringify({ requestId, targetUserId: uid }))
   return { ok: true }
 }
 
 export async function rejectDeletionRequest(requestId: string, adminNote?: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   await db
     .update(deletionRequests)
     .set({ status: 'rejected', adminNote: adminNote ?? null, updatedAt: new Date() })
     .where(eq(deletionRequests.id, requestId))
+  await logAuditEventWithHeaders(adminId, 'admin.deletion_rejected', JSON.stringify({ requestId }))
   return { ok: true }
 }
 
+export async function getAuditLogs(opts: { userId?: string; action?: string; limit?: number; offset?: number }) {
+  const adminId = await assertAdmin()
+  const conditions = []
+  if (opts.userId) conditions.push(eq(auditLog.userId, opts.userId))
+  if (opts.action) conditions.push(eq(auditLog.action, opts.action))
+  const where = conditions.length > 0 ? and(...conditions) : undefined
+  return db
+    .select()
+    .from(auditLog)
+    .where(where)
+    .orderBy(desc(auditLog.createdAt))
+    .limit(opts.limit ?? 100)
+    .offset(opts.offset ?? 0)
+}
+
 export async function getAppeals() {
-  await assertAdmin()
+  const adminId = await assertAdmin()
   return db
     .select({
       appeal: appeals,
@@ -379,7 +411,7 @@ export async function getAppeals() {
 }
 
 export async function approveAppeal(appealId: string, adminNote?: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
 
   const [a] = await db
     .select()
@@ -398,11 +430,12 @@ export async function approveAppeal(appealId: string, adminNote?: string) {
     .set({ banned: false, suspensionReason: null, suspensionType: null, terminatedAt: null, appealable: true })
     .where(eq(user.id, a.userId))
 
+  await logAuditEventWithHeaders(adminId, 'admin.appeal_approved', JSON.stringify({ appealId, targetUserId: a.userId }))
   return { ok: true }
 }
 
 export async function rejectAppeal(appealId: string, adminNote?: string) {
-  await assertAdmin()
+  const adminId = await assertAdmin()
 
   const [a] = await db
     .select()
@@ -416,5 +449,6 @@ export async function rejectAppeal(appealId: string, adminNote?: string) {
     .set({ status: 'rejected', adminNote: adminNote ?? null, updatedAt: new Date() })
     .where(eq(appeals.id, appealId))
 
+  await logAuditEventWithHeaders(adminId, 'admin.appeal_rejected', JSON.stringify({ appealId }))
   return { ok: true }
 }

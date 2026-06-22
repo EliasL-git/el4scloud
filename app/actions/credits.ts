@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { user, creditRequests } from '@/lib/db/schema'
 import { eq, desc, sql } from 'drizzle-orm'
 import crypto from 'crypto'
+import { logAuditEventWithHeaders } from '@/lib/audit'
 
 async function assertAdmin() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -33,6 +34,8 @@ export async function requestCredits(amount: number, reason: string) {
     reason,
   })
 
+  await logAuditEventWithHeaders(session.user.id, 'credits.requested', JSON.stringify({ amount, reason }))
+
   return { ok: true }
 }
 
@@ -51,6 +54,9 @@ export async function getCreditRequests() {
 
 export async function approveCreditRequest(requestId: string, approvedAmount: number, adminNote?: string) {
   await assertAdmin()
+
+  const session = await auth.api.getSession({ headers: await headers() })
+  const adminId = session!.user.id
 
   const [req] = await db
     .select()
@@ -76,11 +82,16 @@ export async function approveCreditRequest(requestId: string, approvedAmount: nu
     .set({ creditsRemaining: sql`${user.creditsRemaining} + ${approvedAmount}` })
     .where(eq(user.id, req.userId))
 
+  await logAuditEventWithHeaders(adminId, 'credits.approved', JSON.stringify({ requestId, approvedAmount }))
+
   return { ok: true }
 }
 
 export async function rejectCreditRequest(requestId: string, adminNote?: string) {
   await assertAdmin()
+
+  const session = await auth.api.getSession({ headers: await headers() })
+  const adminId = session!.user.id
 
   const [req] = await db
     .select()
@@ -94,11 +105,16 @@ export async function rejectCreditRequest(requestId: string, adminNote?: string)
     .set({ status: 'rejected', adminNote: adminNote ?? null, updatedAt: new Date() })
     .where(eq(creditRequests.id, requestId))
 
+  await logAuditEventWithHeaders(adminId, 'credits.rejected', JSON.stringify({ requestId, adminNote }))
+
   return { ok: true }
 }
 
 export async function issueCredits(userId: string, amount: number) {
   await assertAdmin()
+
+  const session = await auth.api.getSession({ headers: await headers() })
+  const adminId = session!.user.id
 
   if (amount <= 0) throw new Error('Amount must be positive')
 
@@ -113,6 +129,8 @@ export async function issueCredits(userId: string, amount: number) {
     .update(user)
     .set({ creditsRemaining: sql`${user.creditsRemaining} + ${amount}` })
     .where(eq(user.id, userId))
+
+  await logAuditEventWithHeaders(adminId, 'credits.issued', JSON.stringify({ targetUserId: userId, amount }))
 
   return { ok: true }
 }

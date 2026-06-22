@@ -25,6 +25,7 @@ import {
   getDeletionRequests,
   approveDeletionRequest,
   rejectDeletionRequest,
+  getAuditLogs,
 } from '@/app/actions/admin'
 import {
   getCreditRequests,
@@ -35,7 +36,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Coins, Search, Ban } from 'lucide-react'
+import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Coins, Search, Ban, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -81,7 +82,8 @@ const statusBadge: Record<string, { label: string; variant: 'outline' | 'seconda
   rejected: { label: 'Rejected', variant: 'destructive' },
 }
 
-type Tab = 'requests' | 'credits' | 'users' | 'tickets' | 'appeals' | 'files' | 'deletions'
+type AuditEntry = Awaited<ReturnType<typeof getAuditLogs>>[number]
+type Tab = 'requests' | 'credits' | 'users' | 'tickets' | 'appeals' | 'files' | 'deletions' | 'audit'
 
 type AdminTicket = Awaited<ReturnType<typeof adminGetTickets>>[number]
 type AdminReply = Awaited<ReturnType<typeof adminGetTicketReplies>>[number]
@@ -110,6 +112,9 @@ export default function AdminPage() {
   const [adminReplySending, setAdminReplySending] = useState(false)
   const [appealNotes, setAppealNotes] = useState<Record<string, string>>({})
   const [deletionNotes, setDeletionNotes] = useState<Record<string, string>>({})
+  const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([])
+  const [auditFilterUser, setAuditFilterUser] = useState('')
+  const [auditFilterAction, setAuditFilterAction] = useState('')
   const [fileQuery, setFileQuery] = useState('')
   const [fileResults, setFileResults] = useState<FileResult>([])
   const [fileSearching, setFileSearching] = useState(false)
@@ -122,13 +127,14 @@ export default function AdminPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [u, r, t, cr, ap, dr] = await Promise.all([getUsers(), getRequests(), adminGetTickets(), getCreditRequests(), getAppeals(), getDeletionRequests()])
+    const [u, r, t, cr, ap, dr, al] = await Promise.all([getUsers(), getRequests(), adminGetTickets(), getCreditRequests(), getAppeals(), getDeletionRequests(), getAuditLogs({ limit: 200 })])
     setUsers(u)
     setRequests(r)
     setAdminTickets(t)
     setCreditRequests(cr)
     setAppealsList(ap)
     setDeletionRequestsList(dr)
+    setAuditLogs(al)
     setLoading(false)
   }, [])
 
@@ -403,6 +409,16 @@ export default function AdminPage() {
           }`}
         >
           Deletion Requests {deletionRequestsList.filter((d) => d.request.status === 'pending').length > 0 && `(${deletionRequestsList.filter((d) => d.request.status === 'pending').length})`}
+        </button>
+        <button
+          onClick={() => setTab('audit')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
+            tab === 'audit'
+              ? 'border-foreground text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Audit Log
         </button>
       </div>
 
@@ -807,6 +823,95 @@ export default function AdminPage() {
               </Card>
             ))
           )}
+        </section>
+      )}
+
+      {/* Audit Log tab */}
+      {tab === 'audit' && (
+        <section className="flex flex-col gap-3">
+          <div className="flex gap-2 flex-wrap">
+            <input
+              type="text"
+              placeholder="Filter by user ID..."
+              value={auditFilterUser}
+              onChange={(e) => setAuditFilterUser(e.target.value)}
+              className="h-8 w-48 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <input
+              type="text"
+              placeholder="Filter by action..."
+              value={auditFilterAction}
+              onChange={(e) => setAuditFilterAction(e.target.value)}
+              className="h-8 w-48 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <Button
+              size="sm"
+              className="gap-1.5"
+              onClick={async () => {
+                const res = await getAuditLogs({ userId: auditFilterUser || undefined, action: auditFilterAction || undefined, limit: 200 })
+                setAuditLogs(res)
+              }}
+            >
+              <Search className="size-3.5" />
+              Filter
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => {
+                const header = 'ID,User ID,Action,Details,IP,User Agent,Created At'
+                const rows = auditLogs.map((e) =>
+                  [e.id, e.userId, e.action, `"${(e.details ?? '').replace(/"/g, '""')}"`, e.ipAddress ?? '', `"${(e.userAgent ?? '').replace(/"/g, '""')}"`, e.createdAt.toISOString()].join(',')
+                )
+                const csv = [header, ...rows].join('\n')
+                const blob = new Blob([csv], { type: 'text/csv' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `audit-log-${new Date().toISOString().split('T')[0]}.csv`
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+                URL.revokeObjectURL(url)
+              }}
+              disabled={auditLogs.length === 0}
+            >
+              <Download className="size-3.5" />
+              Export CSV
+            </Button>
+          </div>
+          <div className="flex flex-col gap-1">
+            {auditLogs.map((entry) => (
+              <Card key={entry.id}>
+                <CardContent className="p-3 flex items-start gap-3 text-xs">
+                  <div className="min-w-0 flex-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+                    <span className="text-muted-foreground">Action:</span>
+                    <span className="font-mono">{entry.action}</span>
+                    <span className="text-muted-foreground">User:</span>
+                    <span className="font-mono truncate">{entry.userId}</span>
+                    <span className="text-muted-foreground">IP:</span>
+                    <span className="font-mono">{entry.ipAddress ?? '-'}</span>
+                    <span className="text-muted-foreground">Date:</span>
+                    <span>{formatDate(entry.createdAt)}</span>
+                    {entry.details && (
+                      <>
+                        <span className="text-muted-foreground">Details:</span>
+                        <span className="text-muted-foreground truncate">{entry.details}</span>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            {auditLogs.length === 0 && (
+              <Card>
+                <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                  No audit log entries.
+                </CardContent>
+              </Card>
+            )}
+          </div>
         </section>
       )}
 

@@ -134,6 +134,19 @@ const statements = [
     "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
 
+  `CREATE TABLE IF NOT EXISTS "audit_log" (
+    "id"          TEXT PRIMARY KEY,
+    "userId"      TEXT NOT NULL,
+    "action"      TEXT NOT NULL,
+    "details"     TEXT,
+    "ipAddress"   TEXT,
+    "userAgent"   TEXT,
+    "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS "audit_log_userId_idx" ON "audit_log"("userId")`,
+  `CREATE INDEX IF NOT EXISTS "audit_log_action_idx" ON "audit_log"("action")`,
+  `CREATE INDEX IF NOT EXISTS "audit_log_createdAt_idx" ON "audit_log"("createdAt")`,
+
   `CREATE TABLE IF NOT EXISTS "deletion_requests" (
     "id"          TEXT PRIMARY KEY,
     "userId"      TEXT NOT NULL,
