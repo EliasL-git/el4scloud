@@ -3,8 +3,6 @@
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { files, user, flaggedHashes } from '@/lib/db/schema'
-import { ensureCredits, getCredits, creditCostForTraffic } from '@/lib/credits'
-import { CREDIT_COSTS } from '@/lib/credit-constants'
 import { and, desc, eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
@@ -41,8 +39,6 @@ export async function getPresignedUploadUrl(
   fileHash: string,
 ) {
   const userId = await getUserId()
-  await ensureCredits(userId, creditCostForTraffic(size))
-
   if (await isBadHash(fileHash)) {
     throw new Error('This file is blocked due to a known malicious hash')
   }
@@ -83,8 +79,6 @@ export async function getPresignedUploadUrl(
 
 export async function deleteFile(fileId: string) {
   const userId = await getUserId()
-  await ensureCredits(userId, CREDIT_COSTS.DELETE)
-
   const [file] = await db
     .select()
     .from(files)
@@ -102,8 +96,6 @@ export async function deleteFile(fileId: string) {
 
 export async function toggleFileVisibility(fileId: string) {
   const userId = await getUserId()
-  await ensureCredits(userId, CREDIT_COSTS.TOGGLE_VISIBILITY)
-
   const [file] = await db
     .select()
     .from(files)
@@ -149,11 +141,6 @@ export async function getStorageLimit() {
     .where(eq(user.id, session.user.id))
 
   return u?.storageLimit ?? 15 * 1024 * 1024 * 1024
-}
-
-export async function getCreditsInfo() {
-  const userId = await getUserId()
-  return getCredits(userId)
 }
 
 export async function flagFile(fileId: string) {

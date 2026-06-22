@@ -12,8 +12,6 @@ export const user = pgTable('user', {
   banned: boolean('banned').notNull().default(false),
   agreedToTerms: boolean('agreedToTerms').notNull().default(false),
   storageLimit: bigint('storageLimit', { mode: 'number' }).notNull().default(15 * 1024 * 1024 * 1024),
-  creditsRemaining: real('creditsRemaining').notNull().default(100),
-  creditsPeriodStart: timestamp('creditsPeriodStart').notNull().defaultNow(),
   suspensionReason: text('suspensionReason'),
   suspensionType: text('suspensionType'),  // 'suspended' | 'terminated'
   terminatedAt: timestamp('terminatedAt'),
@@ -126,17 +124,6 @@ export const tickets = pgTable('tickets', {
   subject: text('subject').notNull(),
   message: text('message').notNull(),
   status: text('status').notNull().default('open'), // open | closed
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
-})
-
-export const creditRequests = pgTable('credit_requests', {
-  id: text('id').primaryKey(),
-  userId: text('userId').notNull(),
-  amount: real('amount').notNull(),
-  reason: text('reason').notNull(),
-  status: text('status').notNull().default('pending'),
-  adminNote: text('adminNote'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })

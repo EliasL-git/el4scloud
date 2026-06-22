@@ -106,10 +106,6 @@ const statements = [
 
   `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "agreedToTerms" BOOLEAN NOT NULL DEFAULT FALSE`,
 
-  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "creditsRemaining" REAL NOT NULL DEFAULT 100`,
-
-  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "creditsPeriodStart" TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
-
   `CREATE TABLE IF NOT EXISTS "storage_requests" (
     "id"         TEXT PRIMARY KEY,
     "userId"     TEXT NOT NULL,
@@ -165,17 +161,6 @@ const statements = [
     "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
 
-  `CREATE TABLE IF NOT EXISTS "credit_requests" (
-    "id"          TEXT PRIMARY KEY,
-    "userId"      TEXT NOT NULL,
-    "amount"      REAL NOT NULL,
-    "reason"      TEXT NOT NULL,
-    "status"      TEXT NOT NULL DEFAULT 'pending',
-    "adminNote"   TEXT,
-    "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
-  )`,
-
   `ALTER TABLE "files" ADD COLUMN IF NOT EXISTS "fileHash" TEXT`,
 
   `CREATE TABLE IF NOT EXISTS "flagged_hashes" (
@@ -201,9 +186,6 @@ const statements = [
     "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
-
-  // Ensure creditsRemaining is NOT NULL for all existing rows
-  `UPDATE "user" SET "creditsRemaining" = 100 WHERE "creditsRemaining" IS NULL`,
 
   // Now safe to drop any ALTER that relied on IF NOT EXISTS (already applied via UPDATE)
 ]

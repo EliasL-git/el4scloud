@@ -120,6 +120,7 @@ export default function AdminPage() {
   const [fileQuery, setFileQuery] = useState('')
   const [fileResults, setFileResults] = useState<FileResult>([])
   const [fileSearching, setFileSearching] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null)
   const [suspendModal, setSuspendModal] = useState<{ userId: string; userName: string } | null>(null)
   const [suspendReason, setSuspendReason] = useState(SUSPENSION_REASONS[0])
   const [suspendCustomReason, setSuspendCustomReason] = useState('')
@@ -940,15 +941,15 @@ export default function AdminPage() {
       {/* Files tab */}
       {tab === 'files' && (
         <section className="flex flex-col gap-3">
-          {/* Get hash from file */}
+          {/* Flag hash — select file → compute hash → blacklist */}
           <Card>
             <CardContent className="p-4 flex flex-col gap-3">
-              <p className="text-xs text-muted-foreground font-medium">Get SHA-256 hash from a file</p>
+              <p className="text-xs text-muted-foreground font-medium">Blacklist a file hash</p>
               <div className="flex items-center gap-3">
                 <input
                   type="file"
                   id="hash-file-input"
-                  className="text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border file:border-input file:bg-transparent file:text-sm file:font-medium"
+                  className="text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border file:border-input file:bg-transparent file:text-sm file:font-medium flex-1"
                   onChange={async (e) => {
                     const file = e.target.files?.[0]
                     if (!file) return
@@ -956,29 +957,34 @@ export default function AdminPage() {
                     const hash = await crypto.subtle.digest('SHA-256', buf)
                     const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('')
                     setHashInput(hex)
-                    toast.success('Hash computed')
+                    setHashSubmitting(true)
+                    try {
+                      await flagHash(hex)
+                      toast.success(`Hash blacklisted: ${hex.slice(0, 16)}...`)
+                      setHashInput('')
+                    } catch {
+                      toast.error('Failed to flag hash (may already exist)')
+                    } finally {
+                      setHashSubmitting(false)
+                    }
                   }}
                 />
-                <span className="text-xs text-muted-foreground">→ populates hash field below</span>
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Flag hash */}
-          <Card>
-            <CardContent className="p-4 flex items-center gap-3">
-              <input
-                type="text"
-                placeholder="Paste a hash to flag..."
-                value={hashInput}
-                onChange={(e) => setHashInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleFlagHash()}
-                className="flex-1 h-8 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
-              />
-              <Button size="sm" className="gap-1.5 shrink-0" onClick={handleFlagHash} disabled={hashSubmitting || !hashInput.trim()}>
-                <Ban className="size-3.5" />
-                {hashSubmitting ? 'Flagging...' : 'Flag hash'}
-              </Button>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>Or paste a hash manually:</span>
+                <input
+                  type="text"
+                  placeholder="SHA-256 hash..."
+                  value={hashInput}
+                  onChange={(e) => setHashInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleFlagHash()}
+                  className="flex-1 h-7 rounded-md border border-input bg-transparent px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-mono"
+                />
+                <Button size="sm" className="gap-1.5 shrink-0 h-7 text-xs" onClick={handleFlagHash} disabled={hashSubmitting || !hashInput.trim()}>
+                  <Ban className="size-3" />
+                  {hashSubmitting ? 'Flagging...' : 'Flag'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
@@ -1155,137 +1161,39 @@ export default function AdminPage() {
       {tab === 'users' && (
         <section className="flex flex-col gap-3">
           {users.map((u) => (
-            <Card key={u.id}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium truncate">{u.name}</p>
-                      {u.banned && (
-                        <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
-                          {u.suspensionType === 'terminated' ? 'Terminated' : 'Suspended'}
-                        </Badge>
-                      )}
-                      {u.banned && !u.appealable && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Not appealable</Badge>}
-                      {u.role === 'admin' && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Admin</Badge>}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">{u.email}</p>
-                    <div className="flex gap-4 mt-1.5 text-xs text-muted-foreground">
-                      <span>Limit: {formatBytes(u.storageLimit)}</span>
-                      <span>Credits: {u.creditsRemaining}</span>
-                      <span>Joined: {formatDate(u.createdAt)}</span>
-                    </div>
-                    {u.suspensionReason && (
-                      <p className="text-xs text-destructive mt-1 italic truncate">
-                        {u.suspensionReason}
-                        {u.suspensionType === 'terminated' && u.terminatedAt && (
-                          <> &middot; Terminated {formatDate(u.terminatedAt)}</>
+            <button key={u.id} onClick={() => setSelectedUser(u)} className="w-full text-left">
+              <Card className="hover:bg-secondary/30 transition-colors cursor-pointer">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">{u.name}</p>
+                        {u.banned && (
+                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">
+                            {u.suspensionType === 'terminated' ? 'Terminated' : 'Suspended'}
+                          </Badge>
                         )}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-1.5 shrink-0 items-end">
-                    <div className="flex gap-1.5">
-                      {u.banned ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-1 h-7 text-xs"
-                          onClick={() => handleAction(u.id, 'unlock', () => unlockUser(u.id), 'User unlocked')}
-                          disabled={processing[`unlock-${u.id}`]}
-                        >
-                          <Unlock className="size-3" />
-                          {processing[`unlock-${u.id}`] ? '...' : 'Unlock'}
-                        </Button>
-                      ) : u.role !== 'admin' ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="gap-1 h-7 text-xs text-destructive border-destructive/40 hover:bg-destructive/10"
-                          onClick={() => setSuspendModal({ userId: u.id, userName: u.name })}
-                        >
-                          <Ban className="size-3" />
-                          Suspend
-                        </Button>
-                      ) : null}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1 h-7 text-xs"
-                        onClick={() => handleAction(u.id, 'revoke', () => revokePublicFiles(u.id), 'Public files revoked')}
-                        disabled={processing[`revoke-${u.id}`]}
-                      >
-                        <GlobeOff className="size-3" />
-                        {processing[`revoke-${u.id}`] ? '...' : 'Revoke public'}
-                      </Button>
-                    </div>
-                    <div className="flex gap-1.5 items-center">
-                      <span className="text-[10px] text-muted-foreground">Storage:</span>
-                      <input
-                        type="text"
-                        placeholder="e.g. 50GB"
-                        value={customStorage[u.id] ?? ''}
-                        onChange={(e) =>
-                          setCustomStorage((s) => ({ ...s, [u.id]: e.target.value }))
-                        }
-                        className="h-7 w-20 rounded border border-input bg-transparent px-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1 h-7 text-xs"
-                        onClick={() =>
-                          handleAction(
-                            u.id,
-                            'set',
-                            () => setStorageLimit(u.id, customStorage[u.id]),
-                            'Storage limit updated',
-                          )
-                        }
-                        disabled={processing[`set-${u.id}`] || !customStorage[u.id]?.trim()}
-                      >
-                        <Pencil className="size-3" />
-                        {processing[`set-${u.id}`] ? '...' : 'Set'}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1 h-7 text-xs"
-                        onClick={() => handleAction(u.id, 'reset', () => resetStorageLimit(u.id), 'Storage limit reset')}
-                        disabled={processing[`reset-${u.id}`]}
-                      >
-                        <RotateCcw className="size-3" />
-                        {processing[`reset-${u.id}`] ? '...' : 'Reset'}
-                      </Button>
-                    </div>
-                    <div className="flex gap-1.5 items-center mt-1">
-                      <Coins className="size-3 text-yellow-600 dark:text-yellow-400" />
-                      <input
-                        type="number"
-                        step="any"
-                        min="1"
-                        placeholder="Credits"
-                        value={issueCreditAmounts[u.id] ?? ''}
-                        onChange={(e) =>
-                          setIssueCreditAmounts((s) => ({ ...s, [u.id]: e.target.value }))
-                        }
-                        className="h-7 w-20 rounded border border-input bg-transparent px-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      />
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1 h-7 text-xs"
-                        onClick={() => handleIssueCredits(u.id)}
-                        disabled={processing[`issue-${u.id}`] || !issueCreditAmounts[u.id]?.trim()}
-                      >
-                        <Coins className="size-3" />
-                        {processing[`issue-${u.id}`] ? '...' : 'Issue'}
-                      </Button>
+                        {u.banned && !u.appealable && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Not appealable</Badge>}
+                        {u.role === 'admin' && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Admin</Badge>}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">{u.email}</p>
+                      <div className="flex gap-4 mt-1.5 text-xs text-muted-foreground">
+                        <span>Limit: {formatBytes(u.storageLimit)}</span>
+                        <span>Joined: {formatDate(u.createdAt)}</span>
+                      </div>
+                      {u.suspensionReason && (
+                        <p className="text-xs text-destructive mt-1 italic truncate">
+                          {u.suspensionReason}
+                          {u.suspensionType === 'terminated' && u.terminatedAt && (
+                            <> &middot; Terminated {formatDate(u.terminatedAt)}</>
+                          )}
+                        </p>
+                      )}
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </button>
           ))}
 
           {users.length === 0 && (
@@ -1296,6 +1204,86 @@ export default function AdminPage() {
             </Card>
           )}
         </section>
+      )}
+
+      {/* User detail panel */}
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setSelectedUser(null)}>
+          <div className="bg-background rounded-xl shadow-lg max-w-lg w-full mx-4 p-6 flex flex-col gap-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-sm font-semibold">{selectedUser.name}</h3>
+                <p className="text-xs text-muted-foreground">{selectedUser.email}</p>
+              </div>
+              <button onClick={() => setSelectedUser(null)} className="text-muted-foreground hover:text-foreground text-sm">&times;</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+              <span>ID: <span className="font-mono text-foreground">{selectedUser.id}</span></span>
+              <span>Role: <span className="text-foreground">{selectedUser.role}</span></span>
+              <span>Storage: <span className="text-foreground">{formatBytes(selectedUser.storageLimit)}</span></span>
+              <span>Joined: <span className="text-foreground">{formatDate(selectedUser.createdAt)}</span></span>
+              {selectedUser.suspensionReason && (
+                <span className="col-span-2">Reason: <span className="text-destructive">{selectedUser.suspensionReason}</span></span>
+              )}
+            </div>
+
+            <div className="border-t border-border pt-3 flex flex-col gap-2">
+              <p className="text-xs font-medium text-muted-foreground">Actions</p>
+              <div className="flex flex-wrap gap-2">
+                {selectedUser.banned ? (
+                  <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
+                    onClick={() => { handleAction(selectedUser.id, 'unlock', () => unlockUser(selectedUser.id), 'User unlocked'); setSelectedUser(null) }}
+                    disabled={processing[`unlock-${selectedUser.id}`]}
+                  >
+                    <Unlock className="size-3" />
+                    {processing[`unlock-${selectedUser.id}`] ? '...' : 'Unlock'}
+                  </Button>
+                ) : selectedUser.role !== 'admin' ? (
+                  <Button size="sm" variant="outline" className="gap-1 h-7 text-xs text-destructive border-destructive/40 hover:bg-destructive/10"
+                    onClick={() => { setSuspendModal({ userId: selectedUser.id, userName: selectedUser.name }); setSelectedUser(null) }}
+                  >
+                    <Ban className="size-3" />
+                    Suspend
+                  </Button>
+                ) : null}
+
+                {selectedUser.role !== 'admin' && (
+                  <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
+                    onClick={() => { handleAction(selectedUser.id, 'revoke', () => revokePublicFiles(selectedUser.id), 'Public files revoked'); setSelectedUser(null) }}
+                    disabled={processing[`revoke-${selectedUser.id}`]}
+                  >
+                    <GlobeOff className="size-3" />
+                    Revoke public
+                  </Button>
+                )}
+
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-muted-foreground">Storage:</span>
+                  <input type="text" placeholder="e.g. 50GB"
+                    value={customStorage[selectedUser.id] ?? ''}
+                    onChange={(e) => setCustomStorage((s) => ({ ...s, [selectedUser.id]: e.target.value }))}
+                    className="h-7 w-16 rounded border border-input bg-transparent px-1.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                  <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
+                    onClick={() => handleAction(selectedUser.id, 'set', () => setStorageLimit(selectedUser.id, customStorage[selectedUser.id]), 'Storage limit updated')}
+                    disabled={processing[`set-${selectedUser.id}`] || !customStorage[selectedUser.id]?.trim()}
+                  >
+                    <Pencil className="size-3" />
+                    Set
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
+                    onClick={() => handleAction(selectedUser.id, 'reset', () => resetStorageLimit(selectedUser.id), 'Storage limit reset')}
+                    disabled={processing[`reset-${selectedUser.id}`]}
+                  >
+                    <RotateCcw className="size-3" />
+                    Reset
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Suspend modal */}

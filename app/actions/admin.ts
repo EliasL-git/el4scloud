@@ -3,13 +3,14 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, storageRequests, files, tickets, ticketReplies, appeals, flaggedHashes, deletionRequests, apiKeys, creditRequests, auditLog } from '@/lib/db/schema'
-import { eq, desc, ilike, and } from 'drizzle-orm'
+import { user, storageRequests, files, tickets, ticketReplies, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog } from '@/lib/db/schema'
+import { eq, desc, ilike, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
 import { Resend } from 'resend'
 import { StorageApprovedEmail } from '@/components/emails/storage-approved'
 import { StorageRejectedEmail } from '@/components/emails/storage-rejected'
+import { DeletionApprovedEmail } from '@/components/emails/deletion-approved'
 import { parseStorageAmount } from '@/lib/storage'
 import crypto from 'crypto'
 
@@ -327,46 +328,52 @@ export async function approveDeletionRequest(requestId: string, adminNote?: stri
 
   const uid = req.userId
 
-  const userFiles = await db
-    .select({ key: files.key })
+  const [u] = await db.select().from(user).where(eq(user.id, uid))
+  if (!u) throw new Error('User not found')
+
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
     .from(files)
     .where(eq(files.userId, uid))
 
-  const s3 = process.env.S3_ENDPOINT
-    ? new (await import('@aws-sdk/client-s3')).S3Client({
-        region: process.env.S3_REGION ?? 'default',
-        endpoint: process.env.S3_ENDPOINT,
-        credentials: {
-          accessKeyId: process.env.S3_ACCESS_KEY_ID!,
-          secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
-        },
-        forcePathStyle: true,
-      })
-    : null
+  const now = new Date()
+  const approvedDate = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
-  for (const f of userFiles) {
-    try {
-      if (s3) {
-        await s3.send(new (await import('@aws-sdk/client-s3')).DeleteObjectCommand({
-          Bucket: process.env.S3_BUCKET!,
-          Key: f.key,
-        }))
-      }
-    } catch { /* best-effort */ }
-  }
+  const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+  const scheduledDate = firstOfNextMonth.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 
-  await db.delete(files).where(eq(files.userId, uid))
-  await db.delete(appeals).where(eq(appeals.userId, uid))
-  await db.delete(apiKeys).where(eq(apiKeys.userId, uid))
-  await db.delete(creditRequests).where(eq(creditRequests.userId, uid))
-  await db.delete(storageRequests).where(eq(storageRequests.userId, uid))
-  await db.delete(tickets).where(eq(tickets.userId, uid))
-  await db.delete(user).where(eq(user.id, uid))
+  await db
+    .update(user)
+    .set({
+      banned: true,
+      suspensionReason: 'Account deletion approved',
+      suspensionType: 'terminated',
+      terminatedAt: now,
+      appealable: false,
+    })
+    .where(eq(user.id, uid))
 
   await db
     .update(deletionRequests)
-    .set({ status: 'approved', adminNote: adminNote ?? null, updatedAt: new Date() })
+    .set({ status: 'approved', adminNote: adminNote ?? null, updatedAt: now })
     .where(eq(deletionRequests.id, requestId))
+
+  if (process.env.RESEND_API_KEY) {
+    try {
+      await resend.emails.send({
+        from: process.env.RESEND_FROM ?? 'noreply@example.com',
+        to: u.email,
+        subject: 'Account deletion approved',
+        react: DeletionApprovedEmail({
+          name: u.name,
+          approvedDate,
+          fileCount: Number(count),
+          scheduledDate,
+          adminNote: adminNote ?? undefined,
+        }),
+      })
+    } catch { /* best-effort */ }
+  }
 
   await logAuditEventWithHeaders(adminId, 'admin.deletion_approved', JSON.stringify({ requestId, targetUserId: uid }))
   return { ok: true }
