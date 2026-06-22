@@ -1046,24 +1046,22 @@ export default function AdminPage() {
                     <Unlock className="size-3" />
                     {processing[`unlock-${selectedUser.id}`] ? '...' : 'Unlock'}
                   </Button>
-                ) : selectedUser.role !== 'admin' ? (
+                ) : (
                   <Button size="sm" variant="outline" className="gap-1 h-7 text-xs text-destructive border-destructive/40 hover:bg-destructive/10"
                     onClick={() => { setSuspendModal({ userId: selectedUser.id, userName: selectedUser.name }); setSelectedUser(null) }}
                   >
                     <Ban className="size-3" />
                     Suspend
                   </Button>
-                ) : null}
-
-                {selectedUser.role !== 'admin' && (
-                  <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
-                    onClick={() => { handleAction(selectedUser.id, 'revoke', () => revokePublicFiles(selectedUser.id), 'Public files revoked'); setSelectedUser(null) }}
-                    disabled={processing[`revoke-${selectedUser.id}`]}
-                  >
-                    <GlobeOff className="size-3" />
-                    Revoke public
-                  </Button>
                 )}
+
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
+                  onClick={() => { handleAction(selectedUser.id, 'revoke', () => revokePublicFiles(selectedUser.id), 'Public files revoked'); setSelectedUser(null) }}
+                  disabled={processing[`revoke-${selectedUser.id}`]}
+                >
+                  <GlobeOff className="size-3" />
+                  Revoke public
+                </Button>
 
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] text-muted-foreground">Storage:</span>
