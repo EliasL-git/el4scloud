@@ -940,6 +940,30 @@ export default function AdminPage() {
       {/* Files tab */}
       {tab === 'files' && (
         <section className="flex flex-col gap-3">
+          {/* Get hash from file */}
+          <Card>
+            <CardContent className="p-4 flex flex-col gap-3">
+              <p className="text-xs text-muted-foreground font-medium">Get SHA-256 hash from a file</p>
+              <div className="flex items-center gap-3">
+                <input
+                  type="file"
+                  id="hash-file-input"
+                  className="text-sm file:mr-3 file:py-1 file:px-3 file:rounded-md file:border file:border-input file:bg-transparent file:text-sm file:font-medium"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    const buf = await file.arrayBuffer()
+                    const hash = await crypto.subtle.digest('SHA-256', buf)
+                    const hex = Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('')
+                    setHashInput(hex)
+                    toast.success('Hash computed')
+                  }}
+                />
+                <span className="text-xs text-muted-foreground">→ populates hash field below</span>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Flag hash */}
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
