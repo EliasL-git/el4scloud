@@ -8,10 +8,11 @@ const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
   : undefined
 
 const baseURL =
-  process.env.BETTER_AUTH_URL ?? productionUrl ?? vercelUrl ?? 'http://localhost:3000'
+  process.env.BETTER_AUTH_URL ?? productionUrl ?? vercelUrl ?? 'https://cloud.el4s.dev'
 
 const trustedOrigins = [
   'http://localhost:3000',
+  'https://cloud.el4s.dev',
   'https://auth.hackclub.com',
   ...(vercelUrl ? [vercelUrl] : []),
   ...(productionUrl ? [productionUrl] : []),
