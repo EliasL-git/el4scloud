@@ -3,10 +3,12 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, storageRequests, files, tickets, ticketReplies, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog } from '@/lib/db/schema'
+import { user, storageRequests, files, tickets, ticketReplies, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, accessCodes, takedownRequests } from '@/lib/db/schema'
 import { eq, desc, ilike, and } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
+import { s3, S3_BUCKET } from '@/lib/s3'
+import { DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { Resend } from 'resend'
 import { StorageApprovedEmail } from '@/components/emails/storage-approved'
 import { StorageRejectedEmail } from '@/components/emails/storage-rejected'
@@ -441,5 +443,113 @@ export async function rejectAppeal(appealId: string, adminNote?: string) {
     .where(eq(appeals.id, appealId))
 
   await logAuditEventWithHeaders(adminId, 'admin.appeal_rejected', JSON.stringify({ appealId }))
+  return { ok: true }
+}
+
+// ─── Access Codes ───────────────────────────────────────────────
+
+export async function getAccessCodes() {
+  const adminId = await assertAdmin()
+  return db
+    .select({
+      code: accessCodes,
+      creatorName: user.name,
+    })
+    .from(accessCodes)
+    .leftJoin(user, eq(accessCodes.createdBy, user.id))
+    .orderBy(desc(accessCodes.createdAt))
+}
+
+export async function generateAccessCode(opts: {
+  maxUses: number
+  expiresAt?: string
+  note?: string
+}) {
+  const adminId = await assertAdmin()
+
+  const code = uuidv4().slice(0, 12).toUpperCase()
+
+  await db.insert(accessCodes).values({
+    id: uuidv4(),
+    code,
+    maxUses: opts.maxUses,
+    usedCount: 0,
+    createdBy: adminId,
+    expiresAt: opts.expiresAt ? new Date(opts.expiresAt) : null,
+    isActive: true,
+    note: opts.note ?? null,
+  })
+
+  await logAuditEventWithHeaders(adminId, 'admin.access_code_generated', JSON.stringify({ code, maxUses: opts.maxUses }))
+  return { code }
+}
+
+export async function revokeAccessCode(codeId: string) {
+  const adminId = await assertAdmin()
+  await db
+    .update(accessCodes)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(eq(accessCodes.id, codeId))
+  await logAuditEventWithHeaders(adminId, 'admin.access_code_revoked', JSON.stringify({ codeId }))
+  return { ok: true }
+}
+
+// ─── Takedown Requests ─────────────────────────────────────────
+
+export async function getTakedownRequests() {
+  const adminId = await assertAdmin()
+  return db
+    .select()
+    .from(takedownRequests)
+    .orderBy(desc(takedownRequests.createdAt))
+}
+
+export async function approveTakedown(requestId: string) {
+  const adminId = await assertAdmin()
+
+  const [req] = await db
+    .select()
+    .from(takedownRequests)
+    .where(eq(takedownRequests.id, requestId))
+  if (!req) throw new Error('Takedown request not found')
+
+  // Try to delete the file from S3 + DB if we know the fileId
+  if (req.fileId) {
+    const [file] = await db
+      .select()
+      .from(files)
+      .where(eq(files.id, req.fileId))
+    if (file) {
+      try {
+        await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: file.key }))
+      } catch { /* file may already be deleted */ }
+      await db.delete(files).where(eq(files.id, req.fileId))
+      if (file.fileHash) {
+        await db.insert(flaggedHashes).values({
+          id: uuidv4(),
+          hash: file.fileHash,
+          fileId: file.id,
+          flaggedBy: 'admin',
+        }).catch(() => {})
+      }
+    }
+  }
+
+  await db
+    .update(takedownRequests)
+    .set({ status: 'approved', updatedAt: new Date() })
+    .where(eq(takedownRequests.id, requestId))
+
+  await logAuditEventWithHeaders(adminId, 'admin.takedown_approved', JSON.stringify({ requestId }))
+  return { ok: true }
+}
+
+export async function rejectTakedown(requestId: string, adminNote?: string) {
+  const adminId = await assertAdmin()
+  await db
+    .update(takedownRequests)
+    .set({ status: 'rejected', adminNote: adminNote ?? null, updatedAt: new Date() })
+    .where(eq(takedownRequests.id, requestId))
+  await logAuditEventWithHeaders(adminId, 'admin.takedown_rejected', JSON.stringify({ requestId }))
   return { ok: true }
 }

@@ -15,6 +15,7 @@ export const user = pgTable('user', {
   suspensionReason: text('suspensionReason'),
   suspensionType: text('suspensionType'),  // 'suspended' | 'terminated'
   terminatedAt: timestamp('terminatedAt'),
+  warningCount: integer('warningCount').notNull().default(0),
   appealable: boolean('appealable').notNull().default(true),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
@@ -156,4 +157,31 @@ export const ticketReplies = pgTable('ticket_replies', {
   userId: text('userId').notNull(),
   message: text('message').notNull(),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
+export const accessCodes = pgTable('access_codes', {
+  id: text('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  maxUses: integer('maxUses').notNull().default(1),
+  usedCount: integer('usedCount').notNull().default(0),
+  createdBy: text('createdBy').notNull(),
+  expiresAt: timestamp('expiresAt'),
+  isActive: boolean('isActive').notNull().default(true),
+  note: text('note'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+})
+
+export const takedownRequests = pgTable('takedown_requests', {
+  id: text('id').primaryKey(),
+  fileId: text('fileId'),
+  fileUrl: text('fileUrl').notNull(),
+  reporterName: text('reporterName'),
+  reporterEmail: text('reporterEmail').notNull(),
+  reason: text('reason').notNull(),
+  details: text('details'),
+  status: text('status').notNull().default('pending'), // pending | approved | rejected
+  adminNote: text('adminNote'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })

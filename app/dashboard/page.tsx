@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { getFiles, getFileStats, getStorageLimit } from '@/app/actions/files'
+import { getAccountStatus } from '@/app/actions/warnings'
 import { FileUploader } from '@/components/dashboard/file-uploader'
 import { FileList } from '@/components/dashboard/file-list'
 import { StatsCards } from '@/components/dashboard/stats-cards'
 import { Separator } from '@/components/ui/separator'
 import { Toaster } from '@/components/ui/sonner'
+import { ViolationWarningDialog } from '@/components/dashboard/violation-warning-dialog'
 
 type FileRecord = Awaited<ReturnType<typeof getFiles>>[number]
 type Stats = Awaited<ReturnType<typeof getFileStats>>
@@ -21,6 +23,7 @@ export default function DashboardPage() {
   })
   const [storageLimit, setStorageLimit] = useState(15 * 1024 * 1024 * 1024)
   const [loading, setLoading] = useState(true)
+  const [warnedInfo, setWarnedInfo] = useState<{ fileName?: string; reason?: string; suspended?: boolean } | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -31,9 +34,23 @@ export default function DashboardPage() {
     setLoading(false)
   }, [])
 
+  // Check for account warnings on load
   useEffect(() => {
-    refresh()
+    const checkWarnings = async () => {
+      const status = await getAccountStatus()
+      if (status?.warned) {
+        setWarnedInfo({ reason: status.reason ?? undefined })
+      } else if (status?.suspended) {
+        setWarnedInfo({ reason: status.reason ?? undefined, suspended: true })
+      }
+    }
+    Promise.all([refresh(), checkWarnings()])
   }, [refresh])
+
+  const handleWarningClose = () => {
+    setWarnedInfo(null)
+    refresh()
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -62,6 +79,15 @@ export default function DashboardPage() {
       </div>
 
       <Toaster />
+
+      {/* Show violation warning if account is warned on page load */}
+      <ViolationWarningDialog
+        open={warnedInfo !== null}
+        onClose={handleWarningClose}
+        fileName={warnedInfo?.fileName}
+        reason={warnedInfo?.reason}
+        suspended={warnedInfo?.suspended}
+      />
     </div>
   )
 }

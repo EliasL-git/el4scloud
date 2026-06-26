@@ -177,6 +177,8 @@ const statements = [
   `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "terminatedAt" TIMESTAMPTZ`,
   `UPDATE "user" SET "suspensionType" = 'suspended' WHERE "banned" = TRUE AND "suspensionType" IS NULL`,
 
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "warningCount" INTEGER NOT NULL DEFAULT 0`,
+
   `CREATE TABLE IF NOT EXISTS "appeals" (
     "id"          TEXT PRIMARY KEY,
     "userId"      TEXT NOT NULL,
@@ -186,6 +188,26 @@ const statements = [
     "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
+
+  `CREATE TABLE IF NOT EXISTS "takedown_requests" (
+    "id"             TEXT PRIMARY KEY,
+    "fileId"         TEXT,
+    "fileUrl"        TEXT NOT NULL,
+    "reporterName"   TEXT,
+    "reporterEmail"  TEXT NOT NULL,
+    "reason"         TEXT NOT NULL,
+    "details"        TEXT,
+    "status"         TEXT NOT NULL DEFAULT 'pending',
+    "adminNote"      TEXT,
+    "createdAt"      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt"      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+
+  // If the table already exists with old schema, add the new columns
+  `ALTER TABLE "takedown_requests" ADD COLUMN IF NOT EXISTS "fileUrl" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "takedown_requests" ADD COLUMN IF NOT EXISTS "details" TEXT`,
+  `ALTER TABLE "takedown_requests" ALTER COLUMN "fileId" DROP NOT NULL`,
+  `ALTER TABLE "takedown_requests" ALTER COLUMN "reporterName" DROP NOT NULL`,
 
   // Now safe to drop any ALTER that relied on IF NOT EXISTS (already applied via UPDATE)
 ]

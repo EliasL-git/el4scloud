@@ -27,6 +27,12 @@ import {
   rejectDeletionRequest,
   getAuditLogs,
   getLastCronRun,
+  getAccessCodes,
+  generateAccessCode,
+  revokeAccessCode,
+  getTakedownRequests,
+  approveTakedown,
+  rejectTakedown,
 } from '@/app/actions/admin'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -78,7 +84,7 @@ const statusBadge: Record<string, { label: string; variant: 'outline' | 'seconda
 }
 
 type AuditEntry = Awaited<ReturnType<typeof getAuditLogs>>[number]
-type Tab = 'requests' | 'users' | 'tickets' | 'appeals' | 'files' | 'deletions' | 'audit'
+type Tab = 'requests' | 'users' | 'tickets' | 'appeals' | 'files' | 'deletions' | 'audit' | 'access-codes' | 'takedown'
 
 type AdminTicket = Awaited<ReturnType<typeof adminGetTickets>>[number]
 type AdminReply = Awaited<ReturnType<typeof adminGetTicketReplies>>[number]
@@ -105,6 +111,13 @@ export default function AdminPage() {
   const [appealNotes, setAppealNotes] = useState<Record<string, string>>({})
   const [deletionNotes, setDeletionNotes] = useState<Record<string, string>>({})
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([])
+  const [accessCodesList, setAccessCodesList] = useState<Awaited<ReturnType<typeof getAccessCodes>>>([])
+  const [takedownList, setTakedownList] = useState<Awaited<ReturnType<typeof getTakedownRequests>>>([])
+  const [newCodeMaxUses, setNewCodeMaxUses] = useState(1)
+  const [newCodeExpires, setNewCodeExpires] = useState('')
+  const [newCodeNote, setNewCodeNote] = useState('')
+  const [generateLoading, setGenerateLoading] = useState(false)
+  const [generatedCode, setGeneratedCode] = useState('')
   const [auditFilterUser, setAuditFilterUser] = useState('')
   const [auditFilterAction, setAuditFilterAction] = useState('')
   const [fileQuery, setFileQuery] = useState('')
@@ -120,7 +133,7 @@ export default function AdminPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [u, r, t, ap, dr, al, cron] = await Promise.all([getUsers(), getRequests(), adminGetTickets(), getAppeals(), getDeletionRequests(), getAuditLogs({ limit: 200 }), getLastCronRun()])
+    const [u, r, t, ap, dr, al, cron, ac, td] = await Promise.all([getUsers(), getRequests(), adminGetTickets(), getAppeals(), getDeletionRequests(), getAuditLogs({ limit: 200 }), getLastCronRun(), getAccessCodes(), getTakedownRequests()])
     setUsers(u)
     setRequests(r)
     setAdminTickets(t)
@@ -128,6 +141,8 @@ export default function AdminPage() {
     setDeletionRequestsList(dr)
     setAuditLogs(al)
     setLastCronRun(cron)
+    setAccessCodesList(ac)
+    setTakedownList(td)
     setLoading(false)
   }, [])
 
@@ -378,6 +393,26 @@ export default function AdminPage() {
           }`}
         >
           Audit Log
+        </button>
+        <button
+          onClick={() => setTab('access-codes')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
+            tab === 'access-codes'
+              ? 'border-foreground text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Access Codes
+        </button>
+        <button
+          onClick={() => setTab('takedown')}
+          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
+            tab === 'takedown'
+              ? 'border-foreground text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Takedown {takedownList.filter((t) => t.status === 'pending').length > 0 && `(${takedownList.filter((t) => t.status === 'pending').length})`}
         </button>
       </div>
 
@@ -1089,6 +1124,214 @@ export default function AdminPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Access Codes tab */}
+      {tab === 'access-codes' && (
+        <section className="flex flex-col gap-4">
+          <Card>
+            <CardContent className="p-4 flex flex-col gap-3">
+              <h3 className="text-sm font-semibold">Generate Access Code</h3>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground">Max uses</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={newCodeMaxUses}
+                    onChange={(e) => setNewCodeMaxUses(parseInt(e.target.value) || 1)}
+                    className="h-8 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground">Expires (optional)</label>
+                  <input
+                    type="datetime-local"
+                    value={newCodeExpires}
+                    onChange={(e) => setNewCodeExpires(e.target.value)}
+                    className="h-8 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground">Note (optional)</label>
+                  <input
+                    type="text"
+                    value={newCodeNote}
+                    onChange={(e) => setNewCodeNote(e.target.value)}
+                    placeholder="Internal note"
+                    className="h-8 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm"
+                  />
+                </div>
+              </div>
+              {generatedCode && (
+                <div className="rounded-md bg-green-900/30 border border-green-700/30 px-3 py-2 flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Generated:</span>
+                  <code className="text-sm font-mono text-green-400">{generatedCode}</code>
+                  <button
+                    onClick={() => { navigator.clipboard.writeText(generatedCode); toast.success('Copied!') }}
+                    className="ml-auto text-xs text-blue-400 hover:underline"
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
+              <Button
+                size="sm"
+                className="gap-1.5 self-start"
+                onClick={async () => {
+                  setGenerateLoading(true)
+                  try {
+                    const result = await generateAccessCode({
+                      maxUses: newCodeMaxUses,
+                      expiresAt: newCodeExpires || undefined,
+                      note: newCodeNote || undefined,
+                    })
+                    setGeneratedCode(result.code)
+                    setNewCodeMaxUses(1)
+                    setNewCodeExpires('')
+                    setNewCodeNote('')
+                    toast.success('Access code generated')
+                    await refresh()
+                  } catch {
+                    toast.error('Failed to generate code')
+                  } finally {
+                    setGenerateLoading(false)
+                  }
+                }}
+                disabled={generateLoading}
+              >
+                {generateLoading ? 'Generating...' : 'Generate Code'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          <div className="flex flex-col gap-2">
+            {accessCodesList.length === 0 ? (
+              <Card>
+                <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                  No access codes yet.
+                </CardContent>
+              </Card>
+            ) : (
+              accessCodesList.map(({ code, creatorName }) => (
+                <Card key={code.id}>
+                  <CardContent className="p-4 flex items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <code className="text-sm font-mono">{code.code}</code>
+                        <Badge variant={code.isActive ? 'default' : 'secondary'}>
+                          {code.isActive ? 'Active' : 'Revoked'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                        <span>Uses: {code.usedCount}/{code.maxUses}</span>
+                        {code.expiresAt && <span>Expires: {formatDate(code.expiresAt)}</span>}
+                        {code.note && <span>Note: {code.note}</span>}
+                        <span>By: {creatorName ?? 'Unknown'}</span>
+                      </div>
+                    </div>
+                    {code.isActive && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 text-destructive border-destructive/40 hover:bg-destructive/10 shrink-0"
+                        onClick={async () => {
+                          try {
+                            await revokeAccessCode(code.id)
+                            toast.success('Code revoked')
+                            await refresh()
+                          } catch {
+                            toast.error('Failed to revoke code')
+                          }
+                        }}
+                      >
+                        <X className="size-3.5" />
+                        Revoke
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Takedown tab */}
+      {tab === 'takedown' && (
+        <section className="flex flex-col gap-3">
+          {takedownList.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                No takedown requests.
+              </CardContent>
+            </Card>
+          ) : (
+            takedownList.map((req) => (
+              <Card key={req.id}>
+                <CardContent className="p-4 flex flex-col gap-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground font-mono truncate">{req.contactEmail}</span>
+                        <Badge variant={req.status === 'pending' ? 'secondary' : req.status === 'approved' ? 'default' : 'destructive'}>
+                          {req.status}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Reason: {req.reason}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        URL: <span className="font-mono">{req.fileUrl}</span>
+                      </p>
+                      {req.details && (
+                        <p className="text-xs text-muted-foreground mt-1">{req.details}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">{formatDate(req.createdAt)}</p>
+                    </div>
+                    {req.status === 'pending' && (
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={async () => {
+                            try {
+                              await approveTakedown(req.id)
+                              toast.success('Takedown approved, file removed')
+                              await refresh()
+                            } catch {
+                              toast.error('Failed to approve takedown')
+                            }
+                          }}
+                        >
+                          <Check className="size-3.5" />
+                          Approve & Delete
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-destructive border-destructive/40"
+                          onClick={async () => {
+                            try {
+                              await rejectTakedown(req.id)
+                              toast.success('Takedown rejected')
+                              await refresh()
+                            } catch {
+                              toast.error('Failed to reject takedown')
+                            }
+                          }}
+                        >
+                          <X className="size-3.5" />
+                          Reject
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </section>
       )}
 
       {/* Suspend modal */}

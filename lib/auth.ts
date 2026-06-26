@@ -31,6 +31,11 @@ export const auth = betterAuth({
       requireLocalEmailVerified: false,
     },
   },
+  emailAndPassword: {
+    enabled: true,
+    disableSignUp: true, // sign-up is gated by access codes
+    autoSignIn: true,
+  },
   plugins: [
     genericOAuth({
       config: [

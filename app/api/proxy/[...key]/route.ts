@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { createHash } from 'crypto'
+import sharp from 'sharp'
 
 function hashKey(key: string) {
   return createHash('sha256').update(key).digest('hex')
@@ -67,10 +68,52 @@ export async function GET(
     return new Response('Not found', { status: 404 })
   }
 
-  return new Response(body.transformToWebStream(), {
+  const buffer = Buffer.from(await body.transformToByteArray())
+  const mimeType = s3Response.ContentType ?? file.mimeType
+
+  // Hotlink detection: only apply overlay to images being hotlinked from external domains
+  const referer = hdrs.get('referer')
+  const host = hdrs.get('host') ?? ''
+  const appDomain = host.split(':')[0] // strip port
+
+  if (referer && mimeType.startsWith('image/')) {
+    try {
+      const refererUrl = new URL(referer)
+      const refererHost = refererUrl.hostname
+
+      // If the referer is a different domain and not one of our own, overlay a warning
+      if (refererHost && refererHost !== appDomain && !refererHost.endsWith(`.${appDomain}`) && !refererHost.endsWith('.el4s.cloud')) {
+        const overlaySvg = Buffer.from(`\n          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">\n            <style>\n              .bg { fill: rgba(0,0,0,0.7); }\n              .title { fill: #fff; font-family: sans-serif; font-size: 16px; font-weight: bold; text-anchor: middle; }\n              .sub { fill: #aaa; font-family: sans-serif; font-size: 13px; text-anchor: middle; }\n              .link { fill: #6af; font-family: sans-serif; font-size: 12px; text-anchor: middle; }\n            </style>\n            <rect class="bg" x="0" y="0" width="100%" height="72" rx="0" />\n            <text class="title" x="50%" y="28">Hosted on cloud.el4s.dev</text>\n            <text class="link" x="50%" y="52">Is this file illegal? Report at cloud.el4s.dev/takedown</text>\n          </svg>\n        `)
+
+        const processed = await sharp(buffer)
+          .resize({ width: Math.min(1200, (await sharp(buffer).metadata()).width ?? 1200) })
+          .composite([
+            {
+              input: overlaySvg,
+              top: 0,
+              left: 0,
+              gravity: 'north',
+            },
+          ])
+          .toBuffer()
+
+        return new Response(processed, {
+          headers: {
+            'Content-Type': mimeType,
+            'Content-Length': String(processed.length),
+            'Cache-Control': 'no-cache',
+          },
+        })
+      }
+    } catch {
+      // If referer parsing fails, just serve the original
+    }
+  }
+
+  return new Response(buffer, {
     headers: {
-      'Content-Type': s3Response.ContentType ?? file.mimeType,
-      'Content-Length': String(s3Response.ContentLength ?? file.size),
+      'Content-Type': mimeType,
+      'Content-Length': String(buffer.length),
       'Content-Disposition': `inline; filename="${file.originalName}"`,
       'Cache-Control': 'private, max-age=3600',
     },
