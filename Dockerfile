@@ -14,35 +14,26 @@ RUN pnpm build
 FROM base AS runner
 ENV NODE_ENV=production \
     PORT=3000 \
-    # ClamAV paths (Alpine apk defaults)
     CLAMAV_DB_DIR=/var/lib/clamav \
+    # Use clamscan binary directly (not clamd daemon)
+    CLAMSCAN_BIN=/usr/bin/clamscan \
     CLAMAV_ENABLED=true
 
 EXPOSE 3000
 
-# ── Install ClamAV with virus databases via freshclam ───────────────────────
-# Step 1: Install ClamAV packages
-RUN apk add --no-cache clamav clamav-libunrar clamav-daemon
-
-# Step 2: Create clamav user/group (may already exist from apk)
-RUN addgroup -S clamav 2>/dev/null || true && \
-    adduser -S clamav -G clamav 2>/dev/null || true && \
+# ── Install ClamAV (clamscan binary + freshclam) ─────────────────────────────
+RUN apk add --no-cache clamav clamav-libunrar && \
     mkdir -p /var/lib/clamav && \
-    chown -R clamav:clamav /var/lib/clamav
+    # Verify the binary exists at the expected path
+    test -x /usr/bin/clamscan && \
+    /usr/bin/clamscan --version && \
+    echo "ClamAV installed successfully at /usr/bin/clamscan"
 
-# Step 3: Generate freshclam config (avoids needing /etc/clamav/)
-RUN echo "DatabaseDirectory /var/lib/clamav" > /tmp/freshclam.conf && \
-    echo "UpdateLogFile /tmp/freshclam.log" >> /tmp/freshclam.conf && \
-    echo "LogVerbose yes" >> /tmp/freshclam.conf && \
-    echo "DatabaseMirror database.clamav.net" >> /tmp/freshclam.conf && \
-    echo "ConnectTimeout 30" >> /tmp/freshclam.conf && \
-    echo "ReceiveTimeout 30" >> /tmp/freshclam.conf && \
-    # Run freshclam once to download databases
-    freshclam --config-file=/tmp/freshclam.conf && \
-    rm /tmp/freshclam.conf /tmp/freshclam.log && \
-    # Verify
+# ── Download virus databases via freshclam ────────────────────────────────────
+RUN printf 'DatabaseDirectory /var/lib/clamav\nDatabaseMirror database.clamav.net\nConnectTimeout 60\nReceiveTimeout 60\n' > /etc/freshclam.conf && \
+    freshclam --config-file=/etc/freshclam.conf --stdout --show-progress && \
     ls -lh /var/lib/clamav/ && \
-    echo "ClamAV setup complete."
+    echo "Virus databases downloaded."
 
 # ── Copy built app ───────────────────────────────────────────────────────────
 COPY --from=builder /app/public ./public
@@ -52,4 +43,7 @@ COPY --from=builder /app/.next/static ./.next/static
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:$PORT/ || exit 1
 
-CMD ["node", "server.js"]
+# Refresh virus databases at startup (if stale), then start the app
+RUN printf '#!/bin/sh\nset -e\necho "=== Refreshing ClamAV virus definitions... ==="\nfreshclam --config-file=/etc/freshclam.conf --stdout --show-progress || echo "freshclam update failed (using existing databases)"\necho "=== Starting app... ==="\nexec node server.js\n' > /start.sh && chmod +x /start.sh
+
+CMD ["/start.sh"]
