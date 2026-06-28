@@ -162,6 +162,8 @@ const statements = [
   )`,
 
   `ALTER TABLE "files" ADD COLUMN IF NOT EXISTS "fileHash" TEXT`,
+  `ALTER TABLE "files" ADD COLUMN IF NOT EXISTS "scanStatus" TEXT DEFAULT 'pending'`,
+  `ALTER TABLE "files" ADD COLUMN IF NOT EXISTS "scanResult" TEXT`,
 
   `CREATE TABLE IF NOT EXISTS "flagged_hashes" (
     "id"          TEXT PRIMARY KEY,

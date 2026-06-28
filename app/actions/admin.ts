@@ -280,6 +280,8 @@ export async function searchFiles(query: string) {
       size: files.size,
       mimeType: files.mimeType,
       isPublic: files.isPublic,
+      scanStatus: files.scanStatus,
+      scanResult: files.scanResult,
       createdAt: files.createdAt,
       userId: files.userId,
       userName: user.name,

@@ -851,14 +851,26 @@ export default function AdminPage() {
               </CardContent>
             </Card>
           )}
-          {fileResults.map((f) => (
+          {fileResults.map((f) => {
+            let scanBadge: { label: string; variant: 'outline' | 'secondary' | 'default' | 'destructive' } | null = null
+            if (f.scanStatus === 'pending') {
+              scanBadge = { label: 'Scan pending', variant: 'outline' }
+            } else if (f.scanStatus === 'scanned' && f.scanResult === 'clean') {
+              scanBadge = { label: 'Clean', variant: 'secondary' }
+            } else if (f.scanStatus === 'scanned' && f.scanResult === 'flagged') {
+              scanBadge = { label: 'Flagged', variant: 'destructive' }
+            } else if (f.scanStatus === 'error') {
+              scanBadge = { label: 'Scan error', variant: 'destructive' }
+            }
+            return (
             <Card key={f.id}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-medium truncate">{f.originalName}</p>
                       {f.isPublic && <Badge variant="outline" className="text-[10px] px-1.5 py-0">Public</Badge>}
+                      {scanBadge && <Badge variant={scanBadge.variant} className="text-[10px] px-1.5 py-0">{scanBadge.label}</Badge>}
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {f.userName} ({f.userEmail}) &middot; {formatBytes(f.size)} &middot; {formatDate(f.createdAt)}
@@ -869,7 +881,8 @@ export default function AdminPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            )
+          })}
           {!fileQuery && (
             <Card>
               <CardContent className="p-6 text-center text-sm text-muted-foreground">

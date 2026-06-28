@@ -84,6 +84,8 @@ export const files = pgTable('files', {
   publicUrl: text('publicUrl'),
   isPublic: boolean('isPublic').notNull().default(false),
   fileHash: text('fileHash'),
+  scanStatus: text('scanStatus').default('pending'),
+  scanResult: text('scanResult'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
