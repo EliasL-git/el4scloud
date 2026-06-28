@@ -32,14 +32,14 @@ RUN addgroup -S clamav 2>/dev/null || true && \
 
 # Step 3: Generate freshclam config (avoids needing /etc/clamav/)
 RUN echo "DatabaseDirectory /var/lib/clamav" > /tmp/freshclam.conf && \
-    echo "UpdateLogFile /dev/stdout" >> /tmp/freshclam.conf && \
+    echo "UpdateLogFile /tmp/freshclam.log" >> /tmp/freshclam.conf && \
     echo "LogVerbose yes" >> /tmp/freshclam.conf && \
     echo "DatabaseMirror database.clamav.net" >> /tmp/freshclam.conf && \
     echo "ConnectTimeout 30" >> /tmp/freshclam.conf && \
     echo "ReceiveTimeout 30" >> /tmp/freshclam.conf && \
     # Run freshclam once to download databases
     freshclam --config-file=/tmp/freshclam.conf && \
-    rm /tmp/freshclam.conf && \
+    rm /tmp/freshclam.conf /tmp/freshclam.log && \
     # Verify
     ls -lh /var/lib/clamav/ && \
     echo "ClamAV setup complete."
