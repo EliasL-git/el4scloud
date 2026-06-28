@@ -11,6 +11,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 import { checkFile } from '@/lib/file-scan'
+import { recordWarning } from '@/lib/warnings'
 
 function hashKey(key: string) {
   return createHash('sha256').update(key).digest('hex')
@@ -199,6 +200,7 @@ async function scanAndHandle(
         .where(eq(files.id, fileId))
 
       if (newCount >= 2) {
+        await recordWarning(userId, 'suspension', `Account suspended: repeated Terms of Service violations (${checkResult.reason || 'Blocked file'} - ${fileName})`, fileName)
         await db
           .update(user)
           .set({
@@ -211,6 +213,7 @@ async function scanAndHandle(
 
         console.log(`[upload] Suspended user ${userId} (violation #${newCount}): ${checkResult.reason} for ${fileName}`)
       } else {
+        await recordWarning(userId, 'warning', `Upload violation: ${checkResult.reason || 'Blocked file'} (${fileName})`, fileName)
         await db
           .update(user)
           .set({

@@ -225,6 +225,16 @@ const statements = [
   `ALTER TABLE "takedown_requests" ALTER COLUMN "fileId" DROP NOT NULL`,
   `ALTER TABLE "takedown_requests" ALTER COLUMN "reporterName" DROP NOT NULL`,
 
+  `CREATE TABLE IF NOT EXISTS "warnings" (
+    "id"        TEXT PRIMARY KEY,
+    "userId"    TEXT NOT NULL,
+    "type"      TEXT NOT NULL,
+    "reason"    TEXT NOT NULL,
+    "fileName"  TEXT,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS "warnings_userId_idx" ON "warnings"("userId")`,
+
   // Now safe to drop any ALTER that relied on IF NOT EXISTS (already applied via UPDATE)
 ]
 

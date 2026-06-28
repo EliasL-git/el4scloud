@@ -4,6 +4,7 @@ import { s3, S3_BUCKET } from '@/lib/s3'
 import { eq } from 'drizzle-orm'
 import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { checkFile } from '@/lib/file-scan'
+import { recordWarning } from '@/lib/warnings'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
@@ -77,6 +78,7 @@ async function scanPendingFile(fileId: string, key: string, fileName: string, us
         .where(eq(files.id, fileId))
 
       if (newCount >= 2) {
+        await recordWarning(userId, 'suspension', `Account suspended: repeated Terms of Service violations (${checkResult.reason || 'Blocked file'} - ${fileName})`, fileName)
         await db
           .update(user)
           .set({
@@ -87,6 +89,7 @@ async function scanPendingFile(fileId: string, key: string, fileName: string, us
           })
           .where(eq(user.id, userId))
       } else {
+        await recordWarning(userId, 'warning', `Upload violation: ${checkResult.reason || 'Blocked file'} (${fileName})`, fileName)
         await db
           .update(user)
           .set({

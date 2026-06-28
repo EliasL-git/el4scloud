@@ -35,6 +35,7 @@ import {
   approveTakedown,
   rejectTakedown,
   getScanStats,
+  getUserStats,
 } from '@/app/actions/admin'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -98,6 +99,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true)
   const [lastCronRun, setLastCronRun] = useState<AuditEntry | null>(null)
   const [scanStats, setScanStats] = useState<{ avgDuration: number | null; totalScans: number; past24hScans: number } | null>(null)
+  const [userStats, setUserStats] = useState<any>(null)
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [approvedAmounts, setApprovedAmounts] = useState<Record<string, string>>({})
   const [customStorage, setCustomStorage] = useState<Record<string, string>>({})
@@ -136,7 +138,7 @@ export default function AdminPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [u, r, t, ap, dr, al, cron, ac, td, ss] = await Promise.all([getUsers(), getRequests(), adminGetTickets(), getAppeals(), getDeletionRequests(), getAuditLogs({ limit: 200 }), getLastCronRun(), getAccessCodes(), getTakedownRequests(), getScanStats()])
+    const [u, r, t, ap, dr, al, cron, ac, td, ss, us] = await Promise.all([getUsers(), getRequests(), adminGetTickets(), getAppeals(), getDeletionRequests(), getAuditLogs({ limit: 200 }), getLastCronRun(), getAccessCodes(), getTakedownRequests(), getScanStats(), getUserStats()])
     setUsers(u)
     setRequests(r)
     setAdminTickets(t)
@@ -147,6 +149,7 @@ export default function AdminPage() {
     setAccessCodesList(ac)
     setTakedownList(td)
     setScanStats(ss)
+    setUserStats(us)
     setLoading(false)
   }, [])
 
@@ -353,6 +356,54 @@ export default function AdminPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* User stats */}
+      {userStats && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Card>
+            <CardContent className="p-3 text-sm">
+              <span className="text-muted-foreground">Users</span>
+              <p className="text-lg font-semibold">{userStats.totalUsers}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 text-sm">
+              <span className="text-muted-foreground">Files/user</span>
+              <p className="text-lg font-semibold">{userStats.avgFilesPerUser}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 text-sm">
+              <span className="text-muted-foreground">API keys/user</span>
+              <p className="text-lg font-semibold">{userStats.avgApiKeysPerUser}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 text-sm">
+              <span className="text-muted-foreground">Tickets/user</span>
+              <p className="text-lg font-semibold">{userStats.avgTicketsPerUser}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 text-sm">
+              <span className="text-muted-foreground">Storage reqs/user</span>
+              <p className="text-lg font-semibold">{userStats.avgStorageRequestsPerUser}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 text-sm">
+              <span className="text-muted-foreground">Appeals/user</span>
+              <p className="text-lg font-semibold">{userStats.avgAppealsPerUser}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 text-sm">
+              <span className="text-muted-foreground">Warnings/user</span>
+              <p className="text-lg font-semibold">{userStats.avgWarningsPerUser}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">

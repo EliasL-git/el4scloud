@@ -188,3 +188,12 @@ export const takedownRequests = pgTable('takedown_requests', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
+
+export const warnings = pgTable('warnings', {
+  id: text('id').primaryKey(),
+  userId: text('userId').notNull(),
+  type: text('type').notNull(), // 'warning' | 'suspension' | 'termination'
+  reason: text('reason').notNull(),
+  fileName: text('fileName'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})

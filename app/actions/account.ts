@@ -3,7 +3,7 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, files, apiKeys, storageRequests, tickets, ticketReplies, deletionRequests, auditLog, appeals } from '@/lib/db/schema'
+import { user, files, apiKeys, storageRequests, tickets, ticketReplies, deletionRequests, auditLog, appeals, warnings } from '@/lib/db/schema'
 import { eq, desc } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
@@ -144,6 +144,17 @@ export async function exportMyData() {
     .where(eq(appeals.userId, userId))
     .orderBy(desc(appeals.createdAt))
 
+  const userWarnings = await db
+    .select({
+      type: warnings.type,
+      reason: warnings.reason,
+      fileName: warnings.fileName,
+      createdAt: warnings.createdAt,
+    })
+    .from(warnings)
+    .where(eq(warnings.userId, userId))
+    .orderBy(desc(warnings.createdAt))
+
   await logAuditEventWithHeaders(userId, 'account.data_exported', JSON.stringify({}))
 
   return {
@@ -156,5 +167,6 @@ export async function exportMyData() {
     ticketReplies: userReplies,
     auditLog: userAuditLog,
     appeals: userAppeals,
+    warnings: userWarnings,
   }
 }

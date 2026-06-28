@@ -15,6 +15,7 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEvent, logAuditEventWithHeaders } from '@/lib/audit'
+import { recordWarning } from '@/lib/warnings'
 
 async function getUserId() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -177,6 +178,7 @@ export async function flagFile(fileId: string) {
   await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: file.key }))
   await db.delete(files).where(eq(files.id, fileId))
 
+  await recordWarning(file.userId, 'suspension', `Flagged file: ${file.originalName} (${file.fileHash.slice(0, 12)}...)`, file.originalName)
   await db
     .update(user)
     .set({ banned: true, suspensionReason: `Flagged file: ${file.originalName} (${file.fileHash.slice(0, 12)}...)`, suspensionType: 'suspended', terminatedAt: null, appealable: true })

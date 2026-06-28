@@ -7,6 +7,7 @@ import { user, storageRequests, files, tickets, ticketReplies, appeals, flaggedH
 import { eq, desc, ilike, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
+import { recordWarning } from '@/lib/warnings'
 import { s3, S3_BUCKET } from '@/lib/s3'
 import { DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { Resend } from 'resend'
@@ -254,6 +255,7 @@ export async function adminReopenTicket(ticketId: string) {
 export async function suspendUser(userId: string, reason: string, appealable: boolean, type: 'suspended' | 'terminated' = 'suspended') {
   const adminId = await assertAdmin()
   const now = new Date()
+  await recordWarning(userId, type === 'terminated' ? 'termination' : 'suspension', reason)
   await db
     .update(user)
     .set({
@@ -352,6 +354,7 @@ export async function approveDeletionRequest(requestId: string, adminNote?: stri
 
   const now = new Date()
 
+  await recordWarning(uid, 'termination', 'Account deletion approved')
   await db
     .update(user)
     .set({
@@ -534,6 +537,35 @@ export async function getScanStats() {
     avgDuration: avgResult?.avgDuration ?? null,
     totalScans: avgResult?.totalScans ?? 0,
     past24hScans: avgResult?.past24hScans ?? 0,
+  }
+}
+
+// ─── User Stats (per-table averages) ───────────────────────────────
+
+export async function getUserStats() {
+  const adminId = await assertAdmin()
+
+  const userCountResult = await db.execute(sql`SELECT COUNT(*)::int AS count FROM "user" WHERE "role" != 'admin'`)
+
+  const queries = [
+    sql`SELECT ROUND(AVG(c))::int AS avg FROM (SELECT COUNT(*) AS c FROM "files" GROUP BY "userId") sub`,
+    sql`SELECT ROUND(AVG(c))::int AS avg FROM (SELECT COUNT(*) AS c FROM "api_keys" GROUP BY "userId") sub`,
+    sql`SELECT ROUND(AVG(c))::int AS avg FROM (SELECT COUNT(*) AS c FROM "tickets" GROUP BY "userId") sub`,
+    sql`SELECT ROUND(AVG(c))::int AS avg FROM (SELECT COUNT(*) AS c FROM "storage_requests" GROUP BY "userId") sub`,
+    sql`SELECT ROUND(AVG(c))::int AS avg FROM (SELECT COUNT(*) AS c FROM "appeals" GROUP BY "userId") sub`,
+    sql`SELECT ROUND(AVG(c))::int AS avg FROM (SELECT COUNT(*) AS c FROM "warnings" GROUP BY "userId") sub`,
+  ]
+
+  const results = await Promise.all(queries.map((q) => db.execute(q)))
+
+  return {
+    totalUsers: (userCountResult?.rows?.[0] as any)?.count ?? 0,
+    avgFilesPerUser: (results[0].rows[0] as any)?.avg ?? 0,
+    avgApiKeysPerUser: (results[1].rows[0] as any)?.avg ?? 0,
+    avgTicketsPerUser: (results[2].rows[0] as any)?.avg ?? 0,
+    avgStorageRequestsPerUser: (results[3].rows[0] as any)?.avg ?? 0,
+    avgAppealsPerUser: (results[4].rows[0] as any)?.avg ?? 0,
+    avgWarningsPerUser: (results[5].rows[0] as any)?.avg ?? 0,
   }
 }
 
