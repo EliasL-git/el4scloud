@@ -22,7 +22,7 @@ ENV NODE_ENV=production \
 EXPOSE 3000
 
 # ── Install ClamAV (clamscan binary + freshclam) ─────────────────────────────
-RUN apk add --no-cache clamav clamav-libunrar && \
+RUN apk add --no-cache clamav clamav-libunrar unzip && \
     mkdir -p /var/lib/clamav && \
     # Verify the binary exists at the expected path
     test -x /usr/bin/clamscan && \
