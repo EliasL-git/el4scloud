@@ -59,8 +59,9 @@ export function DashboardShell({
 
   const isSupportRoute = pathname.startsWith('/dashboard/support')
 
+  const suspendedAllowedRoutes = ['/dashboard', '/dashboard/support', '/dashboard/settings']
   const visibleNavItems = suspended
-    ? navItems.filter((item) => item.href === '/dashboard/support')
+    ? navItems.filter((item) => suspendedAllowedRoutes.includes(item.href))
     : navItems
 
   const handleSignOut = async () => {
@@ -169,7 +170,7 @@ export function DashboardShell({
 
       {/* Page content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {suspended && !isSupportRoute && !pathname.startsWith('/dashboard/admin') ? (
+        {suspended && !suspendedAllowedRoutes.includes(pathname) && !pathname.startsWith('/dashboard/admin') ? (
           <SuspensionBanner reason={suspensionReason ?? 'Account suspended'} appealable={appealable} suspensionType={suspensionType ?? undefined} />
         ) : (
           children

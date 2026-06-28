@@ -24,6 +24,7 @@ export default function DashboardPage() {
   })
   const [storageLimit, setStorageLimit] = useState(15 * 1024 * 1024 * 1024)
   const [loading, setLoading] = useState(true)
+  const [isSuspended, setIsSuspended] = useState(false)
   const [warnedInfo, setWarnedInfo] = useState<{ fileName?: string; reason?: string; suspended?: boolean } | null>(null)
   const [bannerInfo, setBannerInfo] = useState<{ reason?: string; suspended?: boolean } | null>(null)
 
@@ -40,10 +41,14 @@ export default function DashboardPage() {
   useEffect(() => {
     const checkWarnings = async () => {
       const status = await getAccountStatus()
-      if (status?.warned) {
-        setWarnedInfo({ reason: status.reason ?? undefined })
-      } else if (status?.suspended) {
+      if (status?.suspended) {
+        setIsSuspended(true)
         setWarnedInfo({ reason: status.reason ?? undefined, suspended: true })
+      } else if (status?.warned) {
+        setIsSuspended(false)
+        setWarnedInfo({ reason: status.reason ?? undefined })
+      } else {
+        setIsSuspended(false)
       }
     }
     Promise.all([refresh(), checkWarnings()])
@@ -96,16 +101,18 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Files</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Upload and manage your files.
+          {isSuspended ? 'You can download your data. Upload is disabled.' : 'Upload and manage your files.'}
         </p>
       </div>
 
       <StatsCards stats={stats} storageLimit={storageLimit} />
 
-      <div className="flex flex-col gap-4">
-        <h2 className="text-sm font-medium text-foreground">Upload files</h2>
-        <FileUploader onUploadComplete={refresh} onWarningDismissed={handleFileUploaderWarningDismissed} />
-      </div>
+      {!isSuspended && (
+        <div className="flex flex-col gap-4">
+          <h2 className="text-sm font-medium text-foreground">Upload files</h2>
+          <FileUploader onUploadComplete={refresh} onWarningDismissed={handleFileUploaderWarningDismissed} />
+        </div>
+      )}
 
       <Separator />
 
