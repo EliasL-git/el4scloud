@@ -4,7 +4,7 @@ import { apiKeys, files, user } from '@/lib/db/schema'
 import { s3, S3_BUCKET } from '@/lib/s3'
 import { eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
-import { PutObjectCommand } from '@aws-sdk/client-s3'
+import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { createHash } from 'crypto'
 import { v4 as uuidv4 } from 'uuid'
 import * as fs from 'fs'
@@ -102,19 +102,82 @@ export async function POST(req: Request) {
     }, { status: 400 })
   }
 
-  // Write file to temporary location for scanning
+  // Write file to temporary location for async scanning
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'el4s-upload-'))
   const tmpPath = path.join(tmpDir, fileName)
+  const buffer = Buffer.from(await file.arrayBuffer())
+  fs.writeFileSync(tmpPath, buffer)
 
+  // Upload to S3 immediately
+  const fileId = uuidv4()
+  const ext = fileName.split('.').pop()
+  const key = `${userId}/${fileId}${ext ? `.${ext}` : ''}`
+  const mimeType = file.type || 'application/octet-stream'
+
+  const command = new PutObjectCommand({
+    Bucket: S3_BUCKET,
+    Key: key,
+    Body: buffer,
+    ContentType: mimeType,
+    ContentLength: size,
+    Metadata: {
+      userId,
+      originalName: fileName,
+    },
+  })
+
+  await s3.send(command)
+
+  // Insert file record (pending scan)
+  await db.insert(files).values({
+    id: fileId,
+    userId,
+    name: fileName,
+    originalName: fileName,
+    key,
+    size,
+    mimeType,
+    isPublic,
+    scanStatus: 'pending',
+  })
+
+  // Respond immediately — scanning happens asynchronously
+  const response = Response.json({
+    fileId,
+    key,
+    name: fileName,
+    size,
+    mimeType,
+    isPublic,
+    scanStatus: 'pending',
+  })
+
+  // Asynchronously scan and handle flagged files (after response)
+  scanAndHandle(tmpPath, tmpDir, userId, fileId, key, fileName, file.type || 'application/octet-stream', size, isPublic)
+
+  return response
+}
+
+async function scanAndHandle(
+  tmpPath: string,
+  tmpDir: string,
+  userId: string,
+  fileId: string,
+  key: string,
+  fileName: string,
+  mimeType: string,
+  size: number,
+  isPublic: boolean,
+) {
   try {
-    const buffer = Buffer.from(await file.arrayBuffer())
-    fs.writeFileSync(tmpPath, buffer)
-
-    // Run file scan via ClamAV
     const checkResult = await checkFile(fileName, tmpPath)
 
     if (!checkResult.allowed) {
-      // Read current warning count, then increment
+      // Malware detected — delete from S3, update record, warn user
+      try {
+        await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }))
+      } catch { /* object may already be deleted */ }
+
       const [currentWarn] = await db
         .select({ warningCount: user.warningCount })
         .from(user)
@@ -123,34 +186,19 @@ export async function POST(req: Request) {
       const currentCount = currentWarn?.warningCount ?? 0
       const newCount = currentCount + 1
 
-      // Store a record of the blocked file
-      const blockedFileId = uuidv4()
-      const blockedExt = fileName.split('.').pop()
-      const blockedKey = `${userId}/blocked/${blockedFileId}${blockedExt ? `.${blockedExt}` : ''}`
-      await db.insert(files).values({
-        id: blockedFileId,
-        userId,
-        name: fileName,
-        originalName: fileName,
-        key: blockedKey,
-        size,
-        mimeType: file.type || 'application/octet-stream',
-        isPublic: false,
-        scanStatus: 'scanned',
-        scanResult: checkResult.virusName || checkResult.reason || 'flagged',
-      })
-
-      // Increment warning count in DB
       await db
         .update(user)
-        .set({
-          warningCount: newCount,
-          updatedAt: new Date(),
-        })
+        .set({ warningCount: newCount, updatedAt: new Date() })
         .where(eq(user.id, userId))
 
+      // Update file record to reflect flagged status
+      const scanResult = checkResult.virusName || checkResult.reason || 'flagged'
+      await db
+        .update(files)
+        .set({ scanStatus: 'scanned', scanResult })
+        .where(eq(files.id, fileId))
+
       if (newCount >= 2) {
-        // Third violation (0→1→2+) → permanent suspension
         await db
           .update(user)
           .set({
@@ -161,81 +209,45 @@ export async function POST(req: Request) {
           })
           .where(eq(user.id, userId))
 
-        return Response.json({
-          error: 'Your account has been suspended for repeated violations of our terms of service.',
-          suspended: true,
-        }, { status: 403 })
+        console.log(`[upload] Suspended user ${userId} (violation #${newCount}): ${checkResult.reason} for ${fileName}`)
+      } else {
+        await db
+          .update(user)
+          .set({
+            banned: true,
+            suspensionReason: `Upload violation: ${checkResult.reason || 'Blocked file'} (${fileName})`,
+            suspensionType: 'warned',
+            updatedAt: new Date(),
+          })
+          .where(eq(user.id, userId))
+
+        console.log(`[upload] Warned user ${userId} (violation #${newCount}): ${checkResult.reason} for ${fileName}`)
       }
-
-      // First/second violation → warning (reactivatable)
+    } else if (checkResult.scanError) {
+      // ClamAV unavailable or error — update record to reflect scan error
       await db
-        .update(user)
-        .set({
-          banned: true,
-          suspensionReason: `Upload violation: ${checkResult.reason || 'Blocked file'} (${fileName})`,
-          suspensionType: 'warned',
-          updatedAt: new Date(),
-        })
-        .where(eq(user.id, userId))
-
-      return Response.json({
-        error: checkResult.reason || 'File rejected by security check',
-        virusName: checkResult.virusName,
-        warned: true,
-      }, { status: 403 })
+        .update(files)
+        .set({ scanStatus: 'error', scanResult: checkResult.scanError })
+        .where(eq(files.id, fileId))
+    } else {
+      // File is clean
+      await db
+        .update(files)
+        .set({ scanStatus: 'scanned', scanResult: 'clean' })
+        .where(eq(files.id, fileId))
     }
-
-    // File passed malware checks — upload to S3
-    const fileId = uuidv4()
-    const ext = fileName.split('.').pop()
-    const key = `${userId}/${fileId}${ext ? `.${ext}` : ''}`
-
-    const mimeType = file.type || 'application/octet-stream'
-
-    const command = new PutObjectCommand({
-      Bucket: S3_BUCKET,
-      Key: key,
-      Body: buffer,
-      ContentType: mimeType,
-      ContentLength: size,
-      Metadata: {
-        userId,
-        originalName: fileName,
-      },
-    })
-
-    await s3.send(command)
-
-    // Insert file record with scan result
-    const scanStatus = checkResult.scanError ? 'error' : 'scanned'
-    const scanResult = checkResult.scanError || 'clean'
-    await db.insert(files).values({
-      id: fileId,
-      userId,
-      name: fileName,
-      originalName: fileName,
-      key,
-      size,
-      mimeType,
-      isPublic,
-      scanStatus,
-      scanResult,
-    })
-
-    return Response.json({
-      fileId,
-      key,
-      name: fileName,
-      size,
-      mimeType,
-      isPublic,
-    })
+  } catch (err: any) {
+    console.error(`[upload] Scan error for ${fileId}:`, err)
+    await db
+      .update(files)
+      .set({ scanStatus: 'error', scanResult: err.message || 'Unknown scan error' })
+      .where(eq(files.id, fileId))
   } finally {
     // Clean up temp file
     try {
       fs.rmSync(tmpDir, { recursive: true, force: true })
-    } catch {
-      // ignore cleanup errors
-    }
+    } catch { /* ignore cleanup errors */ }
   }
 }
+
+
