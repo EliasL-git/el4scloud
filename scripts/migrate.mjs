@@ -189,6 +189,19 @@ const statements = [
     "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
 
+  `CREATE TABLE IF NOT EXISTS "access_codes" (
+    "id"          TEXT PRIMARY KEY,
+    "code"        TEXT NOT NULL UNIQUE,
+    "maxUses"     INTEGER NOT NULL DEFAULT 1,
+    "usedCount"   INTEGER NOT NULL DEFAULT 0,
+    "createdBy"   TEXT NOT NULL,
+    "expiresAt"   TIMESTAMPTZ,
+    "isActive"    BOOLEAN NOT NULL DEFAULT TRUE,
+    "note"        TEXT,
+    "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+
   `CREATE TABLE IF NOT EXISTS "takedown_requests" (
     "id"             TEXT PRIMARY KEY,
     "fileId"         TEXT,

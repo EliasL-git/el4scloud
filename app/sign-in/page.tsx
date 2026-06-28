@@ -1,12 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { authClient } from '@/lib/auth-client'
-import { FcGoogle } from 'react-icons/fc'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { HardDrive } from 'lucide-react'
 
 export default function SignInPage() {
-  const router = useRouter()
   const [mode, setMode] = useState<'oauth' | 'email'>('oauth')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -17,7 +19,18 @@ export default function SignInPage() {
     setLoading(true)
     setError('')
     try {
-      await authClient.signIn.oauth2({ providerId: 'hackclub' })
+      const res = await fetch('/api/auth/sign-in/oauth2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ providerId: 'hackclub', callbackURL: '/dashboard' }),
+      })
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        setError('Failed to initiate Hack Club sign in.')
+        setLoading(false)
+      }
     } catch {
       setError('Failed to sign in with Hack Club.')
       setLoading(false)
@@ -36,11 +49,9 @@ export default function SignInPage() {
     }
 
     try {
-      const result = await authClient.signIn.email({ email, password })
+      const result = await authClient.signIn.email({ email, password, callbackURL: '/dashboard' })
       if (result.error) {
         setError(result.error.message || 'Invalid email or password.')
-      } else {
-        router.push('/dashboard')
       }
     } catch {
       setError('Invalid email or password.')
@@ -49,100 +60,109 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black">
-      <div className="w-full max-w-md space-y-6 rounded-lg border border-zinc-800 bg-zinc-900 p-8">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-white">Sign in</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            {mode === 'oauth'
-              ? 'Sign in with your Hack Club account'
-              : 'Sign in with your email'}
-          </p>
+    <div className="flex min-h-svh items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm flex flex-col gap-6">
+        <div className="flex items-center justify-center gap-2">
+          <div className="size-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--brand)' }}>
+            <HardDrive className="size-4" style={{ color: 'var(--brand-foreground)' }} />
+          </div>
+          <span className="text-lg font-semibold tracking-tight text-foreground">el4scloud</span>
         </div>
 
-        {/* Mode tabs */}
-        <div className="flex rounded-lg border border-zinc-700 p-1">
-          <button
-            onClick={() => setMode('oauth')}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
-              mode === 'oauth'
-                ? 'bg-zinc-700 text-white'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            Hack Club
-          </button>
-          <button
-            onClick={() => setMode('email')}
-            className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
-              mode === 'email'
-                ? 'bg-zinc-700 text-white'
-                : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            Email
-          </button>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Sign in</CardTitle>
+            <CardDescription>
+              {mode === 'oauth'
+                ? 'Sign in with your Hack Club account'
+                : 'Sign in with your email'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {mode === 'oauth' ? (
+              <>
+                <Button
+                  onClick={handleHackclubSignIn}
+                  disabled={loading}
+                  className="w-full gap-3"
+                  style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+                >
+                  <img src="/icons/hackclub.ico" alt="Hack Club" className="size-5 shrink-0" />
+                  {loading ? 'Redirecting...' : 'Sign in with Hack Club'}
+                </Button>
 
-        {mode === 'oauth' ? (
-          <button
-            onClick={handleHackclubSignIn}
-            disabled={loading}
-            className="flex w-full items-center justify-center gap-3 rounded-md border border-zinc-700 bg-zinc-800 px-4 py-3 font-medium text-white hover:bg-zinc-700 disabled:opacity-50"
-          >
-            <svg viewBox="0 0 200 200" className="h-5 w-5">
-              <path
-                fill="currentColor"
-                d="M 0 0 L 200 0 L 200 200 L 0 200 Z"
-              />
-            </svg>
-            Sign in with Hack Club
-          </button>
-        ) : (
-          <form onSubmit={handleEmailSignIn} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-zinc-300">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="you@example.com"
-                className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-              />
-            </div>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className="w-full border-t border-border" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-card px-2 text-muted-foreground">or</span>
+                  </div>
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-zinc-300">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="Your password"
-                className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-              />
-            </div>
+                <button
+                  onClick={() => { setMode('email'); setError('') }}
+                  className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
+                >
+                  Sign in with email instead
+                </button>
+              </>
+            ) : (
+              <form onSubmit={handleEmailSignIn} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="you@example.com"
+                  />
+                </div>
 
-            {error && (
-              <div className="rounded-md bg-red-900/50 px-3 py-2 text-sm text-red-400">
-                {error}
-              </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="Your password"
+                  />
+                </div>
+
+                {error && (
+                  <p className="text-sm text-destructive" role="alert">
+                    {error}
+                  </p>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full"
+                  style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+                >
+                  {loading ? 'Signing in...' : 'Sign in'}
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => { setMode('oauth'); setError('') }}
+                  className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-2"
+                >
+                  Sign in with Hack Club instead
+                </button>
+              </form>
             )}
+          </CardContent>
+        </Card>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? 'Signing in...' : 'Sign in'}
-            </button>
-          </form>
-        )}
-
-        <p className="text-center text-sm text-zinc-500">
+        <p className="text-center text-sm text-muted-foreground">
           Don&apos;t have an account?{' '}
-          <a href="/sign-up" className="text-blue-400 hover:underline">
+          <a href="/sign-up" className="underline underline-offset-2 hover:text-foreground">
             Register with an access code
           </a>
         </p>

@@ -116,7 +116,7 @@ export function DashboardShell({
                   </Link>
                 )
               })}
-              {isAdmin && !suspended && adminNavItems.map((item) => {
+              {isAdmin && adminNavItems.map((item) => {
                 const Icon = item.icon
                 const active = pathname.startsWith(item.href)
                 return (
@@ -169,7 +169,7 @@ export function DashboardShell({
 
       {/* Page content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {suspended && !isSupportRoute ? (
+        {suspended && !isSupportRoute && !pathname.startsWith('/dashboard/admin') ? (
           <SuspensionBanner reason={suspensionReason ?? 'Account suspended'} appealable={appealable} suspensionType={suspensionType ?? undefined} />
         ) : (
           children

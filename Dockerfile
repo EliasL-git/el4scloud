@@ -38,7 +38,7 @@ RUN echo "DatabaseDirectory /var/lib/clamav" > /tmp/freshclam.conf && \
     echo "ConnectTimeout 30" >> /tmp/freshclam.conf && \
     echo "ReceiveTimeout 30" >> /tmp/freshclam.conf && \
     # Run freshclam once to download databases
-    freshclam --config-file=/tmp/freshclam.conf --no-daemon --stdout && \
+    freshclam --config-file=/tmp/freshclam.conf && \
     rm /tmp/freshclam.conf && \
     # Verify
     ls -lh /var/lib/clamav/ && \

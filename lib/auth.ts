@@ -33,7 +33,7 @@ export const auth = betterAuth({
   },
   emailAndPassword: {
     enabled: true,
-    disableSignUp: true, // sign-up is gated by access codes
+    disableSignUp: true,
     autoSignIn: true,
   },
   plugins: [

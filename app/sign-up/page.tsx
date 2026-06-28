@@ -1,8 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { registerWithAccessCode } from '@/app/actions/register'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { HardDrive } from 'lucide-react'
 
 export default function SignUpPage() {
   const router = useRouter()
@@ -48,105 +52,126 @@ export default function SignUpPage() {
     }
 
     setSuccess(true)
-    setTimeout(() => router.push('/dashboard'), 1500)
+    setTimeout(() => { window.location.href = '/dashboard' }, 1500)
   }
 
   if (success) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black">
-        <div className="w-full max-w-md space-y-6 rounded-lg border border-zinc-800 bg-zinc-900 p-8 text-center">
-          <h1 className="text-2xl font-bold text-green-400">Account Created!</h1>
-          <p className="text-zinc-400">Redirecting you to the dashboard...</p>
+      <div className="flex min-h-svh items-center justify-center bg-background px-4">
+        <div className="w-full max-w-sm flex flex-col gap-6">
+          <div className="flex items-center justify-center gap-2">
+            <div className="size-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--brand)' }}>
+              <HardDrive className="size-4" style={{ color: 'var(--brand-foreground)' }} />
+            </div>
+            <span className="text-lg font-semibold tracking-tight text-foreground">el4scloud</span>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl text-center">Account Created!</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center text-sm text-muted-foreground">
+              Redirecting you to the dashboard...
+            </CardContent>
+          </Card>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black">
-      <div className="w-full max-w-md space-y-6 rounded-lg border border-zinc-800 bg-zinc-900 p-8">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-white">Register</h1>
-          <p className="mt-1 text-sm text-zinc-400">
-            Enter your access code to create an account
-          </p>
+    <div className="flex min-h-svh items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm flex flex-col gap-6">
+        <div className="flex items-center justify-center gap-2">
+          <div className="size-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--brand)' }}>
+            <HardDrive className="size-4" style={{ color: 'var(--brand-foreground)' }} />
+          </div>
+          <span className="text-lg font-semibold tracking-tight text-foreground">el4scloud</span>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-zinc-300">Access Code</label>
-            <input
-              name="code"
-              type="text"
-              required
-              placeholder="XXXX-XXXX-XXXX"
-              className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl">Register</CardTitle>
+            <CardDescription>Enter your access code to create an account</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="code">Access Code</Label>
+                <Input
+                  id="code"
+                  name="code"
+                  type="text"
+                  required
+                  placeholder="XXXX-XXXX-XXXX"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-300">Name</label>
-            <input
-              name="name"
-              type="text"
-              required
-              placeholder="Your name"
-              className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  type="text"
+                  required
+                  placeholder="Your name"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-300">Email</label>
-            <input
-              name="email"
-              type="email"
-              required
-              placeholder="you@example.com"
-              className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="you@example.com"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-300">Password</label>
-            <input
-              name="password"
-              type="password"
-              required
-              minLength={8}
-              placeholder="At least 8 characters"
-              className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  minLength={8}
+                  placeholder="At least 8 characters"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-zinc-300">Confirm Password</label>
-            <input
-              name="confirm"
-              type="password"
-              required
-              placeholder="Repeat your password"
-              className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="confirm">Confirm Password</Label>
+                <Input
+                  id="confirm"
+                  name="confirm"
+                  type="password"
+                  required
+                  placeholder="Repeat your password"
+                />
+              </div>
 
-          {error && (
-            <div className="rounded-md bg-red-900/50 px-3 py-2 text-sm text-red-400">
-              {error}
-            </div>
-          )}
+              {error && (
+                <p className="text-sm text-destructive" role="alert">
+                  {error}
+                </p>
+              )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
-            {loading ? 'Registering...' : 'Register'}
-          </button>
-        </form>
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full"
+                style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+              >
+                {loading ? 'Registering...' : 'Register'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
 
-        <p className="text-center text-sm text-zinc-500">
+        <p className="text-center text-sm text-muted-foreground">
           Already have an account?{' '}
-          <a href="/sign-in" className="text-blue-400 hover:underline">
+          <a href="/sign-in" className="underline underline-offset-2 hover:text-foreground">
             Sign in
           </a>
         </p>

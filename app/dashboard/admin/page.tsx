@@ -1345,10 +1345,10 @@ export default function AdminPage() {
                 <select
                   value={suspendReason}
                   onChange={(e) => setSuspendReason(e.target.value)}
-                  className="h-8 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="h-8 w-full rounded-md border border-input bg-card px-2.5 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {SUSPENSION_REASONS.map((r) => (
-                    <option key={r} value={r}>{r}</option>
+                    <option key={r} value={r} className="bg-card text-foreground">{r}</option>
                   ))}
                 </select>
               </div>
