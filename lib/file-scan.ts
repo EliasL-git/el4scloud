@@ -71,22 +71,32 @@ function logFileSize(filePath: string): string {
   }
 }
 
+// Serialize scans — only one at a time to avoid OOM
+let scanQueue: Promise<void> = Promise.resolve()
+
 export async function scanFile(filePath: string): Promise<ScanResult> {
-  if (!CLAMAV_ENABLED) {
-    console.log(`[file-scan] ClamAV disabled by CLAMAV_ENABLED=false — skipping ${filePath}`)
-    return { infected: false }
-  }
-
-  const clamscan = await getClamscan()
-  if (!clamscan) {
-    console.warn(`[file-scan] ClamAV not available — cannot scan ${filePath}`)
-    return { infected: false, error: 'ClamAV not available' }
-  }
-
-  const fileSize = logFileSize(filePath)
-  console.log(`[file-scan] Scanning ${filePath} (${fileSize})...`)
+  // Wait for all previous scans to finish before starting this one
+  let release: () => void
+  const wait = new Promise<void>((r) => { release = r })
+  const prev = scanQueue
+  scanQueue = prev.then(() => wait)
+  await prev
 
   try {
+    if (!CLAMAV_ENABLED) {
+      console.log(`[file-scan] ClamAV disabled by CLAMAV_ENABLED=false — skipping ${filePath}`)
+      return { infected: false }
+    }
+
+    const clamscan = await getClamscan()
+    if (!clamscan) {
+      console.warn(`[file-scan] ClamAV not available — cannot scan ${filePath}`)
+      return { infected: false, error: 'ClamAV not available' }
+    }
+
+    const fileSize = logFileSize(filePath)
+    console.log(`[file-scan] Scanning ${filePath} (${fileSize})...`)
+
     const start = Date.now()
     const { isInfected, viruses } = await clamscan.isInfected(filePath)
     const elapsed = Date.now() - start
@@ -105,6 +115,8 @@ export async function scanFile(filePath: string): Promise<ScanResult> {
   } catch (err: any) {
     console.error(`[file-scan] SCAN ERROR for ${filePath}: ${err.message}`)
     return { infected: false, error: err.message }
+  } finally {
+    release()
   }
 }
 
