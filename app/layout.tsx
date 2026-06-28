@@ -3,6 +3,8 @@ import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
+// Trigger one-time recovery of pending scans at server startup
+import '@/lib/scan-recovery-init'
 
 const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
 const geistMono = Geist_Mono({
