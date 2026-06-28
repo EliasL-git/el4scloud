@@ -3,7 +3,7 @@
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { files, user, flaggedHashes } from '@/lib/db/schema'
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, or, isNull } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { s3, S3_BUCKET } from '@/lib/s3'
@@ -27,7 +27,13 @@ export async function getFiles() {
   return db
     .select()
     .from(files)
-    .where(eq(files.userId, userId))
+    .where(
+      and(
+        eq(files.userId, userId),
+        // Exclude blocked/flagged files (stored for admin visibility only)
+        or(eq(files.scanResult, 'clean'), isNull(files.scanResult)),
+      )
+    )
     .orderBy(desc(files.createdAt))
 }
 
@@ -118,7 +124,12 @@ export async function getFileStats() {
   const userFiles = await db
     .select()
     .from(files)
-    .where(eq(files.userId, userId))
+    .where(
+      and(
+        eq(files.userId, userId),
+        or(eq(files.scanResult, 'clean'), isNull(files.scanResult)),
+      )
+    )
 
   const totalSize = userFiles.reduce((acc, f) => acc + f.size, 0)
   const publicCount = userFiles.filter((f) => f.isPublic).length

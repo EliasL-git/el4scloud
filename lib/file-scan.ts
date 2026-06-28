@@ -2,30 +2,6 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 
-// ── Bad pattern checking ────────────────────────────────────────────────────
-
-export interface BadPatternResult {
-  isBad: boolean
-  reason?: string
-}
-
-const SUSPICIOUS_FILENAME_PATTERNS: { pattern: RegExp; reason: string }[] = [
-  { pattern: /\..*?\.[a-z]{2,4}$/i, reason: 'Suspicious double extension' },
-  { pattern: /[\u202E\u200F\u200E]/, reason: 'Unicode direction override characters detected' },
-  { pattern: /\0/, reason: 'Null byte in filename' },
-  { pattern: /^(?:ntuser\.dat|boot\.ini|pagefile\.sys|config\.sys|autoexec\.bat)$/i, reason: 'Filename impersonates system file' },
-  { pattern: /\.[a-z0-9]{10,}$/i, reason: 'Suspiciously long file extension' },
-]
-
-export function checkFilenamePatterns(fileName: string): BadPatternResult {
-  for (const { pattern, reason } of SUSPICIOUS_FILENAME_PATTERNS) {
-    if (pattern.test(fileName)) {
-      return { isBad: true, reason }
-    }
-  }
-  return { isBad: false }
-}
-
 // ── ClamAV scanning (via clamscan npm package) ──────────────────────────────
 
 const CLAMAV_ENABLED = process.env.CLAMAV_ENABLED !== 'false'
@@ -119,14 +95,6 @@ export async function checkFile(
   fileName: string,
   filePath: string,
 ): Promise<FileCheckResult> {
-  const patternResult = checkFilenamePatterns(fileName)
-  if (patternResult.isBad) {
-    return {
-      allowed: false,
-      reason: patternResult.reason,
-    }
-  }
-
   const scanResult = await scanFile(filePath)
   if (scanResult.infected) {
     return {

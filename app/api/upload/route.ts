@@ -123,6 +123,23 @@ export async function POST(req: Request) {
       const currentCount = currentWarn?.warningCount ?? 0
       const newCount = currentCount + 1
 
+      // Store a record of the blocked file
+      const blockedFileId = uuidv4()
+      const blockedExt = fileName.split('.').pop()
+      const blockedKey = `${userId}/blocked/${blockedFileId}${blockedExt ? `.${blockedExt}` : ''}`
+      await db.insert(files).values({
+        id: blockedFileId,
+        userId,
+        name: fileName,
+        originalName: fileName,
+        key: blockedKey,
+        size,
+        mimeType: file.type || 'application/octet-stream',
+        isPublic: false,
+        scanStatus: 'scanned',
+        scanResult: checkResult.virusName || checkResult.reason || 'flagged',
+      })
+
       // Increment warning count in DB
       await db
         .update(user)

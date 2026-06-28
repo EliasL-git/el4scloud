@@ -861,16 +861,23 @@ export default function AdminPage() {
           )}
           {fileResults.map((f) => {
             let scanBadge: { label: string; variant: 'outline' | 'secondary' | 'default' | 'destructive' } | null = null
+            let scanDetail: string | null = null
             if (!f.scanStatus) {
               scanBadge = null
             } else if (f.scanStatus === 'pending') {
               scanBadge = { label: 'Pending', variant: 'outline' }
+              scanDetail = f.scanResult ?? null
             } else if (f.scanStatus === 'scanned' && f.scanResult === 'clean') {
               scanBadge = { label: 'Clean', variant: 'secondary' }
             } else if (f.scanStatus === 'scanned' && f.scanResult === 'flagged') {
               scanBadge = { label: 'Flagged', variant: 'destructive' }
+              scanDetail = 'Malware detected'
+            } else if (f.scanStatus === 'scanned' && f.scanResult) {
+              scanBadge = { label: 'Flagged', variant: 'destructive' }
+              scanDetail = f.scanResult
             } else if (f.scanStatus === 'error') {
               scanBadge = { label: 'Scan error', variant: 'destructive' }
+              scanDetail = f.scanResult ?? null
             }
             return (
             <Card key={f.id}>
@@ -886,6 +893,9 @@ export default function AdminPage() {
                       {f.userName} ({f.userEmail}) &middot; {formatBytes(f.size)} &middot; {formatDate(f.createdAt)}
                     </p>
                     <p className="text-xs text-muted-foreground mt-0.5 font-mono">{f.name}</p>
+                    {scanDetail && (
+                      <p className="text-xs text-destructive mt-1 break-words">{scanDetail}</p>
+                    )}
                   </div>
                   <Badge variant="outline">{f.mimeType}</Badge>
                 </div>
