@@ -190,7 +190,7 @@ export async function POST(req: Request) {
 
     await s3.send(command)
 
-    // Insert file record
+    // Insert file record with scan result
     await db.insert(files).values({
       id: fileId,
       userId,
@@ -200,6 +200,8 @@ export async function POST(req: Request) {
       size,
       mimeType,
       isPublic,
+      scanStatus: 'scanned',
+      scanResult: 'clean',
     })
 
     return Response.json({

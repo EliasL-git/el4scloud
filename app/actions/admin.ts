@@ -270,8 +270,8 @@ export async function suspendUser(userId: string, reason: string, appealable: bo
 
 export async function searchFiles(query: string) {
   const adminId = await assertAdmin()
-  if (!query?.trim()) return []
   await logAuditEventWithHeaders(adminId, 'admin.files_searched', JSON.stringify({ query }))
+  const conditions = query?.trim() ? ilike(files.name, `%${query.trim()}%`) : undefined
   return db
     .select({
       id: files.id,
@@ -289,7 +289,7 @@ export async function searchFiles(query: string) {
     })
     .from(files)
     .innerJoin(user, eq(files.userId, user.id))
-    .where(ilike(files.name, `%${query.trim()}%`))
+    .where(conditions)
     .orderBy(desc(files.createdAt))
     .limit(50)
 }

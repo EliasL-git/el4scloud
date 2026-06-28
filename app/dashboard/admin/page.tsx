@@ -150,6 +150,14 @@ export default function AdminPage() {
     refresh()
   }, [refresh])
 
+  // Load recent files when Files tab is selected
+  useEffect(() => {
+    if (tab === 'files' && fileResults.length === 0 && !fileSearching) {
+      setFileSearching(true)
+      searchFiles('').then(setFileResults).finally(() => setFileSearching(false))
+    }
+  }, [tab])
+
   const handleApprove = async (id: string, defaultAmount: string) => {
     setProcessing((p) => ({ ...p, [id]: true }))
     try {
@@ -240,7 +248,6 @@ export default function AdminPage() {
   }
 
   const handleFileSearch = async () => {
-    if (!fileQuery.trim()) { setFileResults([]); return }
     setFileSearching(true)
     try {
       const res = await searchFiles(fileQuery.trim())
@@ -853,8 +860,10 @@ export default function AdminPage() {
           )}
           {fileResults.map((f) => {
             let scanBadge: { label: string; variant: 'outline' | 'secondary' | 'default' | 'destructive' } | null = null
-            if (f.scanStatus === 'pending') {
-              scanBadge = { label: 'Scan pending', variant: 'outline' }
+            if (!f.scanStatus) {
+              scanBadge = null
+            } else if (f.scanStatus === 'pending') {
+              scanBadge = { label: 'Pending', variant: 'outline' }
             } else if (f.scanStatus === 'scanned' && f.scanResult === 'clean') {
               scanBadge = { label: 'Clean', variant: 'secondary' }
             } else if (f.scanStatus === 'scanned' && f.scanResult === 'flagged') {
@@ -883,10 +892,10 @@ export default function AdminPage() {
             </Card>
             )
           })}
-          {!fileQuery && (
+          {!fileQuery && fileResults.length === 0 && !fileSearching && (
             <Card>
               <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                Enter a file name to search.
+                No files uploaded yet.
               </CardContent>
             </Card>
           )}
