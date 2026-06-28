@@ -38,7 +38,9 @@ export default async function DashboardLayout({
 
   const suspensionType = u?.suspensionType as 'suspended' | 'terminated' | null | undefined
   const isAdmin = u?.role === 'admin'
-  const suspended = !!(u?.banned && u?.suspensionReason)
+  // 'warned' users are banned but not suspended — they must see the dashboard page
+  // (including the ViolationWarningDialog) so they can reactivate.
+  const suspended = !!(u?.banned && u?.suspensionReason && u?.suspensionType !== 'warned')
   const appealable = u?.appealable
 
   return (

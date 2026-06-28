@@ -12,6 +12,7 @@ import {
   resetStorageLimit,
   setStorageLimit,
   revokePublicFiles,
+  resetWarnings,
   adminGetTickets,
   adminGetTicketReplies,
   adminReplyToTicket,
@@ -38,7 +39,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Search, Ban, Download, CheckCircle2 } from 'lucide-react'
+import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Search, Ban, Download, CheckCircle2, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -1046,11 +1047,18 @@ export default function AdminPage() {
                         <span>Joined: {formatDate(u.createdAt)}</span>
                       </div>
                       {u.suspensionReason && (
-                        <p className="text-xs text-destructive mt-1 italic truncate">
+                        <p className="text-xs text-destructive mt-1 italic break-words">
                           {u.suspensionReason}
+                          {u.suspensionType && <> ({u.suspensionType})</>}
+                          {u.warningCount > 0 && <> &middot; Warnings: {u.warningCount}</>}
                           {u.suspensionType === 'terminated' && u.terminatedAt && (
                             <> &middot; Terminated {formatDate(u.terminatedAt)}</>
                           )}
+                        </p>
+                      )}
+                      {!u.suspensionReason && u.warningCount > 0 && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Warnings: {u.warningCount}
                         </p>
                       )}
                     </div>
@@ -1087,9 +1095,19 @@ export default function AdminPage() {
               <span>Role: <span className="text-foreground">{selectedUser.role}</span></span>
               <span>Storage: <span className="text-foreground">{formatBytes(selectedUser.storageLimit)}</span></span>
               <span>Joined: <span className="text-foreground">{formatDate(selectedUser.createdAt)}</span></span>
-              {selectedUser.suspensionReason && (
-                <span className="col-span-2">Reason: <span className="text-destructive">{selectedUser.suspensionReason}</span></span>
+              {selectedUser.suspensionType && (
+                <span className="col-span-2">
+                  Suspension type: <span className="text-destructive font-medium">{selectedUser.suspensionType}</span>
+                </span>
               )}
+              {selectedUser.suspensionReason && (
+                <span className="col-span-2">
+                  Reason: <span className="text-destructive break-words">{selectedUser.suspensionReason}</span>
+                </span>
+              )}
+              <span className="col-span-2">
+                Warning count: <span className="text-foreground font-medium">{selectedUser.warningCount}</span>
+              </span>
             </div>
 
             <div className="border-t border-border pt-3 flex flex-col gap-2">
@@ -1119,6 +1137,15 @@ export default function AdminPage() {
                   <GlobeOff className="size-3" />
                   Revoke public
                 </Button>
+                {selectedUser.warningCount > 0 && (
+                  <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
+                    onClick={() => { handleAction(selectedUser.id, 'reset-warnings', () => resetWarnings(selectedUser.id), 'Warnings reset'); setSelectedUser(null) }}
+                    disabled={processing[`reset-warnings-${selectedUser.id}`]}
+                  >
+                    <RefreshCw className="size-3" />
+                    {processing[`reset-warnings-${selectedUser.id}`] ? '...' : 'Reset warnings'}
+                  </Button>
+                )}
 
                 <div className="flex items-center gap-1">
                   <span className="text-[10px] text-muted-foreground">Storage:</span>

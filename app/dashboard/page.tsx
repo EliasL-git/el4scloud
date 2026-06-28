@@ -9,6 +9,7 @@ import { StatsCards } from '@/components/dashboard/stats-cards'
 import { Separator } from '@/components/ui/separator'
 import { Toaster } from '@/components/ui/sonner'
 import { ViolationWarningDialog } from '@/components/dashboard/violation-warning-dialog'
+import { WarningBanner } from '@/components/dashboard/warning-banner'
 
 type FileRecord = Awaited<ReturnType<typeof getFiles>>[number]
 type Stats = Awaited<ReturnType<typeof getFileStats>>
@@ -24,6 +25,7 @@ export default function DashboardPage() {
   const [storageLimit, setStorageLimit] = useState(15 * 1024 * 1024 * 1024)
   const [loading, setLoading] = useState(true)
   const [warnedInfo, setWarnedInfo] = useState<{ fileName?: string; reason?: string; suspended?: boolean } | null>(null)
+  const [bannerInfo, setBannerInfo] = useState<{ reason?: string; suspended?: boolean } | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -47,13 +49,50 @@ export default function DashboardPage() {
     Promise.all([refresh(), checkWarnings()])
   }, [refresh])
 
-  const handleWarningClose = () => {
+  const handleWarningClose = async () => {
+    const prev = warnedInfo
     setWarnedInfo(null)
-    refresh()
+    await refresh()
+    // Re-check status — if still warned/suspended, show the banner
+    const status = await getAccountStatus()
+    if (status?.warned) {
+      setBannerInfo({ reason: status.reason ?? undefined })
+    } else if (status?.suspended) {
+      setBannerInfo({ reason: status.reason ?? undefined, suspended: true })
+    }
+  }
+
+  const handleBannerReactivate = () => {
+    if (bannerInfo) {
+      setWarnedInfo({ reason: bannerInfo.reason, suspended: bannerInfo.suspended })
+      setBannerInfo(null)
+    }
+  }
+
+  const handleBannerDismiss = () => {
+    setBannerInfo(null)
+  }
+
+  const handleFileUploaderWarningDismissed = async () => {
+    // Re-check account status to show the right banner
+    const status = await getAccountStatus()
+    if (status?.warned) {
+      setBannerInfo({ reason: status.reason ?? undefined })
+    } else if (status?.suspended) {
+      setBannerInfo({ reason: status.reason ?? undefined, suspended: true })
+    }
   }
 
   return (
     <div className="flex flex-col gap-6">
+      {bannerInfo && (
+        <WarningBanner
+          reason={bannerInfo.reason}
+          suspended={bannerInfo.suspended}
+          onReactivate={!bannerInfo.suspended ? handleBannerReactivate : undefined}
+          onDismiss={handleBannerDismiss}
+        />
+      )}
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Files</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
@@ -65,7 +104,7 @@ export default function DashboardPage() {
 
       <div className="flex flex-col gap-4">
         <h2 className="text-sm font-medium text-foreground">Upload files</h2>
-        <FileUploader onUploadComplete={refresh} />
+        <FileUploader onUploadComplete={refresh} onWarningDismissed={handleFileUploaderWarningDismissed} />
       </div>
 
       <Separator />

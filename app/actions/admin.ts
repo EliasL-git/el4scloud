@@ -294,6 +294,22 @@ export async function searchFiles(query: string) {
     .limit(50)
 }
 
+export async function resetWarnings(userId: string) {
+  const adminId = await assertAdmin()
+  await db
+    .update(user)
+    .set({
+      warningCount: 0,
+      banned: false,
+      suspensionReason: null,
+      suspensionType: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(user.id, userId))
+  await logAuditEventWithHeaders(adminId, 'admin.warnings_reset', JSON.stringify({ targetUserId: userId }))
+  return { ok: true }
+}
+
 export async function flagHash(hash: string) {
   const adminId = await assertAdmin()
   if (!hash?.trim()) throw new Error('Hash is required')

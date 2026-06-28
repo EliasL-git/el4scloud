@@ -51,7 +51,7 @@ export function ViolationWarningDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <AlertDialogContent size="sm" className="sm:max-w-md">
+      <AlertDialogContent size="default" className="sm:max-w-[35rem]">
         <AlertDialogHeader>
           <AlertDialogMedia
             style={suspended ? { backgroundColor: 'var(--destructive)' } : { backgroundColor: 'var(--brand)' }}

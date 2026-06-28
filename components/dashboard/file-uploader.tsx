@@ -33,7 +33,7 @@ function formatBytes(bytes: number) {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
 
-export function FileUploader({ onUploadComplete }: { onUploadComplete: () => void }) {
+export function FileUploader({ onUploadComplete, onWarningDismissed }: { onUploadComplete: () => void; onWarningDismissed?: () => void }) {
   const [pending, setPending] = useState<PendingFile[]>([])
   const [isPublic, setIsPublic] = useState(false)
   const [violation, setViolation] = useState<ViolationInfo | null>(null)
@@ -58,6 +58,9 @@ export function FileUploader({ onUploadComplete }: { onUploadComplete: () => voi
   }
 
   const handleViolationClose = () => {
+    if (onWarningDismissed && violation) {
+      onWarningDismissed()
+    }
     setViolation(null)
     // Refresh the dashboard (account status, files, etc.)
     onUploadComplete()
