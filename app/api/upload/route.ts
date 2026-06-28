@@ -185,7 +185,7 @@ export async function POST(req: Request) {
       }, { status: 403 })
     }
 
-    // File passed all checks — upload to S3
+    // File passed malware checks — upload to S3
     const fileId = uuidv4()
     const ext = fileName.split('.').pop()
     const key = `${userId}/${fileId}${ext ? `.${ext}` : ''}`
@@ -207,6 +207,8 @@ export async function POST(req: Request) {
     await s3.send(command)
 
     // Insert file record with scan result
+    const scanStatus = checkResult.scanError ? 'error' : 'scanned'
+    const scanResult = checkResult.scanError || 'clean'
     await db.insert(files).values({
       id: fileId,
       userId,
@@ -216,8 +218,8 @@ export async function POST(req: Request) {
       size,
       mimeType,
       isPublic,
-      scanStatus: 'scanned',
-      scanResult: 'clean',
+      scanStatus,
+      scanResult,
     })
 
     return Response.json({

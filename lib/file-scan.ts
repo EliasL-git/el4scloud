@@ -89,6 +89,7 @@ export interface FileCheckResult {
   allowed: boolean
   reason?: string
   virusName?: string
+  scanError?: string
 }
 
 export async function checkFile(
@@ -104,10 +105,11 @@ export async function checkFile(
     }
   }
   if (scanResult.error) {
+    // ClamAV unavailable or scan error — allow the file through but flag it
     console.error(`[file-scan] ClamAV error for ${fileName}: ${scanResult.error}`)
     return {
-      allowed: false,
-      reason: `Security scan failed: ${scanResult.error}`,
+      allowed: true,
+      scanError: scanResult.error,
     }
   }
 

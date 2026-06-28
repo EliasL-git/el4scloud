@@ -31,7 +31,7 @@ export async function getFiles() {
       and(
         eq(files.userId, userId),
         // Exclude blocked/flagged files (stored for admin visibility only)
-        or(eq(files.scanResult, 'clean'), isNull(files.scanResult)),
+        or(eq(files.scanStatus, 'error'), eq(files.scanResult, 'clean'), isNull(files.scanResult)),
       )
     )
     .orderBy(desc(files.createdAt))
@@ -127,7 +127,7 @@ export async function getFileStats() {
     .where(
       and(
         eq(files.userId, userId),
-        or(eq(files.scanResult, 'clean'), isNull(files.scanResult)),
+        or(eq(files.scanStatus, 'error'), eq(files.scanResult, 'clean'), isNull(files.scanResult)),
       )
     )
 
