@@ -3,7 +3,7 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, files, apiKeys, storageRequests, tickets, ticketReplies, deletionRequests } from '@/lib/db/schema'
+import { user, files, apiKeys, storageRequests, tickets, ticketReplies, deletionRequests, auditLog, appeals } from '@/lib/db/schema'
 import { eq, desc } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
@@ -51,13 +51,7 @@ export async function exportMyData() {
   const userId = session.user.id
 
   const [u] = await db
-    .select({
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      storageLimit: user.storageLimit,
-      createdAt: user.createdAt,
-    })
+    .select()
     .from(user)
     .where(eq(user.id, userId))
 
@@ -68,6 +62,9 @@ export async function exportMyData() {
       size: files.size,
       mimeType: files.mimeType,
       isPublic: files.isPublic,
+      scanStatus: files.scanStatus,
+      scanResult: files.scanResult,
+      key: files.key,
       createdAt: files.createdAt,
     })
     .from(files)
@@ -126,6 +123,27 @@ export async function exportMyData() {
       .orderBy(desc(ticketReplies.createdAt))
   }
 
+  const userAuditLog = await db
+    .select({
+      action: auditLog.action,
+      details: auditLog.details,
+      createdAt: auditLog.createdAt,
+    })
+    .from(auditLog)
+    .where(eq(auditLog.userId, userId))
+    .orderBy(desc(auditLog.createdAt))
+
+  const userAppeals = await db
+    .select({
+      reason: appeals.reason,
+      status: appeals.status,
+      adminNote: appeals.adminNote,
+      createdAt: appeals.createdAt,
+    })
+    .from(appeals)
+    .where(eq(appeals.userId, userId))
+    .orderBy(desc(appeals.createdAt))
+
   await logAuditEventWithHeaders(userId, 'account.data_exported', JSON.stringify({}))
 
   return {
@@ -136,5 +154,7 @@ export async function exportMyData() {
     storageRequests: userRequests,
     tickets: userTickets,
     ticketReplies: userReplies,
+    auditLog: userAuditLog,
+    appeals: userAppeals,
   }
 }
