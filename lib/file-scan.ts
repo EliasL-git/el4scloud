@@ -1,6 +1,4 @@
 import * as fs from 'fs'
-import * as path from 'path'
-import * as os from 'os'
 
 // ── ClamAV scanning (via clamscan npm package) ──────────────────────────────
 
@@ -10,6 +8,7 @@ export interface ScanResult {
   infected: boolean
   virusName?: string
   error?: string
+  scanDurationMs?: number
 }
 
 let _clamscan: any = null
@@ -75,7 +74,6 @@ function logFileSize(filePath: string): string {
 let scanQueue: Promise<void> = Promise.resolve()
 
 export async function scanFile(filePath: string): Promise<ScanResult> {
-  // Wait for all previous scans to finish before starting this one
   let release: () => void
   const wait = new Promise<void>((r) => { release = r })
   const prev = scanQueue
@@ -107,95 +105,17 @@ export async function scanFile(filePath: string): Promise<ScanResult> {
       return {
         infected: true,
         virusName: name,
+        scanDurationMs: elapsed,
       }
     }
 
     console.log(`[file-scan] CLEAN: ${filePath} (${elapsed}ms)`)
-    return { infected: false }
+    return { infected: false, scanDurationMs: elapsed }
   } catch (err: any) {
     console.error(`[file-scan] SCAN ERROR for ${filePath}: ${err.message}`)
     return { infected: false, error: err.message }
   } finally {
     release()
-  }
-}
-
-// ── ZIP archive scanning ─────────────────────────────────────────────────────
-
-const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04])
-
-function isZipFile(filePath: string): boolean {
-  try {
-    const fd = fs.openSync(filePath, 'r')
-    const buf = Buffer.alloc(4)
-    fs.readSync(fd, buf, 0, 4, 0)
-    fs.closeSync(fd)
-    const isZip = buf.equals(ZIP_MAGIC)
-    console.log(`[file-scan] ${isZip ? 'ZIP' : 'Not ZIP'} (magic: ${buf.toString('hex')}) — ${path.basename(filePath)}`)
-    return isZip
-  } catch {
-    console.warn(`[file-scan] Could not read magic bytes for ${path.basename(filePath)}`)
-    return false
-  }
-}
-
-/**
- * Scan a ZIP archive by extracting and scanning each entry individually.
- * Returns the first infected result found, or null if all entries are clean.
- */
-async function scanZipArchive(zipPath: string): Promise<{ infected: boolean; virusName?: string; reason?: string } | null> {
-  const AdmZip = require('adm-zip')
-  let zip: any
-  try {
-    zip = new AdmZip(zipPath)
-  } catch (err: any) {
-    console.error(`[file-scan] ZIP open failed for ${path.basename(zipPath)}: ${err.message}`)
-    return { infected: true, reason: `Corrupted or invalid archive: ${err.message}` }
-  }
-
-  const entries = zip.getEntries() as any[]
-  const totalEntries = entries.filter((e: any) => !e.isDirectory).length
-  const totalDirs = entries.filter((e: any) => e.isDirectory).length
-  console.log(`[file-scan] ZIP ${path.basename(zipPath)}: ${totalEntries} files, ${totalDirs} directories`)
-
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'el4s-entries-'))
-  let scanned = 0
-
-  try {
-    for (const entry of entries) {
-      if (entry.isDirectory) {
-        console.log(`[file-scan]   dir:  ${entry.entryName}`)
-        continue
-      }
-
-      // Check for encryption flag (bit 0 of general purpose bit flag)
-      if (entry.header?.flags !== undefined && (entry.header.flags & 1) === 1) {
-        console.error(`[file-scan]   BLOCKED: ${entry.entryName} — password-protected/encrypted`)
-        return { infected: true, reason: 'Password-protected/encrypted archive entry' }
-      }
-
-      // Extract entry to temp file
-      const start = Date.now()
-      const entryBuf: Buffer = entry.getData()
-      // Sanitize entry name to prevent path traversal
-      const safeName = path.basename(entry.entryName).replace(/[^a-zA-Z0-9._-]/g, '_') || 'unnamed'
-      const entryPath = path.join(tmpDir, safeName)
-      fs.writeFileSync(entryPath, entryBuf)
-      console.log(`[file-scan]   extracting: ${entry.entryName} (${entryBuf.length} bytes, ${Date.now() - start}ms)`)
-
-      // Scan this entry with ClamAV
-      scanned++
-      const result = await scanFile(entryPath)
-      if (result.infected) {
-        console.error(`[file-scan]   INFECTED in archive: ${entry.entryName} -> ${result.virusName}`)
-        return { infected: true, virusName: result.virusName, reason: `Malware detected in archive entry '${entry.entryName}': ${result.virusName}` }
-      }
-    }
-
-    console.log(`[file-scan] ZIP ${path.basename(zipPath)}: all ${scanned} entries clean`)
-    return null
-  } finally {
-    try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch {}
   }
 }
 
@@ -206,6 +126,7 @@ export interface FileCheckResult {
   reason?: string
   virusName?: string
   scanError?: string
+  scanDurationMs?: number
 }
 
 export async function checkFile(
@@ -215,41 +136,26 @@ export async function checkFile(
   const fileSize = logFileSize(filePath)
   console.log(`[file-scan] checkFile start: "${fileName}" (${fileSize})`)
 
-  // For ZIP files, extract and scan each entry
-  if (isZipFile(filePath)) {
-    console.log(`[file-scan] "${fileName}" is a ZIP archive — extracting for entry-level scan`)
-    const zipResult = await scanZipArchive(filePath)
-    if (zipResult?.infected) {
-      console.log(`[file-scan] RESULT: "${fileName}" BLOCKED — ${zipResult.reason}`)
-      return {
-        allowed: false,
-        reason: zipResult.reason || 'Blocked archive content',
-        virusName: zipResult.virusName,
-      }
-    }
-    console.log(`[file-scan] "${fileName}" ZIP entries all clean — proceeding to raw scan`)
-  }
-
-  // Also scan the raw file with ClamAV (handles other archive types and non-archives)
-  console.log(`[file-scan] Raw ClamAV scan for "${fileName}"...`)
   const scanResult = await scanFile(filePath)
+
   if (scanResult.infected) {
     console.log(`[file-scan] RESULT: "${fileName}" BLOCKED — ${scanResult.virusName}`)
     return {
       allowed: false,
       reason: `Malware detected: ${scanResult.virusName}`,
       virusName: scanResult.virusName,
+      scanDurationMs: scanResult.scanDurationMs,
     }
   }
   if (scanResult.error) {
-    // ClamAV unavailable or scan error — allow the file through but flag it
     console.error(`[file-scan] RESULT: "${fileName}" SCAN ERROR — ${scanResult.error} (allowing through)`)
     return {
       allowed: true,
       scanError: scanResult.error,
+      scanDurationMs: scanResult.scanDurationMs,
     }
   }
 
   console.log(`[file-scan] RESULT: "${fileName}" ALLOWED — clean`)
-  return { allowed: true }
+  return { allowed: true, scanDurationMs: scanResult.scanDurationMs }
 }

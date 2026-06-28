@@ -86,6 +86,7 @@ export const files = pgTable('files', {
   fileHash: text('fileHash'),
   scanStatus: text('scanStatus').default('pending'),
   scanResult: text('scanResult'),
+  scanDuration: integer('scanDuration'), // milliseconds
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })

@@ -195,7 +195,7 @@ async function scanAndHandle(
       const scanResult = checkResult.virusName || checkResult.reason || 'flagged'
       await db
         .update(files)
-        .set({ scanStatus: 'scanned', scanResult })
+        .set({ scanStatus: 'scanned', scanResult, scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
 
       if (newCount >= 2) {
@@ -227,13 +227,13 @@ async function scanAndHandle(
       // ClamAV unavailable or error — update record to reflect scan error
       await db
         .update(files)
-        .set({ scanStatus: 'error', scanResult: checkResult.scanError })
+        .set({ scanStatus: 'error', scanResult: checkResult.scanError, scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
     } else {
       // File is clean
       await db
         .update(files)
-        .set({ scanStatus: 'scanned', scanResult: 'clean' })
+        .set({ scanStatus: 'scanned', scanResult: 'clean', scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
     }
   } catch (err: any) {

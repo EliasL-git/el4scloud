@@ -73,7 +73,7 @@ async function scanPendingFile(fileId: string, key: string, fileName: string, us
       const scanResult = checkResult.virusName || checkResult.reason || 'flagged'
       await db
         .update(files)
-        .set({ scanStatus: 'scanned', scanResult })
+        .set({ scanStatus: 'scanned', scanResult, scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
 
       if (newCount >= 2) {
@@ -102,13 +102,13 @@ async function scanPendingFile(fileId: string, key: string, fileName: string, us
     } else if (checkResult.scanError) {
       await db
         .update(files)
-        .set({ scanStatus: 'error', scanResult: checkResult.scanError })
+        .set({ scanStatus: 'error', scanResult: checkResult.scanError, scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
       console.log(`[scan-recovery] Scan error for ${fileId} (${fileName}): ${checkResult.scanError}`)
     } else {
       await db
         .update(files)
-        .set({ scanStatus: 'scanned', scanResult: 'clean' })
+        .set({ scanStatus: 'scanned', scanResult: 'clean', scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
       console.log(`[scan-recovery] File ${fileId} (${fileName}) marked clean`)
     }

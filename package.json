@@ -16,7 +16,6 @@
     "@base-ui/react": "^1.5.0",
     "@react-email/components": "^1.0.12",
     "@vercel/analytics": "1.6.1",
-    "adm-zip": "^0.5.17",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.6.20",
     "clamscan": "^2.4.0",

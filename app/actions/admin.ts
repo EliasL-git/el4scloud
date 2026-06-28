@@ -4,7 +4,7 @@ import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
 import { user, storageRequests, files, tickets, ticketReplies, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, accessCodes, takedownRequests } from '@/lib/db/schema'
-import { eq, desc, ilike, and } from 'drizzle-orm'
+import { eq, desc, ilike, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
 import { s3, S3_BUCKET } from '@/lib/s3'
@@ -510,6 +510,31 @@ export async function revokeAccessCode(codeId: string) {
     .where(eq(accessCodes.id, codeId))
   await logAuditEventWithHeaders(adminId, 'admin.access_code_revoked', JSON.stringify({ codeId }))
   return { ok: true }
+}
+
+// ─── Scan Stats ─────────────────────────────────────────────────
+
+export async function getScanStats() {
+  const adminId = await assertAdmin()
+
+  const [avgResult] = await db
+    .select({
+      avgDuration: sql<number>`ROUND(AVG("scanDuration"))`,
+      totalScans: sql<number>`COUNT(*)`,
+      past24hScans: sql<number>`COUNT(*) FILTER (WHERE "updatedAt" > NOW() - INTERVAL '24 hours')`,
+    })
+    .from(files)
+    .where(and(
+      sql`"scanStatus" IS NOT NULL`,
+      sql`"scanStatus" != 'pending'`,
+      sql`"scanDuration" IS NOT NULL`,
+    ))
+
+  return {
+    avgDuration: avgResult?.avgDuration ?? null,
+    totalScans: avgResult?.totalScans ?? 0,
+    past24hScans: avgResult?.past24hScans ?? 0,
+  }
 }
 
 // ─── Takedown Requests ─────────────────────────────────────────
