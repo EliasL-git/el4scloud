@@ -10,7 +10,7 @@ import { v4 as uuidv4 } from 'uuid'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
-import { checkFile, scanFile } from '@/lib/file-scan'
+import { checkFile } from '@/lib/file-scan'
 
 function hashKey(key: string) {
   return createHash('sha256').update(key).digest('hex')
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
     const buffer = Buffer.from(await file.arrayBuffer())
     fs.writeFileSync(tmpPath, buffer)
 
-    // Run file classification + malware scan
+    // Run file scan via ClamAV
     const checkResult = await checkFile(fileName, tmpPath)
 
     if (!checkResult.allowed) {
@@ -163,7 +163,6 @@ export async function POST(req: Request) {
 
       return Response.json({
         error: checkResult.reason || 'File rejected by security check',
-        classification: checkResult.classification,
         virusName: checkResult.virusName,
         warned: true,
       }, { status: 403 })

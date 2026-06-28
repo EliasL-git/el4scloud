@@ -2,56 +2,6 @@ import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
 
-// ── File type classification ────────────────────────────────────────────────
-
-const SAFE_EXTENSIONS = new Set([
-  'jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'bmp', 'ico', 'tiff', 'tif',
-  'txt', 'md', 'csv', 'json', 'xml', 'yaml', 'yml', 'toml', 'ini', 'cfg', 'log',
-  'css', 'scss', 'sass', 'less', 'jsx', 'ts', 'tsx', 'vue', 'svelte',
-  'js', 'mjs', 'cjs',
-  'py', 'rb', 'go', 'rs', 'java', 'kt', 'swift',
-  'c', 'cpp', 'h', 'hpp', 'cs', 'fs', 'ex', 'exs',
-  'php', 'pl', 'pm', 'lua', 'r', 'scala', 'clj',
-  'env', 'env.example', 'gitignore', 'dockerignore',
-  'editorconfig', 'prettierrc', 'eslintrc',
-  'html', 'htm', 'xhtml',
-  'woff', 'woff2', 'ttf', 'otf', 'eot',
-])
-
-const BLOCKED_EXTENSIONS = new Set([
-  'exe', 'scr', 'msi', 'msp', 'mst', 'com', 'pif',
-  'bat', 'cmd', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh',
-  'ps1', 'psm1', 'psd1', 'ps1xml', 'pssc', 'psc1',
-  'sh', 'bash', 'dash', 'ksh', 'zsh', 'csh',
-  'docm', 'dotm', 'xlsm', 'xlam', 'pptm', 'ppam', 'potm', 'ppsm',
-  'jar', 'reg', 'inf', 'gadget', 'msu', 'cpl', 'appref-ms',
-])
-
-const RISKY_EXTENSIONS = new Set([
-  'pdf', 'doc', 'docx', 'dot', 'dotx',
-  'xls', 'xlsx', 'xlt', 'xltx',
-  'ppt', 'pptx', 'pot', 'potx',
-  'zip', 'zipx', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz', 'zst',
-  'tgz', 'tbz2', 'txz',
-  'cab', 'arj', 'lzh', 'lha', 'ace',
-  'iso', 'img', 'vhd', 'vhdx', 'vmdk', 'dmg',
-  'rtf', 'odt', 'ods', 'odp',
-  'apk', 'appimage', 'dmg', 'deb', 'rpm',
-])
-
-export type FileClassification = 'safe' | 'risky' | 'blocked'
-
-export function classifyFile(fileName: string): FileClassification {
-  const ext = fileName.split('.').pop()?.toLowerCase() ?? ''
-
-  if (BLOCKED_EXTENSIONS.has(ext)) return 'blocked'
-  if (RISKY_EXTENSIONS.has(ext)) return 'risky'
-  if (SAFE_EXTENSIONS.has(ext)) return 'safe'
-
-  // Unknown extensions — treat as risky (scan them)
-  return 'risky'
-}
-
 // ── Bad pattern checking ────────────────────────────────────────────────────
 
 export interface BadPatternResult {
@@ -86,7 +36,6 @@ export interface ScanResult {
   error?: string
 }
 
-// Lazy-loaded clamscan instance (init once on first use)
 let _clamscan: any = null
 let _clamscanError: string | null = null
 
@@ -111,12 +60,11 @@ async function getClamscan() {
         active: true,
       },
       clamdscan: {
-        active: false, // Don't use clamd — just clamscan binary
+        active: false,
       },
       preference: 'clamscan',
     })
 
-    // Verify it works by getting version
     try {
       const version = await instance.getVersion()
       console.log(`[file-scan] ClamAV initialized: ${version}`)
@@ -133,9 +81,6 @@ async function getClamscan() {
   }
 }
 
-/**
- * Run ClamAV scan on a file using the `clamscan` npm package.
- */
 export async function scanFile(filePath: string): Promise<ScanResult> {
   if (!CLAMAV_ENABLED) {
     return { infected: false }
@@ -162,70 +107,41 @@ export async function scanFile(filePath: string): Promise<ScanResult> {
   }
 }
 
-// ── Unified scan check ──────────────────────────────────────────────────────
+// ── Unified file check ──────────────────────────────────────────────────────
 
 export interface FileCheckResult {
   allowed: boolean
-  classification: FileClassification
   reason?: string
   virusName?: string
 }
 
-/**
- * Full file check: classify, check filename patterns, optionally run ClamAV scan.
- */
 export async function checkFile(
   fileName: string,
   filePath: string,
-  options?: { skipScan?: boolean }
 ): Promise<FileCheckResult> {
-  const classification = classifyFile(fileName)
-
-  // Blocked extensions are always rejected
-  if (classification === 'blocked') {
-    return {
-      allowed: false,
-      classification,
-      reason: `File type .${fileName.split('.').pop()?.toLowerCase()} is not allowed for security reasons.`,
-    }
-  }
-
-  // Check filename patterns for all files
   const patternResult = checkFilenamePatterns(fileName)
   if (patternResult.isBad) {
     return {
       allowed: false,
-      classification,
       reason: patternResult.reason,
     }
   }
 
-  // Safe files skip ClamAV scan (unless explicitly requested)
-  if (classification === 'safe') {
-    return { allowed: true, classification }
-  }
-
-  // Risky (or unknown) files get scanned
-  if (!options?.skipScan) {
-    const scanResult = await scanFile(filePath)
-    if (scanResult.infected) {
-      return {
-        allowed: false,
-        classification,
-        reason: `Malware detected: ${scanResult.virusName}`,
-        virusName: scanResult.virusName,
-      }
+  const scanResult = await scanFile(filePath)
+  if (scanResult.infected) {
+    return {
+      allowed: false,
+      reason: `Malware detected: ${scanResult.virusName}`,
+      virusName: scanResult.virusName,
     }
-    if (scanResult.error) {
-      console.error(`[file-scan] ClamAV error for ${fileName}: ${scanResult.error}`)
-      // If ClamAV fails, err on the side of caution — reject
-      return {
-        allowed: false,
-        classification,
-        reason: `Security scan failed: ${scanResult.error}`,
-      }
+  }
+  if (scanResult.error) {
+    console.error(`[file-scan] ClamAV error for ${fileName}: ${scanResult.error}`)
+    return {
+      allowed: false,
+      reason: `Security scan failed: ${scanResult.error}`,
     }
   }
 
-  return { allowed: true, classification }
+  return { allowed: true }
 }
