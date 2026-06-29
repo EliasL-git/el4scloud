@@ -53,10 +53,15 @@ export async function register(data: {
   // 4. Send verification email via Better Auth
   console.log('[register] Sending verification email to:', data.email)
   try {
+    // Strip cookies so Better Auth doesn't find an existing session
+    // (session check would throw "Email mismatch" if the browser has
+    // a cookie for a different user)
     const hdrs = await headers()
-    console.log('[register] Headers obtained, calling sendVerificationEmail...')
+    const cleanHeaders = new Headers(hdrs)
+    cleanHeaders.delete('cookie')
+    console.log('[register] Calling sendVerificationEmail...')
     const result = await auth.api.sendVerificationEmail({
-      headers: hdrs,
+      headers: cleanHeaders,
       body: { email: data.email, callbackURL: '/dashboard' },
     })
     console.log('[register] sendVerificationEmail result:', JSON.stringify(result))
