@@ -101,6 +101,11 @@ export default function SignInPage() {
                   required
                   placeholder="Your password"
                 />
+                <div className="flex justify-end -mt-1">
+                  <a href="/forgot-password" className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors">
+                    Forgot password?
+                  </a>
+                </div>
               </div>
 
               {error && !needsVerification && (
