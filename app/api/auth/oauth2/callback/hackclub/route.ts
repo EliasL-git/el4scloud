@@ -20,7 +20,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard/settings?error=no_code', request.url))
   }
 
-  const origin = new URL(request.url).origin
+  const origin = process.env.HOST_URL
+    ? `https://${process.env.HOST_URL}`
+    : new URL(request.url).origin
 
   const tokenResponse = await fetch('https://auth.hackclub.com/oauth/token', {
     method: 'POST',

@@ -6,6 +6,7 @@ import { cookies } from 'next/headers'
 import crypto from 'crypto'
 
 function getBaseUrl(hdrs: Headers): string {
+  if (process.env.HOST_URL) return `https://${process.env.HOST_URL}`
   const host = hdrs.get('host') || 'localhost:3000'
   const proto = hdrs.get('x-forwarded-proto') || (process.env.NODE_ENV === 'production' ? 'https' : 'http')
   return `${proto}://${host}`
