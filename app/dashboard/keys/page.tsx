@@ -19,9 +19,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Key, Plus, Trash2, Copy, Check, Eye, EyeOff, Terminal } from 'lucide-react'
+import { Key, Plus, Trash2, Copy, Check, Eye, EyeOff, BookOpen } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
+import Link from 'next/link'
 
 type ApiKey = Awaited<ReturnType<typeof getApiKeys>>[number]
 
@@ -240,55 +241,23 @@ export default function ApiKeysPage() {
 
       <Separator />
 
-      {/* Usage docs */}
+      {/* Docs link */}
       <div className="flex flex-col gap-3">
         <h2 className="text-sm font-medium flex items-center gap-2">
-          <Terminal className="size-4 text-muted-foreground" />
-          API usage
+          <BookOpen className="size-4 text-muted-foreground" />
+          API reference
         </h2>
         <Card>
-          <CardContent className="p-4 flex flex-col gap-4">
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                1. Request a presigned upload URL
-              </p>
-              <pre className="text-xs bg-secondary rounded-lg p-3 overflow-x-auto font-mono leading-relaxed">
-{`POST /api/upload
-Authorization: Bearer <your-api-key>
-Content-Type: application/json
-
-{
-  "fileName": "photo.jpg",
-  "mimeType": "image/jpeg",
-  "size": 204800,
-  "isPublic": true
-}`}
-              </pre>
-            </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                2. Upload directly to storage
-              </p>
-              <pre className="text-xs bg-secondary rounded-lg p-3 overflow-x-auto font-mono leading-relaxed">
-{`PUT <presignedUrl>
-Content-Type: image/jpeg
-
-<binary file body>`}
-              </pre>
-            </div>
-            <div>
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
-                Response
-              </p>
-              <pre className="text-xs bg-secondary rounded-lg p-3 overflow-x-auto font-mono leading-relaxed">
-{`{
-  "fileId": "uuid",
-  "key": "userId/uuid.jpg",
-  "presignedUrl": "https://...",
-  "cdnUrl": "https://cdn.example.com/..."
-}`}
-              </pre>
-            </div>
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground mb-3">
+              See the full API documentation for upload, download, authentication, and all available endpoints.
+            </p>
+            <Link href="/docs">
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <BookOpen className="size-3.5" />
+                Read the API docs
+              </Button>
+            </Link>
           </CardContent>
         </Card>
       </div>

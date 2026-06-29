@@ -41,9 +41,22 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Search, Ban, Download, CheckCircle2, RefreshCw } from 'lucide-react'
+import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Search, Ban, Download, CheckCircle2, RefreshCw, HardDrive, Users, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Key, LayoutDashboard } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
+
+const sidebarTabs: { id: Tab; label: string; icon: React.ElementType; badge?: (count: number) => number }[] = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'requests', label: 'Storage Requests', icon: HardDrive, badge: (n) => n },
+  { id: 'users', label: 'Users', icon: Users },
+  { id: 'tickets', label: 'Tickets', icon: MessageSquare },
+  { id: 'appeals', label: 'Appeals', icon: Scale, badge: (n) => n },
+  { id: 'files', label: 'Files', icon: FileText },
+  { id: 'deletions', label: 'Deletion Requests', icon: Trash2, badge: (n) => n },
+  { id: 'audit', label: 'Audit Log', icon: ClipboardList },
+  { id: 'access-codes', label: 'Access Codes', icon: Key },
+  { id: 'takedown', label: 'Takedown', icon: ShieldAlert, badge: (n) => n },
+]
 
 type UserRecord = Awaited<ReturnType<typeof getUsers>>[number]
 type RequestRecord = Awaited<ReturnType<typeof getRequests>>[number]
@@ -87,13 +100,13 @@ const statusBadge: Record<string, { label: string; variant: 'outline' | 'seconda
 }
 
 type AuditEntry = Awaited<ReturnType<typeof getAuditLogs>>[number]
-type Tab = 'requests' | 'users' | 'tickets' | 'appeals' | 'files' | 'deletions' | 'audit' | 'access-codes' | 'takedown'
+type Tab = 'overview' | 'requests' | 'users' | 'tickets' | 'appeals' | 'files' | 'deletions' | 'audit' | 'access-codes' | 'takedown'
 
 type AdminTicket = Awaited<ReturnType<typeof adminGetTickets>>[number]
 type AdminReply = Awaited<ReturnType<typeof adminGetTicketReplies>>[number]
 
 export default function AdminPage() {
-  const [tab, setTab] = useState<Tab>('requests')
+  const [tab, setTab] = useState<Tab>('overview')
   const [users, setUsers] = useState<UserRecord[]>([])
   const [requests, setRequests] = useState<RequestRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -296,6 +309,23 @@ export default function AdminPage() {
     }
   }
 
+  // Sync tab state from URL hash (set by the shell sidebar)
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '') as Tab
+    if (hash && sidebarTabs.some((t) => t.id === hash)) {
+      setTab(hash)
+    }
+    const onHashChange = () => {
+      const h = window.location.hash.replace('#', '') as Tab
+      if (h && sidebarTabs.some((t) => t.id === h)) {
+        setTab(h)
+        if (h === 'tickets') setSelectedTicket(null)
+      }
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
   if (loading) {
     return (
       <div className="flex flex-col gap-6">
@@ -309,195 +339,106 @@ export default function AdminPage() {
   const pendingRequests = requests.filter((r) => r.request.status === 'pending')
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl">
-      <div>
+    <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
+
+      {/* Desktop header */}
+      <div className="hidden lg:block">
         <h1 className="text-xl font-semibold tracking-tight">Admin</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           Manage users, files, and system operations.
         </p>
       </div>
 
-      {/* Scan stats + Cron status */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Card className="border-blue-500/20">
-          <CardContent className="p-3 flex items-center gap-3 text-sm">
-            <RefreshCw className="size-4 shrink-0 text-blue-500" />
-            <span className="text-muted-foreground">
-              Scan stats:{' '}
-              {scanStats ? (
-                <span className="text-foreground font-medium">
-                  {scanStats.totalScans} total &middot; {scanStats.past24hScans} in 24h
-                  {scanStats.avgDuration != null && (
-                    <> &middot; avg{' '}{(scanStats.avgDuration / 1000).toFixed(1)}s</>
+      {/* Overview tab */}
+      {tab === 'overview' && (
+        <section className="flex flex-col gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Card className="border-blue-500/20">
+              <CardContent className="p-3 flex items-center gap-3 text-sm">
+                <RefreshCw className="size-4 shrink-0 text-blue-500" />
+                <span className="text-muted-foreground">
+                  Scan stats:{' '}
+                  {scanStats ? (
+                    <span className="text-foreground font-medium">
+                      {scanStats.totalScans} total &middot; {scanStats.past24hScans} in 24h
+                      {scanStats.avgDuration != null && (
+                        <> &middot; avg{' '}{(scanStats.avgDuration / 1000).toFixed(1)}s</>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground italic">Loading...</span>
                   )}
                 </span>
-              ) : (
-                <span className="text-muted-foreground italic">Loading...</span>
-              )}
-            </span>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
 
-        <Card className="border-green-500/20">
-          <CardContent className="p-3 flex items-center gap-3 text-sm">
-            <CheckCircle2 className="size-4 shrink-0 text-green-500" />
-            <span className="text-muted-foreground">
-              Last cleanup run:{' '}
-              {lastCronRun ? (
-                <span className="text-foreground font-medium">
-                  {formatDate(lastCronRun.createdAt)}
-                  {' — '}
-                  {(() => { try { const d = JSON.parse(lastCronRun.details ?? '{}'); return `${d.deleted} user${d.deleted === 1 ? '' : 's'} deleted` } catch { return 'unknown' } })()}
+            <Card className="border-green-500/20">
+              <CardContent className="p-3 flex items-center gap-3 text-sm">
+                <CheckCircle2 className="size-4 shrink-0 text-green-500" />
+                <span className="text-muted-foreground">
+                  Last cleanup run:{' '}
+                  {lastCronRun ? (
+                    <span className="text-foreground font-medium">
+                      {formatDate(lastCronRun.createdAt)}
+                      {' — '}
+                      {(() => { try { const d = JSON.parse(lastCronRun.details ?? '{}'); return `${d.deleted} user${d.deleted === 1 ? '' : 's'} deleted` } catch { return 'unknown' } })()}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground italic">Never run</span>
+                  )}
                 </span>
-              ) : (
-                <span className="text-muted-foreground italic">Never run</span>
-              )}
-            </span>
-          </CardContent>
-        </Card>
-      </div>
+              </CardContent>
+            </Card>
+          </div>
 
-      {/* User stats */}
-      {userStats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Card>
-            <CardContent className="p-3 text-sm">
-              <span className="text-muted-foreground">Users</span>
-              <p className="text-lg font-semibold">{userStats.totalUsers}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 text-sm">
-              <span className="text-muted-foreground">Files/user</span>
-              <p className="text-lg font-semibold">{userStats.avgFilesPerUser}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 text-sm">
-              <span className="text-muted-foreground">API keys/user</span>
-              <p className="text-lg font-semibold">{userStats.avgApiKeysPerUser}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 text-sm">
-              <span className="text-muted-foreground">Tickets/user</span>
-              <p className="text-lg font-semibold">{userStats.avgTicketsPerUser}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 text-sm">
-              <span className="text-muted-foreground">Storage reqs/user</span>
-              <p className="text-lg font-semibold">{userStats.avgStorageRequestsPerUser}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 text-sm">
-              <span className="text-muted-foreground">Appeals/user</span>
-              <p className="text-lg font-semibold">{userStats.avgAppealsPerUser}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-3 text-sm">
-              <span className="text-muted-foreground">Warnings/user</span>
-              <p className="text-lg font-semibold">{userStats.avgWarningsPerUser}</p>
-            </CardContent>
-          </Card>
-        </div>
+          {userStats && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <Card>
+                <CardContent className="p-3 text-sm">
+                  <span className="text-muted-foreground">Users</span>
+                  <p className="text-lg font-semibold">{userStats.totalUsers}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3 text-sm">
+                  <span className="text-muted-foreground">Files/user</span>
+                  <p className="text-lg font-semibold">{userStats.avgFilesPerUser}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3 text-sm">
+                  <span className="text-muted-foreground">API keys/user</span>
+                  <p className="text-lg font-semibold">{userStats.avgApiKeysPerUser}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3 text-sm">
+                  <span className="text-muted-foreground">Tickets/user</span>
+                  <p className="text-lg font-semibold">{userStats.avgTicketsPerUser}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3 text-sm">
+                  <span className="text-muted-foreground">Storage reqs/user</span>
+                  <p className="text-lg font-semibold">{userStats.avgStorageRequestsPerUser}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3 text-sm">
+                  <span className="text-muted-foreground">Appeals/user</span>
+                  <p className="text-lg font-semibold">{userStats.avgAppealsPerUser}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-3 text-sm">
+                  <span className="text-muted-foreground">Warnings/user</span>
+                  <p className="text-lg font-semibold">{userStats.avgWarningsPerUser}</p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </section>
       )}
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-border">
-        <button
-          onClick={() => setTab('requests')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
-            tab === 'requests'
-              ? 'border-foreground text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Storage Requests {pendingRequests.length > 0 && `(${pendingRequests.length})`}
-        </button>
-        <button
-          onClick={() => setTab('users')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
-            tab === 'users'
-              ? 'border-foreground text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Users ({users.length})
-        </button>
-        <button
-          onClick={() => { setTab('tickets'); setSelectedTicket(null) }}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
-            tab === 'tickets'
-              ? 'border-foreground text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Tickets ({adminTickets.length})
-        </button>
-        <button
-          onClick={() => setTab('appeals')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
-            tab === 'appeals'
-              ? 'border-foreground text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Appeals {appealsList.filter((a) => a.appeal.status === 'pending').length > 0 && `(${appealsList.filter((a) => a.appeal.status === 'pending').length})`}
-        </button>
-        <button
-          onClick={() => setTab('files')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
-            tab === 'files'
-              ? 'border-foreground text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Files
-        </button>
-        <button
-          onClick={() => setTab('deletions')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
-            tab === 'deletions'
-              ? 'border-foreground text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Deletion Requests {deletionRequestsList.filter((d) => d.request.status === 'pending').length > 0 && `(${deletionRequestsList.filter((d) => d.request.status === 'pending').length})`}
-        </button>
-        <button
-          onClick={() => setTab('audit')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
-            tab === 'audit'
-              ? 'border-foreground text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Audit Log
-        </button>
-        <button
-          onClick={() => setTab('access-codes')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
-            tab === 'access-codes'
-              ? 'border-foreground text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Access Codes
-        </button>
-        <button
-          onClick={() => setTab('takedown')}
-          className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors -mb-[1px] ${
-            tab === 'takedown'
-              ? 'border-foreground text-foreground'
-              : 'border-transparent text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Takedown {takedownList.filter((t) => t.status === 'pending').length > 0 && `(${takedownList.filter((t) => t.status === 'pending').length})`}
-        </button>
-      </div>
 
       {/* Requests tab */}
       {tab === 'requests' && (
@@ -1407,7 +1348,7 @@ export default function AdminPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground font-mono truncate">{req.contactEmail}</span>
+                        <span className="text-xs text-muted-foreground font-mono truncate">{req.reporterEmail}</span>
                         <Badge variant={req.status === 'pending' ? 'secondary' : req.status === 'approved' ? 'default' : 'destructive'}>
                           {req.status}
                         </Badge>

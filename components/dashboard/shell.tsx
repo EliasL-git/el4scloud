@@ -1,8 +1,9 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Files, Key, LogOut, HardDrive, Shield, MessageSquare, Settings, ShieldAlert } from 'lucide-react'
+import { Files, Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -28,6 +29,19 @@ const navItems = [
 
 const adminNavItems = [
   { href: '/dashboard/admin', label: 'Admin', icon: Shield },
+]
+
+const adminSidebarTabs = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'requests', label: 'Storage Requests', icon: HardDrive },
+  { id: 'users', label: 'Users', icon: Users },
+  { id: 'tickets', label: 'Tickets', icon: MessageSquare },
+  { id: 'appeals', label: 'Appeals', icon: Scale },
+  { id: 'files', label: 'Files', icon: FileText },
+  { id: 'deletions', label: 'Deletion Requests', icon: Trash2 },
+  { id: 'audit', label: 'Audit Log', icon: ClipboardList },
+  { id: 'access-codes', label: 'Access Codes', icon: Key },
+  { id: 'takedown', label: 'Takedown', icon: ShieldAlert },
 ]
 
 interface User {
@@ -56,13 +70,31 @@ export function DashboardShell({
 }) {
   const pathname = usePathname()
   const router = useRouter()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [activeAdminTab, setActiveAdminTab] = useState('overview')
+
+  // Track the active admin tab from URL hash
+  useEffect(() => {
+    if (isAdminRoute) {
+      const hash = window.location.hash.replace('#', '')
+      if (hash) setActiveAdminTab(hash)
+    }
+  }, [pathname])
 
   const isSupportRoute = pathname.startsWith('/dashboard/support')
+  const isAdminRoute = pathname.startsWith('/dashboard/admin')
 
   const suspendedAllowedRoutes = ['/dashboard', '/dashboard/support', '/dashboard/settings']
   const visibleNavItems = suspended
     ? navItems.filter((item) => suspendedAllowedRoutes.includes(item.href))
     : navItems
+
+  // On admin pages, hide user tabs — only show the admin nav
+  const allNavItems = isAdminRoute
+    ? adminNavItems
+    : isAdmin
+      ? [...visibleNavItems, ...adminNavItems]
+      : visibleNavItems
 
   const handleSignOut = async () => {
     await authClient.signOut()
@@ -77,13 +109,23 @@ export function DashboardShell({
     .toUpperCase()
     .slice(0, 2)
 
+  const isActive = (href: string) => {
+    if (href === '/dashboard') return pathname === '/dashboard'
+    return pathname.startsWith(href)
+  }
+
   return (
     <div className="min-h-svh bg-background flex flex-col">
-      {/* Top nav */}
+      {/* Top bar */}
       <header className="border-b border-border bg-background sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-4">
-          {/* Logo */}
-          <div className="flex items-center gap-6">
+        <div className="h-14 flex items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="text-muted-foreground hover:text-foreground -ml-1 lg:hidden"
+            >
+              <Menu className="size-5" />
+            </button>
             <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
               <div
                 className="size-7 rounded-md flex items-center justify-center"
@@ -91,52 +133,8 @@ export function DashboardShell({
               >
                 <HardDrive className="size-3.5" style={{ color: 'var(--brand-foreground)' }} />
               </div>
-              <span className="text-sm font-semibold tracking-tight hidden sm:block">el4scloud</span>
+              <span className="text-sm font-semibold tracking-tight">el4scloud</span>
             </Link>
-
-            {/* Nav links */}
-            <nav className="flex items-center gap-1">
-              {visibleNavItems.map((item) => {
-                const Icon = item.icon
-                const active = item.href === '/dashboard'
-                  ? pathname === '/dashboard'
-                  : pathname.startsWith(item.href)
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors',
-                      active
-                        ? 'bg-secondary text-foreground font-medium'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-                    )}
-                  >
-                    <Icon className="size-3.5 shrink-0" />
-                    {item.label}
-                  </Link>
-                )
-              })}
-              {isAdmin && adminNavItems.map((item) => {
-                const Icon = item.icon
-                const active = pathname.startsWith(item.href)
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors',
-                      active
-                        ? 'bg-secondary text-foreground font-medium'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-                    )}
-                  >
-                    <Icon className="size-3.5 shrink-0" />
-                    {item.label}
-                  </Link>
-                )
-              })}
-            </nav>
           </div>
 
           {/* User menu */}
@@ -168,23 +166,89 @@ export function DashboardShell({
         </div>
       </header>
 
-      {/* Page content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {suspended && !suspendedAllowedRoutes.includes(pathname) && !pathname.startsWith('/dashboard/admin') ? (
-          <SuspensionBanner reason={suspensionReason ?? 'Account suspended'} appealable={appealable} suspensionType={suspensionType ?? undefined} />
-        ) : (
-          children
+      <div className="flex flex-1">
+        {/* Mobile sidebar overlay */}
+        {sidebarOpen && (
+          <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
         )}
-      </main>
+
+        {/* Sidebar */}
+        <aside className={cn(
+          "fixed lg:sticky top-14 z-50 h-[calc(100svh-3.5rem)] w-56 shrink-0 border-r border-border bg-background transition-transform duration-200 lg:translate-x-0",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        )}>
+          <div className="flex flex-col gap-0.5 p-3">
+            <div className="flex items-center justify-between mb-2 lg:hidden">
+              <span className="text-xs font-semibold tracking-tight">Menu</span>
+              <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <XIcon className="size-4" />
+              </button>
+            </div>
+            {isAdminRoute ? (
+              <>
+                <div className="text-xs font-medium text-muted-foreground px-3 py-1.5 uppercase tracking-wider">
+                  Admin
+                </div>
+                {adminSidebarTabs.map(({ id, label, icon: Icon }) => {
+                  const active = activeAdminTab === id
+                  return (
+                    <a
+                      key={id}
+                      href={`/dashboard/admin#${id}`}
+                      onClick={() => setSidebarOpen(false)}
+                      className={cn(
+                        'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
+                        active
+                          ? 'bg-secondary text-foreground font-medium'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+                      )}
+                    >
+                      <Icon className="size-4 shrink-0" />
+                      <span>{label}</span>
+                    </a>
+                  )
+                })}
+              </>
+            ) : (
+              allNavItems.map(({ href, label, icon: Icon }) => {
+                const active = isActive(href)
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    onClick={() => setSidebarOpen(false)}
+                    className={cn(
+                      'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
+                      active
+                        ? 'bg-secondary text-foreground font-medium'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+                    )}
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    <span>{label}</span>
+                  </Link>
+                )
+              })
+            )}
+          </div>
+        </aside>
+
+        {/* Page content */}
+        <main className="flex-1 min-w-0">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            {suspended && !suspendedAllowedRoutes.includes(pathname) && !pathname.startsWith('/dashboard/admin') ? (
+              <SuspensionBanner reason={suspensionReason ?? 'Account suspended'} appealable={appealable} suspensionType={suspensionType ?? undefined} />
+            ) : (
+              children
+            )}
+          </div>
+        </main>
+      </div>
 
       {/* Footer */}
       <footer className="border-t border-border">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-center justify-center gap-6">
-          {!suspended && (
-            <>
-              <StorageRequestDialog />
-            </>
-          )}
+        <div className="h-12 flex items-center justify-center gap-6 px-4 sm:px-6 lg:px-8">
+          {!suspended && <StorageRequestDialog />}
         </div>
       </footer>
     </div>

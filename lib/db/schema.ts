@@ -1,4 +1,5 @@
 import { pgTable, text, timestamp, boolean, bigint, integer, real } from 'drizzle-orm/pg-core'
+import { NON_HC_STORAGE_LIMIT } from '@/lib/storage'
 
 // --- Better Auth required tables -------------------------------------------
 
@@ -11,7 +12,7 @@ export const user = pgTable('user', {
   role: text('role').notNull().default('user'),
   banned: boolean('banned').notNull().default(false),
   agreedToTerms: boolean('agreedToTerms').notNull().default(false),
-  storageLimit: bigint('storageLimit', { mode: 'number' }).notNull().default(15 * 1024 * 1024 * 1024),
+  storageLimit: bigint('storageLimit', { mode: 'number' }).notNull().default(NON_HC_STORAGE_LIMIT),
   suspensionReason: text('suspensionReason'),
   suspensionType: text('suspensionType'),  // 'suspended' | 'terminated'
   terminatedAt: timestamp('terminatedAt'),

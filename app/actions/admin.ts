@@ -545,7 +545,7 @@ export async function getScanStats() {
 export async function getUserStats() {
   const adminId = await assertAdmin()
 
-  const userCountResult = await db.execute(sql`SELECT COUNT(*)::int AS count FROM "user" WHERE "role" != 'admin'`)
+  const userCountResult = await db.execute(sql`SELECT COUNT(*)::int AS count FROM "user"`)
 
   const queries = [
     sql`SELECT ROUND(AVG(c))::int AS avg FROM (SELECT COUNT(*) AS c FROM "files" GROUP BY "userId") sub`,

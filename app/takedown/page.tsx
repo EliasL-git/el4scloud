@@ -3,7 +3,11 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { submitTakedownRequest } from '@/app/actions/takedown'
-import { ShieldAlert } from 'lucide-react'
+import { ShieldAlert, ArrowLeft } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 const REASONS = [
   { value: "I don't like it.", label: "I don't like it." },
@@ -60,168 +64,170 @@ export default function TakedownPage() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black">
-        <div className="w-full max-w-md rounded-lg border border-zinc-800 bg-zinc-900 p-8 text-center">
-          <ShieldAlert className="size-10 mx-auto text-amber-400 mb-4" />
-          <h1 className="text-xl font-bold text-white">Report Submitted</h1>
-          <p className="mt-2 text-sm text-zinc-400 leading-relaxed">
-            Your takedown request has been submitted and will be reviewed by an admin.
-            We&apos;ll follow up at <strong className="text-zinc-300">{reporterEmail}</strong> if needed.
-          </p>
-          <p className="mt-4 text-xs text-zinc-500">
-            <Link href="/" className="text-blue-400 hover:underline">Back to home</Link>
-          </p>
-        </div>
+      <div className="min-h-svh bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardContent className="pt-8 pb-8">
+            <div className="size-12 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-4">
+              <ShieldAlert className="size-5 text-amber-500" />
+            </div>
+            <CardTitle className="mb-2">Report Submitted</CardTitle>
+            <CardDescription className="text-sm leading-relaxed">
+              Your takedown request has been submitted and will be reviewed by an admin.
+              We&apos;ll follow up at <strong className="text-foreground">{reporterEmail}</strong> if needed.
+            </CardDescription>
+            <Link href="/" className="text-sm text-primary underline-offset-4 hover:underline mt-4 inline-block">
+              Back to home
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black">
-      <div className="w-full max-w-lg space-y-6 rounded-lg border border-zinc-800 bg-zinc-900 p-8">
-        <div className="flex items-center gap-3">
-          <div className="size-9 rounded-lg bg-amber-500/10 flex items-center justify-center">
-            <ShieldAlert className="size-4 text-amber-400" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-white">Takedown Request</h1>
-            <p className="text-sm text-zinc-400">
-              Report a file hosted on el4scloud
-            </p>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-zinc-300">File URL</label>
-            <input
-              type="url"
-              value={fileUrl}
-              onChange={(e) => setFileUrl(e.target.value)}
-              required
-              placeholder="https://cloud.el4s.dev/api/proxy/..."
-              className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-            />
-            <p className="mt-1 text-xs text-zinc-500">
-              Paste the full URL of the file you want to report
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-zinc-300">Your Name</label>
-            <input
-              type="text"
-              value={reporterName}
-              onChange={(e) => setReporterName(e.target.value)}
-              placeholder="John Doe"
-              className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-zinc-300">Your Email</label>
-            <input
-              type="email"
-              value={reporterEmail}
-              onChange={(e) => setReporterEmail(e.target.value)}
-              required
-              placeholder="you@example.com"
-              className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-zinc-300 mb-2">Reason for Takedown</label>
-            <div className="space-y-2">
-              {REASONS.map((r) => (
-                <label
-                  key={r.value}
-                  className={`flex items-start gap-3 rounded-md border px-3 py-2.5 cursor-pointer transition-colors ${
-                    reason === r.value
-                      ? 'border-amber-600 bg-amber-600/10'
-                      : 'border-zinc-700 bg-zinc-800 hover:border-zinc-600'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="reason"
-                    value={r.value}
-                    checked={reason === r.value}
-                    onChange={(e) => setReason(e.target.value)}
-                    className="mt-0.5 accent-amber-500"
-                    required
-                  />
-                  <span className="text-sm text-zinc-300">{r.label}</span>
-                </label>
-              ))}
+    <div className="min-h-svh bg-background flex flex-col items-center justify-center p-4">
+      <Card className="w-full max-w-lg">
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="size-9 rounded-lg bg-amber-500/10 flex items-center justify-center">
+              <ShieldAlert className="size-4 text-amber-500" />
+            </div>
+            <div>
+              <CardTitle>Takedown Request</CardTitle>
+              <CardDescription>Report a file hosted on el4scloud</CardDescription>
             </div>
           </div>
-
-          {showMyContentFields && (
-            <div className="space-y-3 rounded-md border border-zinc-700 bg-zinc-800/50 p-4">
-              <p className="text-xs font-medium text-amber-400 uppercase tracking-wider">
-                Proof of Ownership
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="fileUrl">File URL</Label>
+              <Input
+                id="fileUrl"
+                type="url"
+                value={fileUrl}
+                onChange={(e) => setFileUrl(e.target.value)}
+                required
+                placeholder="https://cloud.el4s.dev/api/proxy/..."
+              />
+              <p className="text-xs text-muted-foreground">
+                Paste the full URL of the file you want to report
               </p>
-              <div>
-                <label className="block text-sm text-zinc-300">
-                  It was posted first at
-                </label>
-                <input
-                  type="url"
-                  value={originalUrl}
-                  onChange={(e) => setOriginalUrl(e.target.value)}
-                  placeholder="https://example.com/your-content"
-                  className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none"
-                />
-                <p className="mt-1 text-xs text-zinc-500">
-                  URL where you originally posted this content
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="reporterName">Your Name</Label>
+              <Input
+                id="reporterName"
+                type="text"
+                value={reporterName}
+                onChange={(e) => setReporterName(e.target.value)}
+                placeholder="John Doe"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="reporterEmail">Your Email</Label>
+              <Input
+                id="reporterEmail"
+                type="email"
+                value={reporterEmail}
+                onChange={(e) => setReporterEmail(e.target.value)}
+                required
+                placeholder="you@example.com"
+              />
+            </div>
+
+            <fieldset className="flex flex-col gap-2">
+              <legend className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">Reason for Takedown</legend>
+              <div className="flex flex-col gap-2">
+                {REASONS.map((r) => (
+                  <label
+                    key={r.value}
+                    className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 cursor-pointer transition-colors ${
+                      reason === r.value
+                        ? 'border-amber-500 bg-amber-500/5'
+                        : 'border-border bg-card hover:bg-secondary/60'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="reason"
+                      value={r.value}
+                      checked={reason === r.value}
+                      onChange={(e) => setReason(e.target.value)}
+                      className="mt-0.5 accent-amber-500 shrink-0"
+                      required
+                    />
+                    <span className="text-sm text-foreground">{r.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            {showMyContentFields && (
+              <div className="flex flex-col gap-4 rounded-lg border border-border bg-secondary/30 p-4">
+                <p className="text-xs font-medium text-amber-500 uppercase tracking-wider">
+                  Proof of Ownership
                 </p>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="originalUrl">It was posted first at</Label>
+                  <Input
+                    id="originalUrl"
+                    type="url"
+                    value={originalUrl}
+                    onChange={(e) => setOriginalUrl(e.target.value)}
+                    placeholder="https://example.com/your-content"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    URL where you originally posted this content
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="originalDate">Date of original publication</Label>
+                  <Input
+                    id="originalDate"
+                    type="date"
+                    value={originalDate}
+                    onChange={(e) => setOriginalDate(e.target.value)}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="additionalInfo">Additional information</Label>
+                  <textarea
+                    id="additionalInfo"
+                    value={additionalInfo}
+                    onChange={(e) => setAdditionalInfo(e.target.value)}
+                    placeholder="Any other evidence or context..."
+                    rows={3}
+                    className="flex min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm text-zinc-300">
-                  Date of original publication
-                </label>
-                <input
-                  type="date"
-                  value={originalDate}
-                  onChange={(e) => setOriginalDate(e.target.value)}
-                  className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
-                />
+            )}
+
+            {error && (
+              <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
               </div>
-              <div>
-                <label className="block text-sm text-zinc-300">
-                  Additional information
-                </label>
-                <textarea
-                  value={additionalInfo}
-                  onChange={(e) => setAdditionalInfo(e.target.value)}
-                  placeholder="Any other evidence or context..."
-                  rows={3}
-                  className="mt-1 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-white placeholder-zinc-500 focus:border-blue-500 focus:outline-none resize-none"
-                />
-              </div>
-            </div>
-          )}
+            )}
 
-          {error && (
-            <div className="rounded-md bg-red-900/50 px-3 py-2 text-sm text-red-400">
-              {error}
-            </div>
-          )}
+            <Button
+              type="submit"
+              disabled={loading}
+              className="w-full gap-1.5"
+              style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+            >
+              {loading ? 'Submitting...' : 'Submit Takedown Request'}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-amber-600 px-4 py-2 font-medium text-white hover:bg-amber-700 disabled:opacity-50 transition-colors"
-          >
-            {loading ? 'Submitting...' : 'Submit Takedown Request'}
-          </button>
-        </form>
-
-        <p className="text-center text-xs text-zinc-500">
-          <Link href="/" className="text-blue-400 hover:underline">Back to home</Link>
-        </p>
-      </div>
+      <Link href="/" className="text-sm text-primary underline-offset-4 hover:underline mt-4 inline-flex items-center gap-1.5">
+        <ArrowLeft className="size-3.5" />
+        Back to home
+      </Link>
     </div>
   )
 }

@@ -163,7 +163,7 @@ export default function SignInPage() {
         <p className="text-center text-sm text-muted-foreground">
           Don&apos;t have an account?{' '}
           <a href="/sign-up" className="underline underline-offset-2 hover:text-foreground">
-            Register with an access code
+            Create an account
           </a>
         </p>
       </div>

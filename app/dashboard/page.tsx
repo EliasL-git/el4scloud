@@ -7,9 +7,11 @@ import { FileUploader } from '@/components/dashboard/file-uploader'
 import { FileList } from '@/components/dashboard/file-list'
 import { StatsCards } from '@/components/dashboard/stats-cards'
 import { Separator } from '@/components/ui/separator'
+import { Card, CardContent } from '@/components/ui/card'
 import { Toaster } from '@/components/ui/sonner'
 import { ViolationWarningDialog } from '@/components/dashboard/violation-warning-dialog'
 import { WarningBanner } from '@/components/dashboard/warning-banner'
+import { HardDrive } from 'lucide-react'
 
 type FileRecord = Awaited<ReturnType<typeof getFiles>>[number]
 type Stats = Awaited<ReturnType<typeof getFileStats>>
@@ -107,7 +109,22 @@ export default function DashboardPage() {
 
       <StatsCards stats={stats} storageLimit={storageLimit} />
 
-      {!isSuspended && (
+      {storageLimit === 0 && (
+        <Card>
+          <CardContent className="p-6 flex flex-col items-center gap-3 text-center">
+            <HardDrive className="size-8 text-muted-foreground" />
+            <div>
+              <h3 className="text-sm font-semibold">No storage allocated yet</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                You need to apply for storage before you can upload files. 
+                Use the <strong>Need more storage? Apply.</strong> link in the footer to request storage from an admin.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isSuspended && storageLimit > 0 && (
         <div className="flex flex-col gap-4">
           <h2 className="text-sm font-medium text-foreground">Upload files</h2>
           <FileUploader onUploadComplete={refresh} onWarningDismissed={handleFileUploaderWarningDismissed} />

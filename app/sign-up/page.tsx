@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { registerWithAccessCode } from '@/app/actions/register'
+import { register } from '@/app/actions/register'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,13 +19,12 @@ export default function SignUpPage() {
     setError('')
 
     const form = new FormData(e.currentTarget)
-    const code = form.get('code') as string
     const name = form.get('name') as string
     const email = form.get('email') as string
     const password = form.get('password') as string
     const confirm = form.get('confirm') as string
 
-    if (!code || !name || !email || !password) {
+    if (!name || !email || !password) {
       setError('All fields are required.')
       setLoading(false)
       return
@@ -43,7 +42,7 @@ export default function SignUpPage() {
       return
     }
 
-    const result = await registerWithAccessCode({ code, name, email, password })
+    const result = await register({ name, email, password })
     if (result.error) {
       setError(result.error)
       setLoading(false)
@@ -89,22 +88,11 @@ export default function SignUpPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">Register</CardTitle>
-            <CardDescription>Enter your access code to create an account</CardDescription>
+            <CardTitle className="text-xl">Create your account</CardTitle>
+            <CardDescription>Sign up with email and password to get started</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="code">Access Code</Label>
-                <Input
-                  id="code"
-                  name="code"
-                  type="text"
-                  required
-                  placeholder="XXXX-XXXX-XXXX"
-                />
-              </div>
-
               <div className="flex flex-col gap-2">
                 <Label htmlFor="name">Name</Label>
                 <Input

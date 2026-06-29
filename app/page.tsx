@@ -16,12 +16,12 @@ const features = [
   {
     icon: Zap,
     title: 'Blazing fast uploads',
-    desc: 'Presigned URLs let clients upload directly to storage — no proxying through your server.',
+    desc: 'Upload files directly via multipart POST. No need for presigned URLs or complex SDKs.',
   },
   {
     icon: Globe,
     title: 'CDN-ready URLs',
-    desc: 'Public files get a clean CDN URL you can use anywhere — images, videos, assets.',
+    desc: 'Public files get a clean proxy URL you can use anywhere — images, videos, assets.',
   },
   {
     icon: Lock,
@@ -36,12 +36,12 @@ const features = [
   {
     icon: Code2,
     title: 'Simple REST API',
-    desc: 'One endpoint. POST file metadata, get a presigned URL, PUT the bytes.',
+    desc: 'One POST endpoint with multipart form-data. Upload, get back file metadata.',
   },
   {
     icon: HardDrive,
-    title: 'S3-compatible',
-    desc: 'S3-compatible object storage, built for reliability.',
+    title: 'Reliable storage',
+    desc: 'Store and serve your files with confidence.',
   },
 ]
 
@@ -61,6 +61,12 @@ export default function LandingPage() {
             <span className="text-sm font-semibold tracking-tight">el4scloud</span>
           </div>
           <div className="flex items-center gap-2">
+            <Link href="/docs">
+              <Button variant="ghost" size="sm" className="gap-1.5">
+                <Code2 className="size-3.5" />
+                Docs
+              </Button>
+            </Link>
             <Link href="/sign-in">
               <Button variant="ghost" size="sm">Sign in</Button>
             </Link>
@@ -83,7 +89,6 @@ export default function LandingPage() {
             className="size-1.5 rounded-full inline-block"
             style={{ backgroundColor: 'var(--brand)' }}
           />
-          S3-compatible object storage
         </Badge>
 
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-balance max-w-2xl leading-tight">
@@ -112,18 +117,33 @@ export default function LandingPage() {
               Sign in
             </Button>
           </Link>
+          <Link href="/docs">
+            <Button size="lg" variant="ghost" className="gap-1.5">
+              <Code2 className="size-4" />
+              Read the docs
+            </Button>
+          </Link>
         </div>
 
         {/* Code snippet */}
         <div className="mt-4 w-full max-w-xl text-left">
           <pre className="text-xs bg-secondary border border-border rounded-xl p-4 overflow-x-auto font-mono leading-relaxed text-muted-foreground whitespace-pre">
-            <span className="text-foreground">{'// Upload a file in 2 steps'}</span>{'\n'}
-            <span style={{ color: 'var(--brand)' }}>const</span>{' res = await fetch(\'https://yourapp.com/api/upload\', {\n'}
-            {'  method: \'POST\',\n'}
-            {'  headers: { Authorization: `Bearer ${apiKey}` },\n'}
-            {'  body: JSON.stringify({ fileName, mimeType, size }),\n'}
-            {'});\n\n'}
-            <span style={{ color: 'var(--brand)' }}>await</span>{' fetch(res.presignedUrl, { method: \'PUT\', body: file });'}
+            <span style={{ color: 'var(--brand)' }}>curl</span> https://cloud.el4s.dev/api/upload {'\\'}
+            {'  '}-H "Authorization: Bearer sk_..." {'\\'}
+            {'  '}-F "file=@photo.jpg" {'\\'}
+            {'  '}-F "isPublic=true"
+          </pre>
+          <pre className="text-xs bg-secondary/50 border border-border rounded-xl p-4 overflow-x-auto font-mono leading-relaxed text-muted-foreground whitespace-pre mt-2">
+            <span className="text-foreground">{'// Response'}</span>{'\n'}
+            {'{'}{'\n'}
+            {'  "fileId": "550e8400-...",'}{'\n'}
+            {'  "key": "userId/550e8400-....jpg",'}{'\n'}
+            {'  "name": "photo.jpg",'}{'\n'}
+            {'  "size": 204800,'}{'\n'}
+            {'  "mimeType": "image/jpeg",'}{'\n'}
+            {'  "isPublic": true,'}{'\n'}
+            {'  "scanStatus": "pending"'}{'\n'}
+            {'}'}
           </pre>
         </div>
       </section>
@@ -168,7 +188,12 @@ export default function LandingPage() {
             </div>
             <span className="text-xs text-muted-foreground font-medium">el4scloud</span>
           </div>
-          <p className="text-xs text-muted-foreground">S3-compatible object storage</p>
+          <div className="flex items-center gap-4">
+            <Link href="/docs" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              API docs
+            </Link>
+            <p className="text-xs text-muted-foreground">Cloud storage</p>
+          </div>
         </div>
       </footer>
     </div>

@@ -54,9 +54,9 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Check if user is currently warned or suspended
+  // Check if user is currently warned or suspended and check storage limit
   const [currentUser] = await db
-    .select({ banned: user.banned, suspensionType: user.suspensionType })
+    .select({ banned: user.banned, suspensionType: user.suspensionType, storageLimit: user.storageLimit })
     .from(user)
     .where(eq(user.id, userId))
 
@@ -73,6 +73,12 @@ export async function POST(req: Request) {
         suspended: true,
       }, { status: 403 })
     }
+  }
+
+  if (!currentUser || currentUser.storageLimit === 0) {
+    return Response.json({
+      error: 'You need to apply for storage before uploading files. Visit your dashboard to submit a storage request.',
+    }, { status: 403 })
   }
 
   // Parse multipart form data

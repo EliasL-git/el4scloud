@@ -1,5 +1,7 @@
 # el4scloud
 
+> For complete API reference (endpoints, Server Actions, examples), see [API.md](./API.md).
+
 ## Cron job
 
 The cleanup endpoint deletes all data for terminated users whose 30-day period has expired.
@@ -69,24 +71,33 @@ When any user clicks **Flag as malicious** on a file in their dashboard:
 
 | Table | Purpose |
 |---|---|
-| `user` | Core user profile, storage limit, credits, suspension state |
-| `files` | Uploaded file metadata (name, size, hash, S3 key, public flag) |
+| `user` | Core user profile, storage limit, suspension state, warnings |
+| `session` | Auth sessions (Better Auth) |
+| `account` | Auth accounts (Better Auth) |
+| `verification` | Auth verification codes |
+| `files` | Uploaded file metadata (name, size, hash, S3 key, scan status, public flag) |
 | `flagged_hashes` | Known-bad file hashes (checked on upload) |
 | `appeals` | Suspension appeal submissions |
 | `deletion_requests` | GDPR account deletion requests |
-| `credit_requests` | User requests for additional credits |
+| `credit_requests` | User requests for additional credits (legacy) |
 | `storage_requests` | User requests for storage upgrades |
 | `tickets` / `ticket_replies` | Support tickets |
-| `api_keys` | User API keys |
+| `api_keys` | User API keys (hashed, prefix only visible) |
+| `access_codes` | Registration access codes (invite-only) |
+| `takedown_requests` | DMCA/abuse takedown reports |
+| `warnings` | Warning/suspension/termination records |
+| `audit_log` | Administrative audit trail |
 
-## Admin tabs
+## Admin sidebar tabs
 
 | Tab | Purpose |
 |---|---|
 | Storage Requests | Approve/reject storage upgrades |
-| Credit Requests | Approve/reject credit top-ups, issue credits directly |
-| Users | View users, suspend/terminate, set storage, issue credits |
+| Users | View users, suspend/terminate, set storage, reset warnings |
 | Tickets | Support ticket management |
 | Appeals | Approve/reject suspension appeals |
 | Files | Search files by name, manually flag hashes |
 | Deletion Requests | Approve/reject GDPR account deletion requests |
+| Audit Log | View and export audit log entries |
+| Access Codes | Generate and revoke registration access codes |
+| Takedown | Approve/reject DMCA/abuse takedown requests |
