@@ -15,15 +15,18 @@ export async function register(data: {
   password: string
 }) {
   // 1. Check if email already exists
+  console.log('[register] Checking if email exists:', data.email)
   const [existingUser] = await db
     .select()
     .from(user)
     .where(eq(user.email, data.email))
   if (existingUser) {
+    console.log('[register] Email already exists:', data.email)
     return { error: 'An account with this email already exists.' }
   }
 
   // 2. Create user with email unverified
+  console.log('[register] Creating user:', data.email)
   const userId = uuidv4()
   const hashedPassword = await bcrypt.hash(data.password, 10)
 
@@ -38,6 +41,7 @@ export async function register(data: {
   })
 
   // 3. Create account record (so Better Auth knows about the email/password login)
+  console.log('[register] Creating account record for:', data.email)
   await db.insert(account).values({
     id: uuidv4(),
     userId,
@@ -47,14 +51,20 @@ export async function register(data: {
   })
 
   // 4. Send verification email via Better Auth
+  console.log('[register] Sending verification email to:', data.email)
   try {
     const hdrs = await headers()
-    await auth.api.sendVerificationEmail({
+    console.log('[register] Headers obtained, calling sendVerificationEmail...')
+    const result = await auth.api.sendVerificationEmail({
       headers: hdrs,
-      body: { email: data.email },
+      body: { email: data.email, callbackURL: '/dashboard' },
     })
-  } catch {
-    // Email may fail; account is created but unverified
+    console.log('[register] sendVerificationEmail result:', JSON.stringify(result))
+  } catch (err: any) {
+    console.error('[register] Failed to send verification email:', err?.message ?? err)
+    if (err?.stack) {
+      console.error('[register] Stack:', err.stack)
+    }
   }
 
   return { ok: true, needsVerification: true, email: data.email }
