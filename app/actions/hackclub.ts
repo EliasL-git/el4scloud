@@ -5,11 +5,18 @@ import { headers } from 'next/headers'
 import { cookies } from 'next/headers'
 import crypto from 'crypto'
 
-const BASE_URL = process.env.BETTER_AUTH_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+function getBaseUrl(hdrs: Headers): string {
+  const host = hdrs.get('host') || 'localhost:3000'
+  const proto = hdrs.get('x-forwarded-proto') || (process.env.NODE_ENV === 'production' ? 'https' : 'http')
+  return `${proto}://${host}`
+}
 
 export async function getHackClubAuthUrl() {
-  const session = await auth.api.getSession({ headers: await headers() })
+  const hdrs = await headers()
+  const session = await auth.api.getSession({ headers: hdrs })
   if (!session?.user) throw new Error('Unauthorized')
+
+  const baseUrl = getBaseUrl(hdrs)
 
   const state = crypto.randomBytes(32).toString('hex')
   const cookieStore = await cookies()
@@ -24,7 +31,7 @@ export async function getHackClubAuthUrl() {
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: process.env.HACKCLUB_CLIENT_ID ?? '',
-    redirect_uri: `${BASE_URL}/api/auth/oauth2/callback/hackclub`,
+    redirect_uri: `${baseUrl}/api/auth/oauth2/callback/hackclub`,
     scope: 'openid profile email verification_status',
     state,
   })

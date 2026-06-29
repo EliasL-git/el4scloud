@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard/settings?error=no_code', request.url))
   }
 
-  const baseURL = process.env.BETTER_AUTH_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+  const origin = new URL(request.url).origin
 
   const tokenResponse = await fetch('https://auth.hackclub.com/oauth/token', {
     method: 'POST',
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     body: JSON.stringify({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: `${baseURL}/api/auth/oauth2/callback/hackclub`,
+      redirect_uri: `${origin}/api/auth/oauth2/callback/hackclub`,
       client_id: process.env.HACKCLUB_CLIENT_ID,
       client_secret: process.env.HACKCLUB_CLIENT_SECRET,
     }),
