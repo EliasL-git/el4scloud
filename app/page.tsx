@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
   HardDrive,
   Zap,
@@ -84,13 +83,6 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="flex-1 flex flex-col items-center justify-center text-center px-4 py-24 gap-6">
-        <Badge variant="secondary" className="gap-1.5 text-xs px-3 py-1">
-          <span
-            className="size-1.5 rounded-full inline-block"
-            style={{ backgroundColor: 'var(--brand)' }}
-          />
-        </Badge>
-
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight text-balance max-w-2xl leading-tight">
           Cloud storage that gets out of your way
         </h1>
