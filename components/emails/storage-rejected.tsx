@@ -6,6 +6,7 @@ import {
   Heading,
   Hr,
 } from '@react-email/components'
+import { main, container, heading, paragraph, hr, footer } from '@/lib/email-styles'
 
 interface Props {
   name: string
@@ -21,8 +22,7 @@ export function StorageRejectedEmail({ name, requestedAmount, adminNote }: Props
           <Heading style={heading}>Storage upgrade request</Heading>
           <Text style={paragraph}>Hi {name},</Text>
           <Text style={paragraph}>
-            Your request for <strong>{requestedAmount}</strong> of additional storage was not
-            approved at this time.
+            Your request for {requestedAmount} of additional storage was not approved at this time.
           </Text>
           {adminNote && (
             <Text style={paragraph}>
@@ -38,45 +38,4 @@ export function StorageRejectedEmail({ name, requestedAmount, adminNote }: Props
       </Body>
     </Html>
   )
-}
-
-const main = {
-  backgroundColor: '#f6f9fc',
-  fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
-  padding: '40px 0',
-}
-
-const container = {
-  backgroundColor: '#ffffff',
-  border: '1px solid #e6e6e6',
-  borderRadius: '8px',
-  margin: '0 auto',
-  padding: '32px',
-  maxWidth: '480px',
-}
-
-const heading = {
-  fontSize: '20px',
-  fontWeight: '600',
-  color: '#1a1a1a',
-  margin: '0 0 20px',
-}
-
-const paragraph = {
-  fontSize: '14px',
-  lineHeight: '22px',
-  color: '#4a4a4a',
-  margin: '0 0 12px',
-}
-
-const hr = {
-  border: 'none',
-  borderTop: '1px solid #e6e6e6',
-  margin: '24px 0 16px',
-}
-
-const footer = {
-  fontSize: '12px',
-  color: '#999',
-  margin: 0,
 }

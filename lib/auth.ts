@@ -1,5 +1,8 @@
 import { betterAuth } from 'better-auth'
-import { pool } from '@/lib/db'
+import { pool, db } from '@/lib/db'
+import { verification } from '@/lib/db/schema'
+import { eq } from 'drizzle-orm'
+import { v4 as uuidv4 } from 'uuid'
 import { VerifyEmailEmail } from '@/components/emails/verify-email'
 
 const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined
@@ -16,6 +19,10 @@ const trustedOrigins = [
   ...(vercelUrl ? [vercelUrl] : []),
   ...(productionUrl ? [productionUrl] : []),
 ]
+
+function generateCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString()
+}
 
 export const auth = betterAuth({
   database: pool,
@@ -39,30 +46,41 @@ export const auth = betterAuth({
   emailVerification: {
     sendOnSignUp: false,
     autoSignInAfterVerification: true,
-    sendVerificationEmail: async ({ user, url }) => {
-      console.log('[auth:sendVerificationEmail] Preparing to send verification email...')
+    sendVerificationEmail: async ({ user }) => {
+      console.log('[auth:sendVerificationEmail] Preparing to send verification code...')
       console.log('[auth:sendVerificationEmail] User:', { id: user.id, email: user.email, name: user.name })
-      console.log('[auth:sendVerificationEmail] Verification URL:', url)
-      console.log('[auth:sendVerificationEmail] RESEND_FROM:', process.env.RESEND_FROM)
-      console.log('[auth:sendVerificationEmail] RESEND_API_KEY set?', !!process.env.RESEND_API_KEY)
 
       const apiKey = process.env.RESEND_API_KEY
       if (!apiKey) {
         console.error('[auth:sendVerificationEmail] RESEND_API_KEY is not set — cannot send email')
         return
       }
-
       const from = process.env.RESEND_FROM || 'noreply@example.com'
-      console.log('[auth:sendVerificationEmail] Sending via Resend from:', from, 'to:', user.email)
 
+      // Generate and store 6-digit code
+      const code = generateCode()
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+
+      console.log('[auth:sendVerificationEmail] Generated code:', code, 'expires:', expiresAt.toISOString())
+
+      // Upsert verification entry (delete old, insert new)
+      await db.delete(verification).where(eq(verification.identifier, user.email))
+      await db.insert(verification).values({
+        id: uuidv4(),
+        identifier: user.email,
+        value: code,
+        expiresAt,
+      })
+
+      // Send email with code
       try {
         const { Resend } = await import('resend')
         const resend = new Resend(apiKey)
         const { data, error } = await resend.emails.send({
           from,
           to: user.email,
-          subject: 'Verify your email',
-          react: VerifyEmailEmail({ username: user.name, verificationUrl: url }),
+          subject: 'Your verification code',
+          react: VerifyEmailEmail({ username: user.name, code }),
         })
 
         if (error) {

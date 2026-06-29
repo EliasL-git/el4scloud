@@ -71,10 +71,16 @@ export default function SignUpPage() {
             <CardContent className="text-center text-sm text-muted-foreground flex flex-col items-center gap-3">
               <Mail className="size-8 text-muted-foreground" />
               <p>
-                We sent a verification link to <strong>{registeredEmail}</strong>.
+                We sent a 6-digit verification code to <strong>{registeredEmail}</strong>.
               </p>
               <p>
-                Click the link in the email to verify your account and sign in.
+                <a
+                  href={`/verify-email?email=${encodeURIComponent(registeredEmail)}`}
+                  className="underline underline-offset-2 hover:text-foreground"
+                >
+                  Enter the code
+                </a>
+                {' to verify your account.'}
               </p>
             </CardContent>
           </Card>
