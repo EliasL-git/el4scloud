@@ -312,6 +312,16 @@ export async function resetWarnings(userId: string) {
   return { ok: true }
 }
 
+export async function setUserEmailVerified(userId: string, verified: boolean) {
+  const adminId = await assertAdmin()
+  await db
+    .update(user)
+    .set({ emailVerified: verified, updatedAt: new Date() })
+    .where(eq(user.id, userId))
+  await logAuditEventWithHeaders(adminId, verified ? 'admin.email_verified' : 'admin.email_unverified', JSON.stringify({ targetUserId: userId }))
+  return { ok: true }
+}
+
 export async function flagHash(hash: string) {
   const adminId = await assertAdmin()
   if (!hash?.trim()) throw new Error('Hash is required')

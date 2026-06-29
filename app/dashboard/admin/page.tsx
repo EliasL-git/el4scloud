@@ -13,6 +13,7 @@ import {
   setStorageLimit,
   revokePublicFiles,
   resetWarnings,
+  setUserEmailVerified,
   adminGetTickets,
   adminGetTicketReplies,
   adminReplyToTicket,
@@ -41,7 +42,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Search, Ban, Download, CheckCircle2, RefreshCw, HardDrive, Users, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Key, LayoutDashboard } from 'lucide-react'
+import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Search, Ban, Download, CheckCircle2, RefreshCw, HardDrive, Users, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Key, LayoutDashboard, Mail } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -1120,6 +1121,12 @@ export default function AdminPage() {
               <span>ID: <span className="font-mono text-foreground">{selectedUser.id}</span></span>
               <span>Role: <span className="text-foreground">{selectedUser.role}</span></span>
               <span>Storage: <span className="text-foreground">{formatBytes(selectedUser.storageLimit)}</span></span>
+              <span>
+                Email:{' '}
+                <span className={selectedUser.emailVerified ? 'text-green-600' : 'text-destructive'}>
+                  {selectedUser.emailVerified ? 'Verified' : 'Not verified'}
+                </span>
+              </span>
               <span>Joined: <span className="text-foreground">{formatDate(selectedUser.createdAt)}</span></span>
               {selectedUser.suspensionType && (
                 <span className="col-span-2">
@@ -1155,6 +1162,14 @@ export default function AdminPage() {
                     Suspend
                   </Button>
                 )}
+
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
+                  onClick={() => { handleAction(selectedUser.id, 'email', () => setUserEmailVerified(selectedUser.id, !selectedUser.emailVerified), selectedUser.emailVerified ? 'Email unverified' : 'Email verified'); setSelectedUser(null) }}
+                  disabled={processing[`email-${selectedUser.id}`]}
+                >
+                  <Mail className="size-3" />
+                  {selectedUser.emailVerified ? 'Unverify' : 'Verify'} email
+                </Button>
 
                 <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
                   onClick={() => { handleAction(selectedUser.id, 'revoke', () => revokePublicFiles(selectedUser.id), 'Public files revoked'); setSelectedUser(null) }}
