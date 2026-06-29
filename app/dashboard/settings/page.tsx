@@ -1,18 +1,39 @@
 'use client'
 
 import { useState } from 'react'
+import { authClient } from '@/lib/auth-client'
+import { resendVerificationEmail } from '@/app/actions/verify'
 import { exportMyData, requestAccountDeletion } from '@/app/actions/account'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Download, Trash2 } from 'lucide-react'
+import { Download, Trash2, Mail, MailCheck, ShieldCheck, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 
 export default function SettingsPage() {
+  const { data: session } = authClient.useSession()
+  const [verifying, setVerifying] = useState(false)
+  const [verificationSent, setVerificationSent] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleteReason, setDeleteReason] = useState('')
+
+  const emailVerified = session?.user?.emailVerified ?? true
+  const userEmail = session?.user?.email ?? ''
+
+  const handleResendVerification = async () => {
+    setVerifying(true)
+    setVerificationSent(false)
+    const result = await resendVerificationEmail(userEmail)
+    if (result.ok) {
+      setVerificationSent(true)
+      toast.success('Verification email sent!')
+    } else {
+      toast.error(result.error || 'Failed to send verification email')
+    }
+    setVerifying(false)
+  }
 
   const handleExport = async () => {
     setExporting(true)
@@ -58,6 +79,57 @@ export default function SettingsPage() {
           Manage your account and download your data.
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            {emailVerified ? (
+              <ShieldCheck className="size-4 text-green-600" />
+            ) : (
+              <Mail className="size-4 text-amber-600" />
+            )}
+            Email verification
+          </CardTitle>
+          <CardDescription>
+            {emailVerified
+              ? `${userEmail} is verified.`
+              : `${userEmail} is not yet verified. Check your inbox or resend the verification email.`
+            }
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {emailVerified ? (
+            <div className="flex items-center gap-2 text-xs text-green-600">
+              <MailCheck className="size-3.5 shrink-0" />
+              Verified
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {verificationSent ? (
+                <div className="flex items-center gap-2 text-xs text-green-600">
+                  <MailCheck className="size-3.5 shrink-0" />
+                  Verification email sent! Check your inbox.
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleResendVerification}
+                  disabled={verifying}
+                  className="gap-1.5 w-fit"
+                >
+                  {verifying ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Mail className="size-3.5" />
+                  )}
+                  Resend verification email
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

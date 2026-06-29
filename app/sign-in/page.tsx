@@ -2,22 +2,29 @@
 
 import { useState } from 'react'
 import { authClient } from '@/lib/auth-client'
+import { resendVerificationEmail } from '@/app/actions/verify'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { HardDrive } from 'lucide-react'
+import { HardDrive, Mail, MailCheck, Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export default function SignInPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [needsVerification, setNeedsVerification] = useState<string | null>(null)
+  const [resending, setResending] = useState(false)
+  const [resent, setResent] = useState(false)
 
   async function handleEmailSignIn(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setNeedsVerification(null)
+    setResent(false)
 
     if (!email || !password) {
       setError('Please enter your email and password.')
@@ -28,12 +35,29 @@ export default function SignInPage() {
     try {
       const result = await authClient.signIn.email({ email, password, callbackURL: '/dashboard' })
       if (result.error) {
-        setError(result.error.message || 'Invalid email or password.')
+        if (result.error.code === 'EMAIL_NOT_VERIFIED') {
+          setNeedsVerification(email)
+        } else {
+          setError(result.error.message || 'Invalid email or password.')
+        }
       }
     } catch {
       setError('Invalid email or password.')
     }
     setLoading(false)
+  }
+
+  async function handleResend() {
+    if (!needsVerification) return
+    setResending(true)
+    setResent(false)
+    const result = await resendVerificationEmail(needsVerification)
+    if (result.ok) {
+      setResent(true)
+    } else {
+      setError(result.error || 'Failed to resend verification email.')
+    }
+    setResending(false)
   }
 
   return (
@@ -79,30 +103,75 @@ export default function SignInPage() {
                 />
               </div>
 
-              {error && (
+              {error && !needsVerification && (
                 <p className="text-sm text-destructive" role="alert">
                   {error}
                 </p>
               )}
 
-              <Button
-                type="submit"
-                disabled={loading}
-                className="w-full"
-                style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
-              >
-                {loading ? 'Signing in...' : 'Sign in'}
-              </Button>
+              {needsVerification ? (
+                <div className="flex flex-col gap-3 rounded-lg border border-border bg-secondary/30 p-3">
+                  <div className="flex items-start gap-2">
+                    <Mail className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium">Email not verified</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Check your inbox for a verification link, or click below to resend.
+                      </p>
+                    </div>
+                  </div>
+                  {resent ? (
+                    <div className="flex items-center gap-2 text-xs text-green-600">
+                      <MailCheck className="size-3.5 shrink-0" />
+                      Verification email sent!
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleResend}
+                      disabled={resending}
+                      className="gap-1.5 w-full"
+                    >
+                      {resending ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Mail className="size-3.5" />
+                      )}
+                      Resend verification email
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className={cn(
+                    "w-full",
+                    "bg-[var(--brand)] text-[var(--brand-foreground)]"
+                  )}
+                >
+                  {loading ? 'Signing in...' : 'Sign in'}
+                </Button>
+              )}
             </form>
           </CardContent>
         </Card>
 
-        <p className="text-center text-sm text-muted-foreground">
-          Don&apos;t have an account?{' '}
-          <a href="/sign-up" className="underline underline-offset-2 hover:text-foreground">
-            Create an account
-          </a>
-        </p>
+        <div className="flex flex-col items-center gap-1 text-sm text-muted-foreground">
+          <p>
+            Don&apos;t have an account?{' '}
+            <a href="/sign-up" className="underline underline-offset-2 hover:text-foreground">
+              Create an account
+            </a>
+          </p>
+          <p>
+            <a href="/verify-email" className="underline underline-offset-2 hover:text-foreground">
+              Resend verification email
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   )
