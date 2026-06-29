@@ -1,6 +1,6 @@
 import { betterAuth } from 'better-auth'
-import { genericOAuth } from 'better-auth/plugins/generic-oauth'
 import { pool } from '@/lib/db'
+import { VerifyEmailEmail } from '@/components/emails/verify-email'
 
 const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined
 const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
@@ -13,7 +13,6 @@ const baseURL =
 const trustedOrigins = [
   'http://localhost:3000',
   'https://cloud.el4s.dev',
-  'https://auth.hackclub.com',
   ...(vercelUrl ? [vercelUrl] : []),
   ...(productionUrl ? [productionUrl] : []),
 ]
@@ -35,42 +34,22 @@ export const auth = betterAuth({
     enabled: true,
     disableSignUp: true,
     autoSignIn: true,
+    requireEmailVerification: true,
   },
-  plugins: [
-    genericOAuth({
-      config: [
-        {
-          providerId: 'hackclub',
-          discoveryUrl: 'https://auth.hackclub.com/.well-known/openid-configuration',
-          clientId: process.env.HACKCLUB_CLIENT_ID ?? '',
-          clientSecret: process.env.HACKCLUB_CLIENT_SECRET ?? '',
-          scopes: ['openid', 'profile', 'email', 'verification_status'],
-          getUserInfo: async (tokens: { accessToken: string }) => {
-            const res = await fetch('https://auth.hackclub.com/api/v1/me', {
-              headers: { Authorization: `Bearer ${tokens.accessToken}` },
-            })
-            const data = await res.json() as Record<string, unknown>
-            const identity = data.identity as Record<string, unknown> | undefined
-            if (!identity?.ysws_eligible) return null
-            const displayName = String(identity.name ?? '')
-            const givenName = String(identity.given_name ?? identity.first_name ?? '')
-            const familyName = String(identity.family_name ?? identity.last_name ?? '')
-            const nickname = String(identity.nickname ?? '')
-            return {
-              id: String(identity.id),
-              email: String(identity.primary_email ?? ''),
-              name: displayName || `${givenName} ${familyName}`.trim() || nickname || String(identity.primary_email ?? '').split('@')[0] || 'User',
-            }
-          },
-          mapProfileToUser: (userInfo: Record<string, unknown>) => {
-            const u = userInfo.user as Record<string, unknown> | undefined
-            if (!u) return userInfo as Record<string, unknown>
-            return u
-          },
-        },
-      ],
-    }),
-  ],
+  emailVerification: {
+    sendOnSignUp: false,
+    autoSignInAfterVerification: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      const { Resend } = await import('resend')
+      const resend = new Resend(process.env.RESEND_API_KEY ?? '')
+      await resend.emails.send({
+        from: process.env.RESEND_FROM ?? 'noreply@example.com',
+        to: user.email,
+        subject: 'Verify your email',
+        react: VerifyEmailEmail({ username: user.name, verificationUrl: url }),
+      })
+    },
+  },
   advanced: {
     defaultCookieAttributes: {
       sameSite: 'lax' as const,

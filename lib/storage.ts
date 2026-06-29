@@ -1,6 +1,5 @@
 export const STORAGE_LIMIT = 15 * 1024 * 1024 * 1024 // legacy default
-export const NON_HC_STORAGE_LIMIT = 0 // 0 bytes — non-Hack Club users start with no storage
-export const HC_STORAGE_LIMIT = 50 * 1024 * 1024 * 1024 // 50 GB — Hack Club members get auto-approved
+export const NON_HC_STORAGE_LIMIT = 0 // 0 bytes — default for new accounts
 
 const unitMap: Record<string, number> = {
   B: 1,

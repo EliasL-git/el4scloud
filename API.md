@@ -93,47 +93,7 @@ const data = await res.json()
 console.log(data.fileId) // "550e8400-..."
 ```
 
----
 
-## Presigned upload flow (dashboard)
-
-When uploading from the dashboard, the client requests a **presigned URL** and uploads directly to S3 — no server proxy. This is available as a Server Action (not a REST endpoint).
-
-### 1. Request a presigned URL
-
-```ts
-import { getPresignedUploadUrl } from '@/app/actions/files'
-
-const { presignedUrl, fileId, key } = await getPresignedUploadUrl(
-  'photo.jpg',
-  'image/jpeg',
-  204800,
-  true,            // isPublic
-  'sha256-hash...' // optional file hash for malware check
-)
-```
-
-### 2. Upload directly to S3
-
-```ts
-await fetch(presignedUrl, {
-  method: 'PUT',
-  headers: { 'Content-Type': 'image/jpeg' },
-  body: fileBlob,
-})
-```
-
-### Response
-
-```json
-{
-  "presignedUrl": "https://cloudbox.s3.fra.databucket.eu/...",
-  "fileId": "550e8400-e29b-41d4-a716-446655440000",
-  "key": "userId/filename.jpg"
-}
-```
-
----
 
 ## Download / proxy a file
 
@@ -305,21 +265,7 @@ Authorization: Bearer <MIGRATE_SECRET>
 
 ---
 
-## Server Actions (dashboard)
-
-These are Next.js Server Actions callable directly from client components.
-
-### Files
-
-| Action | Description |
-|---|---|
-| `getFiles()` | List all files for the current user |
-| `getPresignedUploadUrl(fileName, mimeType, size, isPublic, fileHash)` | Get a presigned S3 URL for direct upload |
-| `deleteFile(fileId)` | Delete a file from S3 and the database |
-| `toggleFileVisibility(fileId)` | Toggle a file between public and private |
-| `getFileStats()` | Get total file count, size, public/private breakdown |
-| `getStorageLimit()` | Get the current user's storage limit |
-| `flagFile(fileId)` | Report a file as malicious (flags hash, deletes file, suspends uploader) |
+## Server Actions
 
 ### Account
 
@@ -393,5 +339,5 @@ All admin actions require the current user to have `role: 'admin'`.
 |---|---|
 | Max file size | 500 MB |
 | Presigned URL expiry | 1 hour |
-| Default storage | 15 GB |
+| Default storage | 0 B (apply for quota) |
 | Cron cleanup delay | 30 days after termination |

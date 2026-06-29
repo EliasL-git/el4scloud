@@ -1,12 +1,13 @@
 'use server'
 
 import { db } from '@/lib/db'
-import { user, account, session } from '@/lib/db/schema'
+import { user, account } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import bcrypt from 'bcryptjs'
-import { cookies } from 'next/headers'
+import { headers } from 'next/headers'
 import { NON_HC_STORAGE_LIMIT } from '@/lib/storage'
+import { auth } from '@/lib/auth'
 
 export async function register(data: {
   name: string
@@ -22,7 +23,7 @@ export async function register(data: {
     return { error: 'An account with this email already exists.' }
   }
 
-  // 2. Create user with minimal storage limit
+  // 2. Create user with email unverified
   const userId = uuidv4()
   const hashedPassword = await bcrypt.hash(data.password, 10)
 
@@ -30,7 +31,7 @@ export async function register(data: {
     id: userId,
     name: data.name,
     email: data.email,
-    emailVerified: true,
+    emailVerified: false,
     role: 'user',
     storageLimit: NON_HC_STORAGE_LIMIT,
     agreedToTerms: true,
@@ -45,26 +46,16 @@ export async function register(data: {
     password: hashedPassword,
   })
 
-  // 4. Create session
-  const sessionToken = uuidv4()
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+  // 4. Send verification email via Better Auth
+  try {
+    const hdrs = await headers()
+    await auth.api.sendVerificationEmail({
+      headers: hdrs,
+      body: { email: data.email },
+    })
+  } catch {
+    // Email may fail; account is created but unverified
+  }
 
-  await db.insert(session).values({
-    id: uuidv4(),
-    token: sessionToken,
-    userId,
-    expiresAt,
-  })
-
-  // 5. Set session cookie — Better Auth default format
-  const cookieStore = await cookies()
-  cookieStore.set('better-auth.session_token', sessionToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    expires: expiresAt,
-    path: '/',
-  })
-
-  return { ok: true }
+  return { ok: true, needsVerification: true, email: data.email }
 }

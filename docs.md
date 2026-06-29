@@ -2,6 +2,16 @@
 
 > For complete API reference (endpoints, Server Actions, examples), see [API.md](./API.md).
 
+## Registration
+
+Sign up with email and password. New accounts start with 0 B storage — apply for quota from the dashboard footer.
+
+- **Standard user**: Sign up with email/password, then apply for storage via the "Need more storage? Apply." link.
+
+## File management
+
+Upload files directly from the dashboard. Download is available via the API for programmatic access (see [API.md](./API.md)).
+
 ## Cron job
 
 The cleanup endpoint deletes all data for terminated users whose 30-day period has expired.
@@ -38,8 +48,8 @@ In the **Users** tab, click **Suspend** on any non-admin user:
 In the **Files** tab, paste a SHA-256 hash into the input and click **Flag hash**.
 The hash is added to the `flagged_hashes` table and checked on all future uploads.
 
-### Automatic (User report)
-When any user clicks **Flag as malicious** on a file in their dashboard:
+### Automatic (API report)
+When any user flags a file as malicious via the API:
 - The file is deleted from S3 for all users
 - Its hash is added to `flagged_hashes`
 - The uploader is automatically **suspended** (appealable)
@@ -83,7 +93,7 @@ When any user clicks **Flag as malicious** on a file in their dashboard:
 | `storage_requests` | User requests for storage upgrades |
 | `tickets` / `ticket_replies` | Support tickets |
 | `api_keys` | User API keys (hashed, prefix only visible) |
-| `access_codes` | Registration access codes (invite-only) |
+| `access_codes` | Registration access codes (optional, admin-generated) |
 | `takedown_requests` | DMCA/abuse takedown reports |
 | `warnings` | Warning/suspension/termination records |
 | `audit_log` | Administrative audit trail |

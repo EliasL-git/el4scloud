@@ -6,12 +6,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { HardDrive } from 'lucide-react'
+import { HardDrive, Mail } from 'lucide-react'
 
 export default function SignUpPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [registeredEmail, setRegisteredEmail] = useState('')
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -49,8 +50,8 @@ export default function SignUpPage() {
       return
     }
 
+    setRegisteredEmail(email)
     setSuccess(true)
-    setTimeout(() => { window.location.href = '/dashboard' }, 1500)
   }
 
   if (success) {
@@ -65,12 +66,24 @@ export default function SignUpPage() {
           </div>
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl text-center">Account Created!</CardTitle>
+              <CardTitle className="text-xl text-center">Check your email</CardTitle>
             </CardHeader>
-            <CardContent className="text-center text-sm text-muted-foreground">
-              Redirecting you to the dashboard...
+            <CardContent className="text-center text-sm text-muted-foreground flex flex-col items-center gap-3">
+              <Mail className="size-8 text-muted-foreground" />
+              <p>
+                We sent a verification link to <strong>{registeredEmail}</strong>.
+              </p>
+              <p>
+                Click the link in the email to verify your account and sign in.
+              </p>
             </CardContent>
           </Card>
+          <p className="text-center text-sm text-muted-foreground">
+            <a href="/sign-in" className="underline underline-offset-2 hover:text-foreground">
+              Sign in
+            </a>
+            {' after verifying your email.'}
+          </p>
         </div>
       </div>
     )
