@@ -2,9 +2,8 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { user, account } from '@/lib/db/schema'
-import { eq, and } from 'drizzle-orm'
-import { HC_STORAGE_LIMIT } from '@/lib/storage'
+import { user } from '@/lib/db/schema'
+import { eq } from 'drizzle-orm'
 import { DashboardShell } from '@/components/dashboard/shell'
 
 export default async function DashboardLayout({
@@ -35,24 +34,6 @@ export default async function DashboardLayout({
     await db
       .update(user)
       .set({ agreedToTerms: true })
-      .where(eq(user.id, session.user.id))
-  }
-
-  // Auto-upgrade Hack Club members to HC storage limit
-  const [hcAccount] = await db
-    .select({ id: account.id })
-    .from(account)
-    .where(
-      and(
-        eq(account.userId, session.user.id),
-        eq(account.providerId, 'hackclub')
-      )
-    )
-
-  if (hcAccount && (u.storageLimit ?? 0) < HC_STORAGE_LIMIT) {
-    await db
-      .update(user)
-      .set({ storageLimit: HC_STORAGE_LIMIT })
       .where(eq(user.id, session.user.id))
   }
 

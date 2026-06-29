@@ -1,1 +1,1 @@
-export type VerificationMethod = 'none' | 'manual' | 'hackclub'
+export type VerificationMethod = 'none' | 'manual'

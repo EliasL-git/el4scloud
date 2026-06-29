@@ -6,9 +6,17 @@ import { resendVerificationEmail } from '@/app/actions/verify'
 import { exportMyData, requestAccountDeletion } from '@/app/actions/account'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Download, Trash2, Mail, MailCheck, ShieldCheck, Loader2 } from 'lucide-react'
+import { Download, Trash2, Mail, MailCheck, ShieldCheck, IdCard, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
+import { MAX_IDENTITY_TIER } from '@/lib/storage'
+
+function formatStorage(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
+  if (bytes >= 1024 * 1024) return `${Math.round(bytes / (1024 * 1024))} MB`
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`
+  return `${bytes} B`
+}
 
 export default function SettingsPage() {
   const { data: session } = authClient.useSession()
@@ -21,6 +29,8 @@ export default function SettingsPage() {
 
   const emailVerified = session?.user?.emailVerified ?? true
   const userEmail = session?.user?.email ?? ''
+  const userStorageLimit = (session?.user as any)?.storageLimit ?? 0
+  const needsVerification = userStorageLimit > 0 && userStorageLimit < MAX_IDENTITY_TIER
 
   const handleResendVerification = async () => {
     setVerifying(true)
@@ -126,6 +136,35 @@ export default function SettingsPage() {
                   Resend verification email
                 </Button>
               )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <IdCard className="size-4 text-muted-foreground" />
+            Identity verification
+          </CardTitle>
+          <CardDescription>
+            {needsVerification
+              ? `You are on the ${formatStorage(userStorageLimit)} tier. Verify your identity to unlock up to ${formatStorage(MAX_IDENTITY_TIER)}.`
+              : `Your storage tier allows up to ${formatStorage(MAX_IDENTITY_TIER)}.`
+            }
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {needsVerification ? (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs text-muted-foreground">
+                Use the <strong>Need more storage? Apply.</strong> link in the dashboard footer to request a higher limit. An admin will review your request.
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-xs text-green-600">
+              <ShieldCheck className="size-3.5 shrink-0" />
+              {userStorageLimit >= MAX_IDENTITY_TIER ? 'Max tier unlocked' : 'No upgrade needed'}
             </div>
           )}
         </CardContent>

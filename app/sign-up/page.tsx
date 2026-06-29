@@ -2,12 +2,11 @@
 
 import { useState } from 'react'
 import { register } from '@/app/actions/register'
-import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { HardDrive, Mail, ShieldCheck, Zap, Terminal } from 'lucide-react'
+import { HardDrive, Mail, ShieldCheck, Zap } from 'lucide-react'
 import type { VerificationMethod } from '@/lib/types'
 
 const tiers: {
@@ -30,13 +29,6 @@ const tiers: {
     storage: '2.5 GB',
     description: 'Verify with a code sent to your email',
     icon: ShieldCheck,
-  },
-  {
-    id: 'hackclub',
-    title: 'Hack Club',
-    storage: '50 GB',
-    description: 'Hack Club members get instant 50 GB',
-    icon: Terminal,
   },
 ]
 
@@ -87,28 +79,6 @@ export default function SignUpPage() {
     setRegisteredEmail(email)
     setSuccessMethod(method!)
     setSuccess(true)
-  }
-
-  async function handleHackclubSignIn() {
-    setLoading(true)
-    setError('')
-    try {
-      const { data, error } = await authClient.signIn.oauth2({ providerId: 'hackclub', callbackURL: '/dashboard' })
-      if (error) {
-        setError(error.message || 'Failed to initiate Hack Club sign in.')
-        setLoading(false)
-        return
-      }
-      if (data?.url) {
-        window.location.href = data.url
-      } else {
-        setError('Failed to initiate Hack Club sign in.')
-        setLoading(false)
-      }
-    } catch {
-      setError('Failed to sign in with Hack Club.')
-      setLoading(false)
-    }
   }
 
   if (success) {
@@ -190,7 +160,6 @@ export default function SignUpPage() {
             <CardDescription>Choose how to verify and pick your storage tier</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            {/* Tier selector */}
             <div className="grid gap-2">
               {tiers.map((tier) => {
                 const selected = method === tier.id
@@ -221,27 +190,7 @@ export default function SignUpPage() {
               })}
             </div>
 
-            {method === 'hackclub' ? (
-              <div className="flex flex-col gap-3">
-                <Button
-                  onClick={handleHackclubSignIn}
-                  disabled={loading}
-                  className="w-full gap-3"
-                  style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
-                >
-                  <img src="/icons/hackclub.ico" alt="Hack Club" className="size-5 shrink-0" />
-                  {loading ? 'Redirecting...' : 'Sign up with Hack Club'}
-                </Button>
-
-                {error && (
-                  <p className="text-sm text-destructive" role="alert">{error}</p>
-                )}
-
-                <p className="text-xs text-muted-foreground text-center">
-                  You must be a Hack Club member to use this option.
-                </p>
-              </div>
-            ) : method ? (
+            {method ? (
               <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="name">Name</Label>

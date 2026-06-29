@@ -14,33 +14,10 @@ export default function SignInPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
-  const [hcLoading, setHcLoading] = useState(false)
   const [error, setError] = useState('')
   const [needsVerification, setNeedsVerification] = useState<string | null>(null)
   const [resending, setResending] = useState(false)
   const [resent, setResent] = useState(false)
-
-  async function handleHackclubSignIn() {
-    setHcLoading(true)
-    setError('')
-    try {
-      const { data, error } = await authClient.signIn.oauth2({ providerId: 'hackclub', callbackURL: '/dashboard' })
-      if (error) {
-        setError(error.message || 'Failed to initiate Hack Club sign in.')
-        setHcLoading(false)
-        return
-      }
-      if (data?.url) {
-        window.location.href = data.url
-      } else {
-        setError('Failed to initiate Hack Club sign in.')
-        setHcLoading(false)
-      }
-    } catch {
-      setError('Failed to sign in with Hack Club.')
-      setHcLoading(false)
-    }
-  }
 
   async function handleEmailSignIn(e: React.FormEvent) {
     e.preventDefault()
@@ -101,26 +78,6 @@ export default function SignInPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            {/* Hack Club OAuth */}
-            <Button
-              onClick={handleHackclubSignIn}
-              disabled={hcLoading}
-              className="w-full gap-3"
-              style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
-            >
-              <img src="/icons/hackclub.ico" alt="Hack Club" className="size-5 shrink-0" />
-              {hcLoading ? 'Redirecting...' : 'Sign in with Hack Club'}
-            </Button>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-border" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-2 text-muted-foreground">or</span>
-              </div>
-            </div>
-
             <form onSubmit={handleEmailSignIn} className="flex flex-col gap-4">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="email">Email</Label>
