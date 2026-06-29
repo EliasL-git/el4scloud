@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { authClient } from '@/lib/auth-client'
 import { resendVerificationEmail, sendUpgradeCode, verifyUpgradeCode } from '@/app/actions/verify'
 import { getStorageLimit } from '@/app/actions/files'
+import { submitStorageRequest } from '@/app/actions/storage'
 import { exportMyData, requestAccountDeletion } from '@/app/actions/account'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -31,6 +32,10 @@ export default function SettingsPage() {
   const [upgradeSent, setUpgradeSent] = useState(false)
   const [upgraded, setUpgraded] = useState(false)
   const [linkingHc, setLinkingHc] = useState(false)
+  const [requestReason, setRequestReason] = useState('')
+  const [requestSlider, setRequestSlider] = useState(5)
+  const [requestSending, setRequestSending] = useState(false)
+  const [requestSent, setRequestSent] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -53,6 +58,7 @@ export default function SettingsPage() {
   const on100MbTier = storageLimit === NO_VERIFICATION_LIMIT
   const canUpgradeTo25Gb = storageLimit > 0 && storageLimit < MANUAL_VERIFICATION_LIMIT
   const canUpgradeTo50Gb = storageLimit < HC_STORAGE_LIMIT
+  const canRequestMore = storageLimit >= MANUAL_VERIFICATION_LIMIT && storageLimit < MAX_IDENTITY_TIER
 
   const handleResendVerification = async () => {
     setVerifying(true)
@@ -112,6 +118,21 @@ export default function SettingsPage() {
     } catch {
       toast.error('Failed to start Hack Club verification.')
       setLinkingHc(false)
+    }
+  }
+
+  const handleSubmitUpgradeRequest = async () => {
+    if (!requestReason.trim()) return
+    setRequestSending(true)
+    try {
+      const amount = `${requestSlider} GB`
+      await submitStorageRequest(requestReason.trim(), amount)
+      setRequestSent(true)
+      toast.success('Request submitted for review.')
+    } catch {
+      toast.error('Failed to submit request.')
+    } finally {
+      setRequestSending(false)
     }
   }
 
@@ -219,8 +240,8 @@ export default function SettingsPage() {
           </CardTitle>
           <CardDescription>
             {canUpgradeTo25Gb
-              ? `You are on the ${formatStorage(storageLimit)} tier.`
-              : `Your storage tier allows up to ${formatStorage(MAX_IDENTITY_TIER)}.`
+              ? `You are on the ${formatStorage(storageLimit)} tier. Verify your email to upgrade or submit a request for more.`
+              : `Your storage allows up to ${formatStorage(MAX_IDENTITY_TIER)}. Submit a request or link Hack Club to unlock more.`
             }
           </CardDescription>
         </CardHeader>
@@ -284,6 +305,67 @@ export default function SettingsPage() {
             <div className="flex items-center gap-2 text-xs text-green-600">
               <ShieldCheck className="size-3.5 shrink-0" />
               Identity verified — storage upgraded to {formatStorage(MANUAL_VERIFICATION_LIMIT)}
+            </div>
+          )}
+
+          {/* Request more storage (reason + slider) */}
+          {canRequestMore && !requestSent && (
+            <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-3">
+              <div className="flex flex-col gap-2">
+                <p className="text-sm font-medium">Request more storage</p>
+                <p className="text-xs text-muted-foreground">
+                  Tell us why you need more space and how much you need.
+                </p>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-muted-foreground">
+                  Desired amount: <span className="font-medium text-foreground">{requestSlider} GB</span>
+                </label>
+                <input
+                  type="range"
+                  min={2.5}
+                  max={25}
+                  step={0.5}
+                  value={requestSlider}
+                  onChange={(e) => setRequestSlider(parseFloat(e.target.value))}
+                  className="w-full h-2 rounded-full appearance-none cursor-pointer bg-secondary accent-[var(--brand)]"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>2.5 GB</span>
+                  <span>25 GB</span>
+                </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-muted-foreground">What are you using the app for?</label>
+                <textarea
+                  value={requestReason}
+                  onChange={(e) => setRequestReason(e.target.value)}
+                  placeholder="Describe your use case and why you need more storage..."
+                  rows={3}
+                  className="min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={handleSubmitUpgradeRequest}
+                disabled={requestSending || !requestReason.trim()}
+                className="gap-1.5 w-fit"
+                style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+              >
+                {requestSending ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <IdCard className="size-3.5" />
+                )}
+                Submit request
+              </Button>
+            </div>
+          )}
+
+          {requestSent && (
+            <div className="flex items-center gap-2 text-xs text-amber-600">
+              <ShieldCheck className="size-3.5 shrink-0" />
+              Request submitted — an admin will review it.
             </div>
           )}
 
