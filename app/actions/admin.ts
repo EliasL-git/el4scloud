@@ -3,17 +3,17 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, storageRequests, files, tickets, ticketReplies, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, accessCodes, takedownRequests } from '@/lib/db/schema'
+import { user, account, storageRequests, files, tickets, ticketReplies, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, accessCodes, takedownRequests, session as sessionTable, warnings } from '@/lib/db/schema'
 import { eq, desc, ilike, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
 import { recordWarning } from '@/lib/warnings'
 import { s3, S3_BUCKET } from '@/lib/s3'
-import { DeleteObjectCommand } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3'
 import { Resend } from 'resend'
 import { StorageApprovedEmail } from '@/components/emails/storage-approved'
 import { StorageRejectedEmail } from '@/components/emails/storage-rejected'
-import { parseStorageAmount } from '@/lib/storage'
+import { parseStorageAmount, NO_VERIFICATION_LIMIT } from '@/lib/storage'
 import crypto from 'crypto'
 
 const resend = new Resend(process.env.RESEND_API_KEY ?? '')
@@ -319,6 +319,26 @@ export async function setUserEmailVerified(userId: string, verified: boolean) {
     .set({ emailVerified: verified, updatedAt: new Date() })
     .where(eq(user.id, userId))
   await logAuditEventWithHeaders(adminId, verified ? 'admin.email_verified' : 'admin.email_unverified', JSON.stringify({ targetUserId: userId }))
+  return { ok: true }
+}
+
+export async function resetVerificationStatus(userId: string) {
+  const adminId = await assertAdmin()
+
+  await db.delete(storageRequests).where(
+    and(eq(storageRequests.userId, userId), eq(storageRequests.status, 'pending'))
+  )
+
+  await db.delete(account).where(
+    and(eq(account.userId, userId), eq(account.providerId, 'hackclub'))
+  )
+
+  await db
+    .update(user)
+    .set({ storageLimit: NO_VERIFICATION_LIMIT, updatedAt: new Date() })
+    .where(eq(user.id, userId))
+
+  await logAuditEventWithHeaders(adminId, 'admin.verification_reset', JSON.stringify({ targetUserId: userId }))
   return { ok: true }
 }
 
@@ -636,5 +656,45 @@ export async function rejectTakedown(requestId: string, adminNote?: string) {
     .set({ status: 'rejected', adminNote: adminNote ?? null, updatedAt: new Date() })
     .where(eq(takedownRequests.id, requestId))
   await logAuditEventWithHeaders(adminId, 'admin.takedown_rejected', JSON.stringify({ requestId }))
+  return { ok: true }
+}
+
+export async function deleteUser(userId: string) {
+  const adminId = await assertAdmin()
+
+  const [u] = await db.select().from(user).where(eq(user.id, userId))
+  if (!u) throw new Error('User not found')
+
+  // Delete S3 objects for all files
+  const userFiles = await db
+    .select({ key: files.key })
+    .from(files)
+    .where(eq(files.userId, userId))
+
+  if (userFiles.length > 0) {
+    const keys = userFiles.map((f) => ({ Key: f.key }))
+    await s3.send(new DeleteObjectsCommand({
+      Bucket: S3_BUCKET,
+      Delete: { Objects: keys },
+    }))
+  }
+
+  // Delete all associated records
+  await db.delete(files).where(eq(files.userId, userId))
+  await db.delete(storageRequests).where(eq(storageRequests.userId, userId))
+  await db.delete(tickets).where(eq(tickets.userId, userId))
+  await db.delete(appeals).where(eq(appeals.userId, userId))
+  await db.delete(deletionRequests).where(eq(deletionRequests.userId, userId))
+  await db.delete(apiKeys).where(eq(apiKeys.userId, userId))
+  await db.delete(accessCodes).where(eq(accessCodes.createdBy, userId))
+  await db.delete(warnings).where(eq(warnings.userId, userId))
+
+  // account + session have cascade, but delete explicitly
+  await db.delete(account).where(eq(account.userId, userId))
+  await db.delete(sessionTable).where(eq(sessionTable.userId, userId))
+
+  await db.delete(user).where(eq(user.id, userId))
+
+  await logAuditEventWithHeaders(adminId, 'admin.user_deleted', JSON.stringify({ targetUserId: userId, email: u.email }))
   return { ok: true }
 }

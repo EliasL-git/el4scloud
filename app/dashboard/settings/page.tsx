@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import { authClient } from '@/lib/auth-client'
-import { resendVerificationEmail, sendUpgradeCode, verifyUpgradeCode } from '@/app/actions/verify'
-import { getStorageLimit } from '@/app/actions/files'
+import { resendVerificationEmail } from '@/app/actions/verify'
+import { getVerificationStatus } from '@/app/actions/verification'
+import { getStorageLimit, getStorageUsage } from '@/app/actions/files'
 import { submitStorageRequest } from '@/app/actions/storage'
+import { getHackClubAuthUrl } from '@/app/actions/hackclub'
 import { exportMyData, requestAccountDeletion } from '@/app/actions/account'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -12,7 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Download, Trash2, Mail, MailCheck, ShieldCheck, IdCard, Terminal, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
-import { MAX_IDENTITY_TIER, HC_STORAGE_LIMIT, NO_VERIFICATION_LIMIT, MANUAL_VERIFICATION_LIMIT } from '@/lib/storage'
+import { HC_STORAGE_LIMIT } from '@/lib/storage'
 
 function formatStorage(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
@@ -24,14 +26,16 @@ function formatStorage(bytes: number): string {
 export default function SettingsPage() {
   const { data: session, refetch } = authClient.useSession()
   const [storageLimit, setStorageLimit] = useState(0)
+  const [storageUsage, setStorageUsage] = useState(0)
   const [verifying, setVerifying] = useState(false)
   const [verificationSent, setVerificationSent] = useState(false)
-  const [upgradeCode, setUpgradeCode] = useState('')
-  const [upgradeSending, setUpgradeSending] = useState(false)
-  const [upgradeVerifying, setUpgradeVerifying] = useState(false)
-  const [upgradeSent, setUpgradeSent] = useState(false)
-  const [upgraded, setUpgraded] = useState(false)
+  const [pickedMethod, setPickedMethod] = useState<'manual' | 'hackclub' | null>(null)
+  const [methodStarted, setMethodStarted] = useState<{ type: 'manual' | 'hackclub' } | null>(null)
+  const [loadingStatus, setLoadingStatus] = useState(true)
   const [linkingHc, setLinkingHc] = useState(false)
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [age, setAge] = useState('')
   const [requestReason, setRequestReason] = useState('')
   const [requestSlider, setRequestSlider] = useState(5)
   const [requestSending, setRequestSending] = useState(false)
@@ -46,19 +50,21 @@ export default function SettingsPage() {
 
   useEffect(() => {
     getStorageLimit().then(setStorageLimit)
+    getStorageUsage().then(setStorageUsage)
+    getVerificationStatus().then((s) => {
+      if (s.hasPendingRequest) setMethodStarted({ type: 'manual' })
+      else if (s.hasHackClubAccount) setMethodStarted({ type: 'hackclub' })
+      setLoadingStatus(false)
+    })
   }, [])
 
   // Refetch storage after upgrade
   const refreshStorage = async () => {
-    const limit = await getStorageLimit()
+    const [limit, usage] = await Promise.all([getStorageLimit(), getStorageUsage()])
     setStorageLimit(limit)
+    setStorageUsage(usage)
     refetch()
   }
-
-  const on100MbTier = storageLimit === NO_VERIFICATION_LIMIT
-  const canUpgradeTo25Gb = storageLimit > 0 && storageLimit < MANUAL_VERIFICATION_LIMIT
-  const canUpgradeTo50Gb = storageLimit < HC_STORAGE_LIMIT
-  const canRequestMore = storageLimit >= MANUAL_VERIFICATION_LIMIT && storageLimit < MAX_IDENTITY_TIER
 
   const handleResendVerification = async () => {
     setVerifying(true)
@@ -73,44 +79,12 @@ export default function SettingsPage() {
     setVerifying(false)
   }
 
-  const handleSendUpgradeCode = async () => {
-    setUpgradeSending(true)
-    setUpgradeSent(false)
-    const result = await sendUpgradeCode(userEmail)
-    if (result.ok) {
-      setUpgradeSent(true)
-      toast.success('Verification code sent!')
-    } else {
-      toast.error(result.error || 'Failed to send code')
-    }
-    setUpgradeSending(false)
-  }
-
-  const handleVerifyUpgradeCode = async () => {
-    if (!upgradeCode.trim()) return
-    setUpgradeVerifying(true)
-    const result = await verifyUpgradeCode(userEmail, upgradeCode.trim())
-    if (result.ok) {
-      setUpgraded(true)
-      toast.success('Identity verified! Storage upgraded to 2.5 GB.')
-      await refreshStorage()
-    } else {
-      toast.error(result.error || 'Invalid code')
-    }
-    setUpgradeVerifying(false)
-  }
-
   const handleLinkHackClub = async () => {
     setLinkingHc(true)
     try {
-      const res = await fetch('/api/auth/oauth2/link', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ providerId: 'hackclub', callbackURL: '/dashboard/settings' }),
-      })
-      const data = await res.json()
-      if (data.url) {
-        window.location.href = data.url
+      const { url } = await getHackClubAuthUrl()
+      if (url) {
+        window.location.href = url
       } else {
         toast.error('Failed to start Hack Club verification.')
         setLinkingHc(false)
@@ -122,11 +96,13 @@ export default function SettingsPage() {
   }
 
   const handleSubmitUpgradeRequest = async () => {
-    if (!requestReason.trim()) return
+    if (!requestReason.trim() || !firstName.trim() || !lastName.trim() || !age.trim()) return
+    const ageNum = parseInt(age, 10)
+    if (isNaN(ageNum) || ageNum < 1) return
     setRequestSending(true)
     try {
       const amount = `${requestSlider} GB`
-      await submitStorageRequest(requestReason.trim(), amount)
+      await submitStorageRequest(requestReason.trim(), amount, ageNum, firstName.trim(), lastName.trim())
       setRequestSent(true)
       toast.success('Request submitted for review.')
     } catch {
@@ -239,171 +215,257 @@ export default function SettingsPage() {
             Identity verification
           </CardTitle>
           <CardDescription>
-            {canUpgradeTo25Gb
-              ? `You are on the ${formatStorage(storageLimit)} tier. Verify your email to upgrade or submit a request for more.`
-              : `Your storage allows up to ${formatStorage(MAX_IDENTITY_TIER)}. Submit a request or link Hack Club to unlock more.`
-            }
+            Pick a verification method to unlock higher storage tiers.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {/* Email verification upgrade (100 MB → 2.5 GB) */}
-          {on100MbTier && !upgraded && (
+          {/* Usage bar */}
+          <div className="flex flex-col gap-1">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Storage usage</span>
+              <span>{formatStorage(storageUsage)} / {formatStorage(storageLimit)}</span>
+            </div>
+            <div className="w-full h-1.5 rounded-full bg-secondary overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${Math.min((storageUsage / (storageLimit || 1)) * 100, 100)}%`,
+                  backgroundColor: 'var(--brand)',
+                }}
+              />
+            </div>
+          </div>
+          {loadingStatus ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-3.5 animate-spin" />
+              Loading...
+            </div>
+          ) : methodStarted ? (
+            /* Method already in progress — show status + ticket note */
             <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-3">
               <div className="flex items-start gap-2">
-                <Mail className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                {methodStarted.type === 'manual' ? (
+                  <Mail className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                ) : (
+                  <Terminal className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                )}
                 <div>
-                  <p className="text-sm font-medium">Verify your email to unlock 2.5 GB</p>
+                  <p className="text-sm font-medium">
+                    {methodStarted.type === 'manual' ? 'Manual verification in progress' : 'Hack Club verification active'}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Send a verification code to your email. Once verified, your storage will be upgraded from {formatStorage(NO_VERIFICATION_LIMIT)} to {formatStorage(MANUAL_VERIFICATION_LIMIT)}.
+                    {methodStarted.type === 'manual'
+                      ? 'You have a pending storage request. An admin will review it.'
+                      : 'Your Hack Club account is linked.'
+                    }
                   </p>
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Changed your mind?{' '}
+                <a href="/dashboard/support" className="underline underline-offset-2 hover:text-foreground">
+                  Open a support ticket
+                </a>{' '}
+                to request a reset.
+              </p>
+            </div>
+          ) : storageLimit >= HC_STORAGE_LIMIT ? (
+            <div className="flex items-center gap-2 text-xs text-green-600">
+              <ShieldCheck className="size-3.5 shrink-0" />
+              Max tier unlocked — {formatStorage(HC_STORAGE_LIMIT)}
+            </div>
+          ) : pickedMethod === 'manual' ? (
+            /* Manual verification flow */
+            !requestSent ? (
+              <div className="flex flex-col gap-3">
+                <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-3">
+                  <p className="text-sm font-medium">Verify your identity</p>
+                  <p className="text-xs text-muted-foreground">
+                    Provide your details and tell us how much storage you need.
+                  </p>
 
-              {upgradeSent ? (
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-2 text-xs text-green-600">
-                    <MailCheck className="size-3.5 shrink-0" />
-                    Code sent! Check your inbox.
-                  </div>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-muted-foreground">First name</label>
                     <Input
-                      placeholder="Enter 6-digit code"
-                      value={upgradeCode}
-                      onChange={(e) => setUpgradeCode(e.target.value)}
-                      maxLength={6}
-                      className="w-40"
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder="John"
+                      className="w-full"
                     />
-                    <Button
-                      size="sm"
-                      onClick={handleVerifyUpgradeCode}
-                      disabled={upgradeVerifying || upgradeCode.length !== 6}
-                    >
-                      {upgradeVerifying ? <Loader2 className="size-3.5 animate-spin" /> : 'Verify'}
-                    </Button>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-muted-foreground">Last name</label>
+                    <Input
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder="Doe"
+                      className="w-full"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-muted-foreground">Age</label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={age}
+                      onChange={(e) => setAge(e.target.value)}
+                      placeholder="18"
+                      className="w-24"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-muted-foreground">
+                      Requested storage: <span className="font-medium text-foreground">{requestSlider} GB</span>
+                    </label>
+                    <input
+                      type="range"
+                      min={2.5}
+                      max={25}
+                      step={0.5}
+                      value={requestSlider}
+                      onChange={(e) => setRequestSlider(parseFloat(e.target.value))}
+                      className="w-full h-2 rounded-full appearance-none cursor-pointer bg-secondary accent-[var(--brand)]"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>2.5 GB</span>
+                      <span>25 GB</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs text-muted-foreground">What are you using the app for?</label>
+                    <textarea
+                      value={requestReason}
+                      onChange={(e) => setRequestReason(e.target.value)}
+                      placeholder="Describe your use case and why you need more storage..."
+                      rows={3}
+                      className="min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={handleSubmitUpgradeRequest}
+                    disabled={requestSending || !requestReason.trim() || !firstName.trim() || !lastName.trim() || !age.trim()}
+                    className="gap-1.5 w-fit"
+                    style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+                  >
+                    {requestSending ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <IdCard className="size-3.5" />
+                    )}
+                    Submit request
+                  </Button>
+                </div>
+
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { setPickedMethod(null); setRequestSent(false) }}
+                  className="gap-1.5 w-fit text-xs"
+                >
+                  &larr; Choose a different method
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-2 text-xs text-amber-600">
+                  <ShieldCheck className="size-3.5 shrink-0" />
+                  Request submitted — an admin will review it.
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { setPickedMethod(null); setRequestSent(false) }}
+                  className="gap-1.5 w-fit text-xs"
+                >
+                  &larr; Choose a different method
+                </Button>
+              </>
+            )
+          ) : pickedMethod === 'hackclub' ? (
+            /* Hack Club verification flow */
+            <div className="flex flex-col gap-3">
+              <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-3">
+                <div className="flex items-start gap-2">
+                  <Terminal className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium">Verify with Hack Club for {formatStorage(HC_STORAGE_LIMIT)}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Link your Hack Club account to instantly unlock {formatStorage(HC_STORAGE_LIMIT)}.
+                    </p>
                   </div>
                 </div>
-              ) : (
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={handleSendUpgradeCode}
-                  disabled={upgradeSending}
+                  onClick={handleLinkHackClub}
+                  disabled={linkingHc}
                   className="gap-1.5 w-fit"
                 >
-                  {upgradeSending ? (
+                  {linkingHc ? (
                     <Loader2 className="size-3.5 animate-spin" />
                   ) : (
-                    <Mail className="size-3.5" />
+                    <Terminal className="size-3.5" />
                   )}
-                  Send verification code
+                  Link Hack Club account
                 </Button>
-              )}
-            </div>
-          )}
+              </div>
 
-          {upgraded && (
-            <div className="flex items-center gap-2 text-xs text-green-600">
-              <ShieldCheck className="size-3.5 shrink-0" />
-              Identity verified — storage upgraded to {formatStorage(MANUAL_VERIFICATION_LIMIT)}
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setPickedMethod(null)}
+                className="gap-1.5 w-fit text-xs"
+              >
+                &larr; Choose a different method
+              </Button>
             </div>
-          )}
+          ) : (
+            /* Method picker */
+            <>
+              <p className="text-xs text-muted-foreground">Choose your verification method:</p>
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPickedMethod('manual')}
+                  className="flex items-center gap-3 rounded-lg border border-border p-3 text-left hover:border-muted-foreground/30 transition-colors"
+                >
+                  <div className="size-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
+                    <Mail className="size-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm">Manual verification</div>
+                    <div className="text-xs text-muted-foreground">Provide identity details + admin review</div>
+                  </div>
+                  <div className="text-xs font-semibold whitespace-nowrap">Up to 25 GB</div>
+                </button>
 
-          {/* Request more storage (reason + slider) */}
-          {canRequestMore && !requestSent && (
-            <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-3">
-              <div className="flex flex-col gap-2">
-                <p className="text-sm font-medium">Request more storage</p>
+                <button
+                  type="button"
+                  onClick={() => setPickedMethod('hackclub')}
+                  className="flex items-center gap-3 rounded-lg border border-border p-3 text-left hover:border-muted-foreground/30 transition-colors"
+                >
+                  <div className="size-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
+                    <Terminal className="size-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm">Hack Club</div>
+                    <div className="text-xs text-muted-foreground">Instant verification via Hack Club</div>
+                  </div>
+                  <div className="text-xs font-semibold whitespace-nowrap">50 GB</div>
+                </button>
+              </div>
+
+              {storageLimit > 0 && storageLimit < HC_STORAGE_LIMIT && !pickedMethod && (
                 <p className="text-xs text-muted-foreground">
-                  Tell us why you need more space and how much you need.
+                  Changed your mind later?{' '}
+                  <a href="/dashboard/support" className="underline underline-offset-2 hover:text-foreground">
+                    Open a ticket
+                  </a>{' '}
+                  and an admin can reset your status.
                 </p>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-muted-foreground">
-                  Desired amount: <span className="font-medium text-foreground">{requestSlider} GB</span>
-                </label>
-                <input
-                  type="range"
-                  min={2.5}
-                  max={25}
-                  step={0.5}
-                  value={requestSlider}
-                  onChange={(e) => setRequestSlider(parseFloat(e.target.value))}
-                  className="w-full h-2 rounded-full appearance-none cursor-pointer bg-secondary accent-[var(--brand)]"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>2.5 GB</span>
-                  <span>25 GB</span>
-                </div>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-muted-foreground">What are you using the app for?</label>
-                <textarea
-                  value={requestReason}
-                  onChange={(e) => setRequestReason(e.target.value)}
-                  placeholder="Describe your use case and why you need more storage..."
-                  rows={3}
-                  className="min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              </div>
-              <Button
-                size="sm"
-                onClick={handleSubmitUpgradeRequest}
-                disabled={requestSending || !requestReason.trim()}
-                className="gap-1.5 w-fit"
-                style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
-              >
-                {requestSending ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <IdCard className="size-3.5" />
-                )}
-                Submit request
-              </Button>
-            </div>
-          )}
-
-          {requestSent && (
-            <div className="flex items-center gap-2 text-xs text-amber-600">
-              <ShieldCheck className="size-3.5 shrink-0" />
-              Request submitted — an admin will review it.
-            </div>
-          )}
-
-          {/* Hack Club verification */}
-          {canUpgradeTo50Gb && (
-            <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-3">
-              <div className="flex items-start gap-2">
-                <Terminal className="size-4 text-muted-foreground shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-sm font-medium">Verify with Hack Club for {formatStorage(HC_STORAGE_LIMIT)}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Link your Hack Club account to verify your identity and unlock the maximum storage tier.
-                  </p>
-                </div>
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={handleLinkHackClub}
-                disabled={linkingHc}
-                className="gap-1.5 w-fit"
-              >
-                {linkingHc ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  <Terminal className="size-3.5" />
-                )}
-                Verify with Hack Club
-              </Button>
-            </div>
-          )}
-
-          {/* Already at max tier */}
-          {!canUpgradeTo25Gb && !canUpgradeTo50Gb && (
-            <div className="flex items-center gap-2 text-xs text-green-600">
-              <ShieldCheck className="size-3.5 shrink-0" />
-              Max tier unlocked
-            </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

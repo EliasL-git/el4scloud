@@ -23,17 +23,25 @@ export function StorageRequestDialog() {
   const [loading, setLoading] = useState(false)
   const [amount, setAmount] = useState('')
   const [reason, setReason] = useState('')
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
+  const [age, setAge] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!amount || !reason) return
+    if (!amount || !reason || !firstName || !lastName || !age) return
+    const ageNum = parseInt(age, 10)
+    if (isNaN(ageNum) || ageNum < 1) return
     setLoading(true)
     try {
-      await submitStorageRequest(reason, amount)
+      await submitStorageRequest(reason, amount, ageNum, firstName, lastName)
       toast.success('Request sent')
       setOpen(false)
       setAmount('')
       setReason('')
+      setFirstName('')
+      setLastName('')
+      setAge('')
     } catch {
       toast.error('Failed to send request')
     } finally {
@@ -55,10 +63,43 @@ export function StorageRequestDialog() {
           <AlertDialogHeader>
             <AlertDialogTitle>Request more storage</AlertDialogTitle>
             <AlertDialogDescription>
-              Tell us why you need additional storage and how much.
+              Provide your identity details and tell us how much storage you need.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-4 py-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="firstName">First name</Label>
+              <Input
+                id="firstName"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="John"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="lastName">Last name</Label>
+              <Input
+                id="lastName"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Doe"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="age">Age</Label>
+              <Input
+                id="age"
+                type="number"
+                min={1}
+                value={age}
+                onChange={(e) => setAge(e.target.value)}
+                placeholder="18"
+                className="w-24"
+                required
+              />
+            </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="amount">How much do you need?</Label>
               <Input

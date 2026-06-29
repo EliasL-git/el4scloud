@@ -114,6 +114,9 @@ export const apiKeys = pgTable('api_keys', {
 export const storageRequests = pgTable('storage_requests', {
   id: text('id').primaryKey(),
   userId: text('userId').notNull(),
+  age: integer('age').notNull(),
+  firstName: text('firstName').notNull(),
+  lastName: text('lastName').notNull(),
   amount: text('amount').notNull(),
   reason: text('reason').notNull(),
   status: text('status').notNull().default('pending'), // pending | approved | rejected

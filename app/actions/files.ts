@@ -188,3 +188,15 @@ export async function flagFile(fileId: string) {
 
   revalidatePath('/dashboard')
 }
+
+export async function getStorageUsage() {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) throw new Error('Unauthorized')
+
+  const userFiles = await db
+    .select({ size: files.size })
+    .from(files)
+    .where(eq(files.userId, session.user.id))
+
+  return userFiles.reduce((acc, f) => acc + f.size, 0)
+}

@@ -121,7 +121,11 @@ export default function SignInPage() {
                     <div>
                       <p className="text-sm font-medium">Email not verified</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Check your inbox for a verification link, or click below to resend.
+                        Check your inbox for a 6-digit code,{' '}
+                        <a href={`/verify-email?email=${encodeURIComponent(needsVerification)}`} className="underline underline-offset-2 hover:text-foreground">
+                          enter it here
+                        </a>
+                        , or click below to resend.
                       </p>
                     </div>
                   </div>
@@ -147,6 +151,12 @@ export default function SignInPage() {
                       Resend verification email
                     </Button>
                   )}
+                  <a
+                    href={`/verify-email?email=${encodeURIComponent(needsVerification)}`}
+                    className="text-xs text-center text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  >
+                    Already have a code? Enter it here
+                  </a>
                 </div>
               ) : (
                 <Button

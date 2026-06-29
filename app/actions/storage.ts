@@ -9,6 +9,9 @@ import crypto from 'crypto'
 export async function submitStorageRequest(
   reason: string,
   amount: string,
+  age: number,
+  firstName: string,
+  lastName: string,
 ) {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
@@ -16,6 +19,9 @@ export async function submitStorageRequest(
   await db.insert(storageRequests).values({
     id: crypto.randomUUID(),
     userId: session.user.id,
+    age,
+    firstName: firstName.trim(),
+    lastName: lastName.trim(),
     amount,
     reason,
   })

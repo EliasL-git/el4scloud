@@ -235,6 +235,10 @@ const statements = [
   )`,
   `CREATE INDEX IF NOT EXISTS "warnings_userId_idx" ON "warnings"("userId")`,
 
+  `ALTER TABLE "storage_requests" ADD COLUMN IF NOT EXISTS "age" INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE "storage_requests" ADD COLUMN IF NOT EXISTS "firstName" TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE "storage_requests" ADD COLUMN IF NOT EXISTS "lastName" TEXT NOT NULL DEFAULT ''`,
+
   // Now safe to drop any ALTER that relied on IF NOT EXISTS (already applied via UPDATE)
 ]
 

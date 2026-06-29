@@ -6,10 +6,7 @@ import { eq } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import bcrypt from 'bcryptjs'
 import { headers } from 'next/headers'
-import {
-  NO_VERIFICATION_LIMIT,
-  MANUAL_VERIFICATION_LIMIT,
-} from '@/lib/storage'
+import { NO_VERIFICATION_LIMIT } from '@/lib/storage'
 import { auth } from '@/lib/auth'
 import type { VerificationMethod } from '@/lib/types'
 
@@ -31,12 +28,9 @@ export async function register(data: {
   }
 
   const emailVerified = data.verificationMethod === 'none'
-  const storageLimit = data.verificationMethod === 'none'
-    ? NO_VERIFICATION_LIMIT
-    : MANUAL_VERIFICATION_LIMIT
 
   // 2. Create user
-  console.log('[register] Creating user:', data.email, { emailVerified, storageLimit })
+  console.log('[register] Creating user:', data.email, { emailVerified, storageLimit: NO_VERIFICATION_LIMIT })
   const userId = uuidv4()
   const hashedPassword = await bcrypt.hash(data.password, 10)
 
@@ -46,7 +40,7 @@ export async function register(data: {
     email: data.email,
     emailVerified,
     role: 'user',
-    storageLimit,
+    storageLimit: NO_VERIFICATION_LIMIT,
     agreedToTerms: true,
   })
 

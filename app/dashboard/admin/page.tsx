@@ -14,6 +14,8 @@ import {
   revokePublicFiles,
   resetWarnings,
   setUserEmailVerified,
+  resetVerificationStatus,
+  deleteUser,
   adminGetTickets,
   adminGetTicketReplies,
   adminReplyToTicket,
@@ -465,6 +467,14 @@ export default function AdminPage() {
                   </CardHeader>
                   <CardContent className="flex flex-col gap-3">
                     <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-xs text-muted-foreground">Name</span>
+                        <p className="font-medium">{request.firstName} {request.lastName}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted-foreground">Age</span>
+                        <p className="font-medium">{request.age}</p>
+                      </div>
                       <div>
                         <span className="text-xs text-muted-foreground">Requested amount</span>
                         <p className="font-medium">{request.amount}</p>
@@ -1169,6 +1179,22 @@ export default function AdminPage() {
                 >
                   <Mail className="size-3" />
                   {selectedUser.emailVerified ? 'Unverify' : 'Verify'} email
+                </Button>
+
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
+                  onClick={() => { handleAction(selectedUser.id, 'reset-verification', () => resetVerificationStatus(selectedUser.id), 'Verification reset'); setSelectedUser(null) }}
+                  disabled={processing[`reset-verification-${selectedUser.id}`]}
+                >
+                  <RotateCcw className="size-3" />
+                  Reset verification
+                </Button>
+
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+                  onClick={() => { handleAction(selectedUser.id, 'delete', () => deleteUser(selectedUser.id), 'User deleted'); setSelectedUser(null) }}
+                  disabled={processing[`delete-${selectedUser.id}`]}
+                >
+                  <Trash2 className="size-3" />
+                  {processing[`delete-${selectedUser.id}`] ? 'Deleting...' : 'Delete user'}
                 </Button>
 
                 <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"

@@ -20,14 +20,14 @@ const tiers: {
     id: 'none',
     title: 'No verification',
     storage: '100 MB',
-    description: 'Quick access, basic storage',
+    description: 'Quick access, upgrade with identity verification later',
     icon: Zap,
   },
   {
     id: 'manual',
     title: 'Email verification',
-    storage: '2.5 GB',
-    description: 'Verify with a code sent to your email',
+    storage: '100 MB',
+    description: 'Verify your email to access your account, upgrade later',
     icon: ShieldCheck,
   },
 ]
