@@ -1,15 +1,17 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { authClient } from '@/lib/auth-client'
-import { resendVerificationEmail } from '@/app/actions/verify'
+import { resendVerificationEmail, sendUpgradeCode, verifyUpgradeCode } from '@/app/actions/verify'
+import { getStorageLimit } from '@/app/actions/files'
 import { exportMyData, requestAccountDeletion } from '@/app/actions/account'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Download, Trash2, Mail, MailCheck, ShieldCheck, IdCard, Loader2 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Download, Trash2, Mail, MailCheck, ShieldCheck, IdCard, Terminal, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
-import { MAX_IDENTITY_TIER } from '@/lib/storage'
+import { MAX_IDENTITY_TIER, HC_STORAGE_LIMIT, NO_VERIFICATION_LIMIT, MANUAL_VERIFICATION_LIMIT } from '@/lib/storage'
 
 function formatStorage(bytes: number): string {
   if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`
@@ -19,9 +21,16 @@ function formatStorage(bytes: number): string {
 }
 
 export default function SettingsPage() {
-  const { data: session } = authClient.useSession()
+  const { data: session, refetch } = authClient.useSession()
+  const [storageLimit, setStorageLimit] = useState(0)
   const [verifying, setVerifying] = useState(false)
   const [verificationSent, setVerificationSent] = useState(false)
+  const [upgradeCode, setUpgradeCode] = useState('')
+  const [upgradeSending, setUpgradeSending] = useState(false)
+  const [upgradeVerifying, setUpgradeVerifying] = useState(false)
+  const [upgradeSent, setUpgradeSent] = useState(false)
+  const [upgraded, setUpgraded] = useState(false)
+  const [linkingHc, setLinkingHc] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -29,8 +38,21 @@ export default function SettingsPage() {
 
   const emailVerified = session?.user?.emailVerified ?? true
   const userEmail = session?.user?.email ?? ''
-  const userStorageLimit = (session?.user as any)?.storageLimit ?? 0
-  const needsVerification = userStorageLimit > 0 && userStorageLimit < MAX_IDENTITY_TIER
+
+  useEffect(() => {
+    getStorageLimit().then(setStorageLimit)
+  }, [])
+
+  // Refetch storage after upgrade
+  const refreshStorage = async () => {
+    const limit = await getStorageLimit()
+    setStorageLimit(limit)
+    refetch()
+  }
+
+  const on100MbTier = storageLimit === NO_VERIFICATION_LIMIT
+  const canUpgradeTo25Gb = storageLimit > 0 && storageLimit < MANUAL_VERIFICATION_LIMIT
+  const canUpgradeTo50Gb = storageLimit < HC_STORAGE_LIMIT
 
   const handleResendVerification = async () => {
     setVerifying(true)
@@ -43,6 +65,54 @@ export default function SettingsPage() {
       toast.error(result.error || 'Failed to send verification email')
     }
     setVerifying(false)
+  }
+
+  const handleSendUpgradeCode = async () => {
+    setUpgradeSending(true)
+    setUpgradeSent(false)
+    const result = await sendUpgradeCode(userEmail)
+    if (result.ok) {
+      setUpgradeSent(true)
+      toast.success('Verification code sent!')
+    } else {
+      toast.error(result.error || 'Failed to send code')
+    }
+    setUpgradeSending(false)
+  }
+
+  const handleVerifyUpgradeCode = async () => {
+    if (!upgradeCode.trim()) return
+    setUpgradeVerifying(true)
+    const result = await verifyUpgradeCode(userEmail, upgradeCode.trim())
+    if (result.ok) {
+      setUpgraded(true)
+      toast.success('Identity verified! Storage upgraded to 2.5 GB.')
+      await refreshStorage()
+    } else {
+      toast.error(result.error || 'Invalid code')
+    }
+    setUpgradeVerifying(false)
+  }
+
+  const handleLinkHackClub = async () => {
+    setLinkingHc(true)
+    try {
+      const res = await fetch('/api/auth/oauth2/link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ providerId: 'hackclub', callbackURL: '/dashboard/settings' }),
+      })
+      const data = await res.json()
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        toast.error('Failed to start Hack Club verification.')
+        setLinkingHc(false)
+      }
+    } catch {
+      toast.error('Failed to start Hack Club verification.')
+      setLinkingHc(false)
+    }
   }
 
   const handleExport = async () => {
@@ -148,23 +218,109 @@ export default function SettingsPage() {
             Identity verification
           </CardTitle>
           <CardDescription>
-            {needsVerification
-              ? `You are on the ${formatStorage(userStorageLimit)} tier. Verify your identity to unlock up to ${formatStorage(MAX_IDENTITY_TIER)}.`
+            {canUpgradeTo25Gb
+              ? `You are on the ${formatStorage(storageLimit)} tier.`
               : `Your storage tier allows up to ${formatStorage(MAX_IDENTITY_TIER)}.`
             }
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {needsVerification ? (
-            <div className="flex flex-col gap-2">
-              <p className="text-xs text-muted-foreground">
-                Use the <strong>Need more storage? Apply.</strong> link in the dashboard footer to request a higher limit. An admin will review your request.
-              </p>
+        <CardContent className="flex flex-col gap-4">
+          {/* Email verification upgrade (100 MB → 2.5 GB) */}
+          {on100MbTier && !upgraded && (
+            <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-3">
+              <div className="flex items-start gap-2">
+                <Mail className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium">Verify your email to unlock 2.5 GB</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Send a verification code to your email. Once verified, your storage will be upgraded from {formatStorage(NO_VERIFICATION_LIMIT)} to {formatStorage(MANUAL_VERIFICATION_LIMIT)}.
+                  </p>
+                </div>
+              </div>
+
+              {upgradeSent ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2 text-xs text-green-600">
+                    <MailCheck className="size-3.5 shrink-0" />
+                    Code sent! Check your inbox.
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Enter 6-digit code"
+                      value={upgradeCode}
+                      onChange={(e) => setUpgradeCode(e.target.value)}
+                      maxLength={6}
+                      className="w-40"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleVerifyUpgradeCode}
+                      disabled={upgradeVerifying || upgradeCode.length !== 6}
+                    >
+                      {upgradeVerifying ? <Loader2 className="size-3.5 animate-spin" /> : 'Verify'}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSendUpgradeCode}
+                  disabled={upgradeSending}
+                  className="gap-1.5 w-fit"
+                >
+                  {upgradeSending ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Mail className="size-3.5" />
+                  )}
+                  Send verification code
+                </Button>
+              )}
             </div>
-          ) : (
+          )}
+
+          {upgraded && (
             <div className="flex items-center gap-2 text-xs text-green-600">
               <ShieldCheck className="size-3.5 shrink-0" />
-              {userStorageLimit >= MAX_IDENTITY_TIER ? 'Max tier unlocked' : 'No upgrade needed'}
+              Identity verified — storage upgraded to {formatStorage(MANUAL_VERIFICATION_LIMIT)}
+            </div>
+          )}
+
+          {/* Hack Club verification */}
+          {canUpgradeTo50Gb && (
+            <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-3">
+              <div className="flex items-start gap-2">
+                <Terminal className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium">Verify with Hack Club for {formatStorage(HC_STORAGE_LIMIT)}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Link your Hack Club account to verify your identity and unlock the maximum storage tier.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleLinkHackClub}
+                disabled={linkingHc}
+                className="gap-1.5 w-fit"
+              >
+                {linkingHc ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Terminal className="size-3.5" />
+                )}
+                Verify with Hack Club
+              </Button>
+            </div>
+          )}
+
+          {/* Already at max tier */}
+          {!canUpgradeTo25Gb && !canUpgradeTo50Gb && (
+            <div className="flex items-center gap-2 text-xs text-green-600">
+              <ShieldCheck className="size-3.5 shrink-0" />
+              Max tier unlocked
             </div>
           )}
         </CardContent>

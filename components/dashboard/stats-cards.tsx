@@ -53,6 +53,7 @@ const statDefs = [
 
 export function StatsCards({ stats, storageLimit }: { stats: Stats; storageLimit: number }) {
   const formatUsage = (totalSize: number) => {
+    if (storageLimit === 0) return `${formatBytes(totalSize)} used`
     const pct = Math.round((totalSize / storageLimit) * 100)
     return `${formatBytes(totalSize)} / ${formatBytes(storageLimit)} (${pct}%)`
   }

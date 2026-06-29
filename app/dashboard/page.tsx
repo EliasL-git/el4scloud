@@ -12,7 +12,7 @@ import { Toaster } from '@/components/ui/sonner'
 import { ViolationWarningDialog } from '@/components/dashboard/violation-warning-dialog'
 import { WarningBanner } from '@/components/dashboard/warning-banner'
 import { HardDrive, IdCard } from 'lucide-react'
-import { MAX_IDENTITY_TIER } from '@/lib/storage'
+import { HC_STORAGE_LIMIT } from '@/lib/storage'
 
 type FileRecord = Awaited<ReturnType<typeof getFiles>>[number]
 type Stats = Awaited<ReturnType<typeof getFileStats>>
@@ -110,7 +110,7 @@ export default function DashboardPage() {
 
       <StatsCards stats={stats} storageLimit={storageLimit} />
 
-      {storageLimit > 0 && storageLimit < MAX_IDENTITY_TIER && (
+      {storageLimit > 0 && storageLimit < HC_STORAGE_LIMIT && (
         <Card>
           <CardContent className="p-6 flex items-start gap-4">
             <div className="size-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
