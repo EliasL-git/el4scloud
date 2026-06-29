@@ -196,7 +196,12 @@ export async function getStorageUsage() {
   const userFiles = await db
     .select({ size: files.size })
     .from(files)
-    .where(eq(files.userId, session.user.id))
+    .where(
+      and(
+        eq(files.userId, session.user.id),
+        or(eq(files.scanStatus, 'error'), eq(files.scanResult, 'clean'), isNull(files.scanResult)),
+      )
+    )
 
   return userFiles.reduce((acc, f) => acc + f.size, 0)
 }
