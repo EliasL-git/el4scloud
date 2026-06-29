@@ -6,16 +6,21 @@ import { eq } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import bcrypt from 'bcryptjs'
 import { headers } from 'next/headers'
-import { NON_HC_STORAGE_LIMIT } from '@/lib/storage'
+import {
+  NO_VERIFICATION_LIMIT,
+  MANUAL_VERIFICATION_LIMIT,
+} from '@/lib/storage'
 import { auth } from '@/lib/auth'
+import type { VerificationMethod } from '@/lib/types'
 
 export async function register(data: {
   name: string
   email: string
   password: string
+  verificationMethod: VerificationMethod
 }) {
   // 1. Check if email already exists
-  console.log('[register] Checking if email exists:', data.email)
+  console.log('[register] Checking if email exists:', data.email, 'method:', data.verificationMethod)
   const [existingUser] = await db
     .select()
     .from(user)
@@ -25,8 +30,13 @@ export async function register(data: {
     return { error: 'An account with this email already exists.' }
   }
 
-  // 2. Create user with email unverified
-  console.log('[register] Creating user:', data.email)
+  const emailVerified = data.verificationMethod === 'none'
+  const storageLimit = data.verificationMethod === 'none'
+    ? NO_VERIFICATION_LIMIT
+    : MANUAL_VERIFICATION_LIMIT
+
+  // 2. Create user
+  console.log('[register] Creating user:', data.email, { emailVerified, storageLimit })
   const userId = uuidv4()
   const hashedPassword = await bcrypt.hash(data.password, 10)
 
@@ -34,13 +44,13 @@ export async function register(data: {
     id: userId,
     name: data.name,
     email: data.email,
-    emailVerified: false,
+    emailVerified,
     role: 'user',
-    storageLimit: NON_HC_STORAGE_LIMIT,
+    storageLimit,
     agreedToTerms: true,
   })
 
-  // 3. Create account record (so Better Auth knows about the email/password login)
+  // 3. Create account record
   console.log('[register] Creating account record for:', data.email)
   await db.insert(account).values({
     id: uuidv4(),
@@ -50,27 +60,30 @@ export async function register(data: {
     password: hashedPassword,
   })
 
-  // 4. Send verification email via Better Auth
-  console.log('[register] Sending verification email to:', data.email)
-  try {
-    // Strip cookies so Better Auth doesn't find an existing session
-    // (session check would throw "Email mismatch" if the browser has
-    // a cookie for a different user)
-    const hdrs = await headers()
-    const cleanHeaders = new Headers(hdrs)
-    cleanHeaders.delete('cookie')
-    console.log('[register] Calling sendVerificationEmail...')
-    const result = await auth.api.sendVerificationEmail({
-      headers: cleanHeaders,
-      body: { email: data.email, callbackURL: '/dashboard' },
-    })
-    console.log('[register] sendVerificationEmail result:', JSON.stringify(result))
-  } catch (err: any) {
-    console.error('[register] Failed to send verification email:', err?.message ?? err)
-    if (err?.stack) {
-      console.error('[register] Stack:', err.stack)
+  // 4. Send verification email if manual verification
+  if (data.verificationMethod === 'manual') {
+    console.log('[register] Sending verification email to:', data.email)
+    try {
+      const hdrs = await headers()
+      const cleanHeaders = new Headers(hdrs)
+      cleanHeaders.delete('cookie')
+      console.log('[register] Calling sendVerificationEmail...')
+      const result = await auth.api.sendVerificationEmail({
+        headers: cleanHeaders,
+        body: { email: data.email, callbackURL: '/dashboard' },
+      })
+      console.log('[register] sendVerificationEmail result:', JSON.stringify(result))
+    } catch (err: any) {
+      console.error('[register] Failed to send verification email:', err?.message ?? err)
+      if (err?.stack) {
+        console.error('[register] Stack:', err.stack)
+      }
     }
   }
 
-  return { ok: true, needsVerification: true, email: data.email }
+  return {
+    ok: true,
+    needsVerification: data.verificationMethod === 'manual',
+    email: data.email,
+  }
 }
