@@ -8,9 +8,23 @@ import { headers } from 'next/headers'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { createHash } from 'crypto'
 import sharp from 'sharp'
+import { verify } from '@/lib/hash'
 
 function hashKey(key: string) {
   return createHash('sha256').update(key).digest('hex')
+}
+
+function getHostUrl(hdrs: Headers) {
+  if (process.env.HOST_URL) {
+    let hostUrl = process.env.HOST_URL
+    if (!hostUrl.startsWith('http://') && !hostUrl.startsWith('https://')) {
+      hostUrl = `https://${hostUrl}`
+    }
+    return hostUrl
+  }
+  const host = hdrs.get('host') || 'localhost:3000'
+  const proto = hdrs.get('x-forwarded-proto') || (process.env.NODE_ENV === 'production' ? 'https' : 'http')
+  return `${proto}://${host}`
 }
 
 export async function GET(
@@ -56,6 +70,21 @@ export async function GET(
     return new Response('Forbidden', { status: 403 })
   }
 
+  const hostUrl = getHostUrl(hdrs)
+  const reportUrl = `${hostUrl}/takedown`
+
+  if (file.passwordHash) {
+    const url = new URL(_req.url)
+    const givenPassword = url.searchParams.get('password')
+    if (!givenPassword) {
+      return new Response('Password required', { status: 401 })
+    }
+    const valid = await verify(givenPassword, file.passwordHash)
+    if (!valid) {
+      return new Response('Incorrect password', { status: 401 })
+    }
+  }
+
   const command = new GetObjectCommand({
     Bucket: S3_BUCKET,
     Key: objectKey,
@@ -71,43 +100,39 @@ export async function GET(
   const buffer = Buffer.from(await body.transformToByteArray())
   const mimeType = s3Response.ContentType ?? file.mimeType
 
-  // Hotlink detection: only apply overlay to images being hotlinked from external domains
-  const referer = hdrs.get('referer')
-  const host = hdrs.get('host') ?? ''
-  const appDomain = host.split(':')[0] // strip port
+  if (mimeType.startsWith('image/')) {
+    const overlaySvg = Buffer.from(`<svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+        <style>
+          .bg { fill: rgba(0,0,0,0.7); }
+          .title { fill: #fff; font-family: sans-serif; font-size: 16px; font-weight: bold; text-anchor: middle; }
+          .sub { fill: #ccc; font-family: sans-serif; font-size: 11px; text-anchor: middle; }
+          .link { fill: #6af; font-family: sans-serif; font-size: 12px; text-anchor: middle; }
+        </style>
+        <rect class="bg" x="0" y="0" width="100%" height="86" rx="0" />
+        <text class="title" x="50%" y="24">This file is hosted at ${hostUrl}</text>
+        <text class="link" x="50%" y="48">Is it violating our TOS? or a law? Report it here:</text>
+        <text class="sub" x="50%" y="68">${reportUrl}</text>
+      </svg>`)
 
-  if (referer && mimeType.startsWith('image/')) {
-    try {
-      const refererUrl = new URL(referer)
-      const refererHost = refererUrl.hostname
+    const processed = await sharp(buffer)
+      .resize({ width: Math.min(1200, (await sharp(buffer).metadata()).width ?? 1200) })
+      .composite([
+        {
+          input: overlaySvg,
+          top: 0,
+          left: 0,
+          gravity: 'north',
+        },
+      ])
+      .toBuffer()
 
-      // If the referer is a different domain and not one of our own, overlay a warning
-      if (refererHost && refererHost !== appDomain && !refererHost.endsWith(`.${appDomain}`) && !refererHost.endsWith('.el4s.cloud')) {
-        const overlaySvg = Buffer.from(`\n          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">\n            <style>\n              .bg { fill: rgba(0,0,0,0.7); }\n              .title { fill: #fff; font-family: sans-serif; font-size: 16px; font-weight: bold; text-anchor: middle; }\n              .sub { fill: #aaa; font-family: sans-serif; font-size: 13px; text-anchor: middle; }\n              .link { fill: #6af; font-family: sans-serif; font-size: 12px; text-anchor: middle; }\n            </style>\n            <rect class="bg" x="0" y="0" width="100%" height="72" rx="0" />\n            <text class="title" x="50%" y="28">Hosted on cloud.el4s.dev</text>\n            <text class="link" x="50%" y="52">Is this file illegal? Report at cloud.el4s.dev/takedown</text>\n          </svg>\n        `)
-
-        const processed = await sharp(buffer)
-          .resize({ width: Math.min(1200, (await sharp(buffer).metadata()).width ?? 1200) })
-          .composite([
-            {
-              input: overlaySvg,
-              top: 0,
-              left: 0,
-              gravity: 'north',
-            },
-          ])
-          .toBuffer()
-
-        return new Response(processed, {
-          headers: {
-            'Content-Type': mimeType,
-            'Content-Length': String(processed.length),
-            'Cache-Control': 'no-cache',
-          },
-        })
-      }
-    } catch {
-      // If referer parsing fails, just serve the original
-    }
+    return new Response(processed, {
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Length': String(processed.length),
+        'Cache-Control': 'no-cache',
+      },
+    })
   }
 
   return new Response(buffer, {
@@ -116,6 +141,8 @@ export async function GET(
       'Content-Length': String(buffer.length),
       'Content-Disposition': `inline; filename="${file.originalName}"`,
       'Cache-Control': 'private, max-age=3600',
+      'X-File-Host': hostUrl,
+      'X-File-Report': reportUrl,
     },
   })
 }

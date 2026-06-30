@@ -30,6 +30,21 @@ export async function requestAccountDeletion(reason?: string) {
   return { ok: true }
 }
 
+export async function updateName(firstName: string, lastName: string) {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) throw new Error('Unauthorized')
+
+  const fullName = `${firstName} ${lastName}`.trim()
+  if (!fullName) throw new Error('Name is required')
+
+  await db
+    .update(user)
+    .set({ name: fullName })
+    .where(eq(user.id, session.user.id))
+
+  return { ok: true }
+}
+
 export async function acceptTerms() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')

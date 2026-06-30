@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Files, Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users } from 'lucide-react'
+import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -20,8 +20,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-const navItems = [
-  { href: '/dashboard', label: 'Files', icon: Files },
+const serviceNavItems = [
+  { href: '/dashboard/storage', label: 'Storage', icon: HardDrive },
+]
+
+const accountNavItems = [
   { href: '/dashboard/keys', label: 'API Keys', icon: Key },
   { href: '/dashboard/support', label: 'Support', icon: MessageSquare },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
@@ -84,17 +87,13 @@ export function DashboardShell({
   const isSupportRoute = pathname.startsWith('/dashboard/support')
   const isAdminRoute = pathname.startsWith('/dashboard/admin')
 
-  const suspendedAllowedRoutes = ['/dashboard', '/dashboard/support', '/dashboard/settings']
-  const visibleNavItems = suspended
-    ? navItems.filter((item) => suspendedAllowedRoutes.includes(item.href))
-    : navItems
-
-  // On admin pages, hide user tabs — only show the admin nav
-  const allNavItems = isAdminRoute
-    ? adminNavItems
-    : isAdmin
-      ? [...visibleNavItems, ...adminNavItems]
-      : visibleNavItems
+  const suspendedAllowedRoutes = ['/dashboard', '/dashboard/storage', '/dashboard/support', '/dashboard/settings']
+  const visibleServiceItems = suspended
+    ? serviceNavItems.filter((item) => suspendedAllowedRoutes.includes(item.href))
+    : serviceNavItems
+  const visibleAccountItems = suspended
+    ? accountNavItems.filter((item) => suspendedAllowedRoutes.includes(item.href))
+    : accountNavItems
 
   const handleSignOut = async () => {
     await authClient.signOut()
@@ -184,6 +183,19 @@ export function DashboardShell({
                 <XIcon className="size-4" />
               </button>
             </div>
+            <Link
+              href="/dashboard"
+              onClick={() => setSidebarOpen(false)}
+              className={cn(
+                'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors mb-1',
+                pathname === '/dashboard'
+                  ? 'bg-secondary text-foreground font-medium'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+              )}
+            >
+              <LayoutDashboard className="size-4 shrink-0" />
+              <span>Dashboard</span>
+            </Link>
             {isAdminRoute ? (
               <>
                 <div className="text-xs font-medium text-muted-foreground px-3 py-1.5 uppercase tracking-wider">
@@ -210,25 +222,86 @@ export function DashboardShell({
                 })}
               </>
             ) : (
-              allNavItems.map(({ href, label, icon: Icon }) => {
-                const active = isActive(href)
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    onClick={() => setSidebarOpen(false)}
-                    className={cn(
-                      'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
-                      active
-                        ? 'bg-secondary text-foreground font-medium'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-                    )}
-                  >
-                    <Icon className="size-4 shrink-0" />
-                    <span>{label}</span>
-                  </Link>
-                )
-              })
+              <>
+                {visibleServiceItems.length > 0 && (
+                  <>
+                    <div className="text-xs font-medium text-muted-foreground px-3 py-1.5 uppercase tracking-wider">
+                      Services
+                    </div>
+                    {visibleServiceItems.map(({ href, label, icon: Icon }) => {
+                      const active = isActive(href)
+                      return (
+                        <Link
+                          key={href}
+                          href={href}
+                          onClick={() => setSidebarOpen(false)}
+                          className={cn(
+                            'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
+                            active
+                              ? 'bg-secondary text-foreground font-medium'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+                          )}
+                        >
+                          <Icon className="size-4 shrink-0" />
+                          <span>{label}</span>
+                        </Link>
+                      )
+                    })}
+                  </>
+                )}
+                {visibleAccountItems.length > 0 && (
+                  <>
+                    <div className="text-xs font-medium text-muted-foreground px-3 py-1.5 uppercase tracking-wider mt-2">
+                      Account
+                    </div>
+                    {visibleAccountItems.map(({ href, label, icon: Icon }) => {
+                      const active = isActive(href)
+                      return (
+                        <Link
+                          key={href}
+                          href={href}
+                          onClick={() => setSidebarOpen(false)}
+                          className={cn(
+                            'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
+                            active
+                              ? 'bg-secondary text-foreground font-medium'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+                          )}
+                        >
+                          <Icon className="size-4 shrink-0" />
+                          <span>{label}</span>
+                        </Link>
+                      )
+                    })}
+                  </>
+                )}
+                {isAdmin && (
+                  <>
+                    <div className="text-xs font-medium text-muted-foreground px-3 py-1.5 uppercase tracking-wider mt-2">
+                      Admin
+                    </div>
+                    {adminNavItems.map(({ href, label, icon: Icon }) => {
+                      const active = isActive(href)
+                      return (
+                        <Link
+                          key={href}
+                          href={href}
+                          onClick={() => setSidebarOpen(false)}
+                          className={cn(
+                            'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
+                            active
+                              ? 'bg-secondary text-foreground font-medium'
+                              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+                          )}
+                        >
+                          <Icon className="size-4 shrink-0" />
+                          <span>{label}</span>
+                        </Link>
+                      )
+                    })}
+                  </>
+                )}
+              </>
             )}
           </div>
         </aside>

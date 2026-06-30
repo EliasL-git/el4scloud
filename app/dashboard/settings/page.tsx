@@ -7,7 +7,7 @@ import { getVerificationStatus } from '@/app/actions/verification'
 import { getStorageLimit, getStorageUsage } from '@/app/actions/files'
 import { submitStorageRequest } from '@/app/actions/storage'
 import { getHackClubAuthUrl } from '@/app/actions/hackclub'
-import { exportMyData, requestAccountDeletion } from '@/app/actions/account'
+import { exportMyData, requestAccountDeletion, updateName } from '@/app/actions/account'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,11 +44,21 @@ export default function SettingsPage() {
   const [deleting, setDeleting] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleteReason, setDeleteReason] = useState('')
+  const [editFirstName, setEditFirstName] = useState('')
+  const [editLastName, setEditLastName] = useState('')
+  const [savingName, setSavingName] = useState(false)
 
   const emailVerified = session?.user?.emailVerified ?? true
   const userEmail = session?.user?.email ?? ''
+  const userName = session?.user?.name ?? ''
+  const nameParts = userName.split(' ')
+  const defaultFirstName = nameParts[0] ?? ''
+  const defaultLastName = nameParts.slice(1).join(' ')
 
   useEffect(() => {
+    const parts = (session?.user?.name ?? '').split(' ')
+    setEditFirstName(parts[0] ?? '')
+    setEditLastName(parts.slice(1).join(' '))
     getStorageLimit().then(setStorageLimit)
     getStorageUsage().then(setStorageUsage)
     getVerificationStatus().then((s) => {
@@ -148,6 +158,26 @@ export default function SettingsPage() {
     }
   }
 
+  const handleSaveName = async () => {
+    if (!editFirstName.trim() || !editLastName.trim()) return
+    setSavingName(true)
+    try {
+      await updateName(editFirstName.trim(), editLastName.trim())
+      refetch()
+      toast.success('Name updated')
+    } catch {
+      toast.error('Failed to update name')
+    } finally {
+      setSavingName(false)
+    }
+  }
+
+  const handleNameReset = () => {
+    const parts = (session?.user?.name ?? '').split(' ')
+    setEditFirstName(parts[0] ?? '')
+    setEditLastName(parts.slice(1).join(' '))
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
       <div>
@@ -156,6 +186,54 @@ export default function SettingsPage() {
           Manage your account and download your data.
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            Profile
+          </CardTitle>
+          <CardDescription>
+            Update your first and last name.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col gap-3">
+            <div className="flex gap-3">
+              <div className="flex flex-col gap-1.5 flex-1">
+                <label className="text-xs text-muted-foreground">First name</label>
+                <Input
+                  value={editFirstName}
+                  onChange={(e) => setEditFirstName(e.target.value)}
+                  placeholder="First name"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5 flex-1">
+                <label className="text-xs text-muted-foreground">Last name</label>
+                <Input
+                  value={editLastName}
+                  onChange={(e) => setEditLastName(e.target.value)}
+                  placeholder="Last name"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={handleSaveName}
+                disabled={savingName || !editFirstName.trim() || !editLastName.trim() || (editFirstName.trim() === defaultFirstName && editLastName.trim() === defaultLastName)}
+                style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+              >
+                {savingName ? <Loader2 className="size-3.5 animate-spin" /> : 'Save'}
+              </Button>
+              {(editFirstName !== defaultFirstName || editLastName !== defaultLastName) && (
+                <Button size="sm" variant="ghost" onClick={handleNameReset}>
+                  Reset
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

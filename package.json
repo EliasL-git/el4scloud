@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "migrate": "node --env-file .env scripts/migrate.mjs",
     "admin:promote": "node --env-file .env scripts/admin-promote.mjs",
+    "lookup": "node scripts/user-lookup.mjs",
     "reset": "node --env-file .env scripts/reset-password.mjs"
   },
   "dependencies": {

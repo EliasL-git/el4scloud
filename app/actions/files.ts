@@ -16,6 +16,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEvent, logAuditEventWithHeaders } from '@/lib/audit'
 import { recordWarning } from '@/lib/warnings'
+import { hash } from '@/lib/hash'
 
 async function getUserId() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -120,6 +121,43 @@ export async function toggleFileVisibility(fileId: string) {
   revalidatePath('/dashboard')
 }
 
+export async function setFilePassword(fileId: string, password: string) {
+  const userId = await getUserId()
+  const [file] = await db
+    .select()
+    .from(files)
+    .where(and(eq(files.id, fileId), eq(files.userId, userId)))
+
+  if (!file) throw new Error('File not found')
+  if (password && password.length < 4) throw new Error('Password must be at least 4 characters')
+
+  const passwordHash = await hash(password)
+
+  await db
+    .update(files)
+    .set({ passwordHash, updatedAt: new Date() })
+    .where(and(eq(files.id, fileId), eq(files.userId, userId)))
+
+  revalidatePath('/dashboard')
+}
+
+export async function removeFilePassword(fileId: string) {
+  const userId = await getUserId()
+  const [file] = await db
+    .select()
+    .from(files)
+    .where(and(eq(files.id, fileId), eq(files.userId, userId)))
+
+  if (!file) throw new Error('File not found')
+
+  await db
+    .update(files)
+    .set({ passwordHash: null, updatedAt: new Date() })
+    .where(and(eq(files.id, fileId), eq(files.userId, userId)))
+
+  revalidatePath('/dashboard')
+}
+
 export async function getFileStats() {
   const userId = await getUserId()
   const userFiles = await db
@@ -164,6 +202,7 @@ export async function flagFile(fileId: string) {
     .where(eq(files.id, fileId))
 
   if (!file) throw new Error('File not found')
+  if (file.userId === userId) throw new Error('Cannot flag your own file')
   if (!file.fileHash) throw new Error('File hash not available')
 
   await db.insert(flaggedHashes).values({

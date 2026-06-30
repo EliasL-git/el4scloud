@@ -14,7 +14,8 @@ import {
   Copy,
   Check,
   MoreHorizontal,
-  Flag,
+  LockKeyhole,
+  UnlockKeyhole,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -36,7 +37,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
-import { deleteFile, toggleFileVisibility, flagFile } from '@/app/actions/files'
+import { Input } from '@/components/ui/input'
+import { deleteFile, toggleFileVisibility, setFilePassword, removeFilePassword } from '@/app/actions/files'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -48,6 +50,7 @@ interface FileRecord {
   size: number
   mimeType: string
   isPublic: boolean
+  passwordHash: string | null
   createdAt: Date
 }
 
@@ -113,7 +116,9 @@ export function FileList({
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [flaggingId, setFlaggingId] = useState<string | null>(null)
+  const [passwordDialog, setPasswordDialog] = useState<{ fileId: string; hasPassword: boolean } | null>(null)
+  const [passwordValue, setPasswordValue] = useState('')
+  const [savingPassword, setSavingPassword] = useState(false)
 
   const handleCopy = (url: string, id: string) => {
     navigator.clipboard.writeText(url)
@@ -148,16 +153,33 @@ export function FileList({
     }
   }
 
-  const handleFlag = async (id: string) => {
-    setFlaggingId(id)
+  const handleSetPassword = async () => {
+    if (!passwordDialog || !passwordValue.trim()) return
+    if (passwordValue.length < 4) {
+      toast.error('Password must be at least 4 characters')
+      return
+    }
+    setSavingPassword(true)
     try {
-      await flagFile(id)
+      await setFilePassword(passwordDialog.fileId, passwordValue)
       onRefresh?.()
-      toast.success('File flagged and removed')
+      toast.success('Password set')
+      setPasswordDialog(null)
+      setPasswordValue('')
     } catch {
-      toast.error('Failed to flag file')
+      toast.error('Failed to set password')
     } finally {
-      setFlaggingId(null)
+      setSavingPassword(false)
+    }
+  }
+
+  const handleRemovePassword = async (fileId: string) => {
+    try {
+      await removeFilePassword(fileId)
+      onRefresh?.()
+      toast.success('Password removed')
+    } catch {
+      toast.error('Failed to remove password')
     }
   }
 
@@ -212,6 +234,12 @@ export function FileList({
               </p>
             </div>
 
+            {file.passwordHash && (
+              <Badge variant="outline" className="text-xs shrink-0 gap-1 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900">
+                <LockKeyhole className="size-3" />
+                Locked
+              </Badge>
+            )}
             <Badge
               variant={file.isPublic ? 'secondary' : 'outline'}
               className={cn(
@@ -273,14 +301,26 @@ export function FileList({
                     Copy URL
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
-                  onClick={() => handleFlag(file.id)}
-                  disabled={flaggingId === file.id}
-                  className="text-destructive focus:text-destructive gap-2 cursor-pointer"
+                  onClick={() => setPasswordDialog({ fileId: file.id, hasPassword: !!file.passwordHash })}
+                  className="gap-2 cursor-pointer"
                 >
-                  <Flag className="size-3.5" />
-                  {flaggingId === file.id ? 'Flagging...' : 'Flag as malicious'}
+                  {file.passwordHash ? (
+                    <><LockKeyhole className="size-3.5" /> Change password</>
+                  ) : (
+                    <><LockKeyhole className="size-3.5" /> Set password</>
+                  )}
                 </DropdownMenuItem>
+                {file.passwordHash && (
+                  <DropdownMenuItem
+                    onClick={() => handleRemovePassword(file.id)}
+                    className="gap-2 cursor-pointer"
+                  >
+                    <UnlockKeyhole className="size-3.5" />
+                    Remove password
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => setConfirmDelete(file.id)}
@@ -295,6 +335,40 @@ export function FileList({
           )
         })}
       </div>
+
+      <AlertDialog open={!!passwordDialog} onOpenChange={() => { setPasswordDialog(null); setPasswordValue('') }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {passwordDialog?.hasPassword ? 'Change password' : 'Set password'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {passwordDialog?.hasPassword
+                ? 'Enter a new password to protect this file.'
+                : 'Set a password that must be provided to access this file.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Input
+              type="password"
+              value={passwordValue}
+              onChange={(e) => setPasswordValue(e.target.value)}
+              placeholder="Enter a password (min 4 characters)"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSetPassword() }}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleSetPassword}
+              disabled={savingPassword || passwordValue.length < 4}
+            >
+              {savingPassword ? 'Saving...' : passwordDialog?.hasPassword ? 'Change' : 'Set'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!confirmDelete} onOpenChange={() => setConfirmDelete(null)}>
         <AlertDialogContent>
