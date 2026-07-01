@@ -7,6 +7,8 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
+ARG BETTER_AUTH_SECRET
+ENV BETTER_AUTH_SECRET=$BETTER_AUTH_SECRET
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm build
@@ -39,6 +41,7 @@ RUN printf 'DatabaseDirectory /var/lib/clamav\nDatabaseMirror database.clamav.ne
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+COPY --from=builder /app/documentation ./documentation
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:$PORT/ || exit 1
