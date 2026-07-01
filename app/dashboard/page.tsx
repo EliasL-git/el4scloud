@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { getFileStats, getStorageLimit } from '@/app/actions/files'
-import { HardDrive, ArrowRight, Database, Cpu } from 'lucide-react'
+import { HardDrive, ArrowRight, Cpu } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const services = [
@@ -20,13 +20,6 @@ const services = [
     title: 'Compute',
     description: 'Deploy and scale virtual machines in seconds.',
     icon: Cpu,
-    status: 'coming-soon' as const,
-  },
-  {
-    id: 'databases',
-    title: 'Databases',
-    description: 'Managed databases with automated backups and scaling.',
-    icon: Database,
     status: 'coming-soon' as const,
   },
 ]
