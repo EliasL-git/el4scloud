@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { getFiles, getFileStats, getStorageLimit } from '@/app/actions/files'
+import { getFileStats, getStorageLimit } from '@/app/actions/files'
 import { getAccountStatus } from '@/app/actions/warnings'
 import { FileUploader } from '@/components/dashboard/file-uploader'
-import { FileList } from '@/components/dashboard/file-list'
+import { FileManager } from '@/components/dashboard/file-manager'
 import { StatsCards } from '@/components/dashboard/stats-cards'
 import { Separator } from '@/components/ui/separator'
 import { Card, CardContent } from '@/components/ui/card'
@@ -14,11 +14,9 @@ import { WarningBanner } from '@/components/dashboard/warning-banner'
 import { HardDrive, IdCard } from 'lucide-react'
 import { HC_STORAGE_LIMIT } from '@/lib/storage'
 
-type FileRecord = Awaited<ReturnType<typeof getFiles>>[number]
 type Stats = Awaited<ReturnType<typeof getFileStats>>
 
 export default function StoragePage() {
-  const [files, setFiles] = useState<FileRecord[]>([])
   const [stats, setStats] = useState<Stats>({
     totalFiles: 0,
     totalSize: 0,
@@ -26,18 +24,14 @@ export default function StoragePage() {
     privateFiles: 0,
   })
   const [storageLimit, setStorageLimit] = useState(15 * 1024 * 1024 * 1024)
-  const [loading, setLoading] = useState(true)
   const [isSuspended, setIsSuspended] = useState(false)
   const [warnedInfo, setWarnedInfo] = useState<{ fileName?: string; reason?: string; suspended?: boolean } | null>(null)
   const [bannerInfo, setBannerInfo] = useState<{ reason?: string; suspended?: boolean } | null>(null)
 
   const refresh = useCallback(async () => {
-    setLoading(true)
-    const [f, s, limit] = await Promise.all([getFiles(), getFileStats(), getStorageLimit()])
-    setFiles(f)
+    const [s, limit] = await Promise.all([getFileStats(), getStorageLimit()])
     setStats(s)
     setStorageLimit(limit)
-    setLoading(false)
   }, [])
 
   useEffect(() => {
@@ -154,11 +148,8 @@ export default function StoragePage() {
       <Separator />
 
       <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-medium text-foreground">Your files</h2>
-          <span className="text-xs text-muted-foreground">{stats.totalFiles} file{stats.totalFiles !== 1 ? 's' : ''}</span>
-        </div>
-        <FileList files={files} loading={loading} onRefresh={refresh} />
+        <h2 className="text-sm font-medium text-foreground">Your files</h2>
+        <FileManager onRefresh={refresh} />
       </div>
 
       <Toaster />

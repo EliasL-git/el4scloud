@@ -253,6 +253,21 @@ const statements = [
   )`,
   `CREATE INDEX IF NOT EXISTS "share_links_token_idx" ON "share_links"("token")`,
   `CREATE INDEX IF NOT EXISTS "share_links_fileId_idx" ON "share_links"("fileId")`,
+
+  `CREATE TABLE IF NOT EXISTS "folders" (
+    "id"              TEXT PRIMARY KEY,
+    "name"            TEXT NOT NULL,
+    "userId"          TEXT NOT NULL,
+    "parentFolderId"  TEXT,
+    "createdAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS "folders_userId_idx" ON "folders"("userId")`,
+
+  `ALTER TABLE "files" ADD COLUMN IF NOT EXISTS "folderId" TEXT`,
+  `CREATE INDEX IF NOT EXISTS "files_folderId_idx" ON "files"("folderId")`,
+
+  `ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "passwordHash" TEXT`,
 ]
 
 async function migrate() {

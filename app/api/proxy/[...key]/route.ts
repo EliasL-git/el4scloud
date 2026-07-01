@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { apiKeys, files } from '@/lib/db/schema'
 
 import { s3, S3_BUCKET } from '@/lib/s3'
-import { eq } from 'drizzle-orm'
+import { eq, and, desc } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { NextRequest } from 'next/server'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
@@ -58,10 +58,21 @@ export async function GET(
     }
   }
 
-  const [file] = await db
+  let [file] = await db
     .select()
     .from(files)
     .where(eq(files.key, objectKey))
+
+  if (!file && keyParts.length === 2) {
+    const [ownerId, ...nameParts] = keyParts
+    const fileName = nameParts.join('/')
+    const decodedName = decodeURIComponent(fileName)
+    ;[file] = await db
+      .select()
+      .from(files)
+      .where(and(eq(files.userId, ownerId), eq(files.originalName, decodedName)))
+      .orderBy(desc(files.createdAt))
+  }
 
   if (!file) {
     return new Response('Not found', { status: 404 })
@@ -74,18 +85,26 @@ export async function GET(
   const hostUrl = getHostUrl(hdrs)
   const reportUrl = `${hostUrl}/takedown`
 
+  const raw = req.nextUrl.searchParams.has('raw')
+
   if (file.passwordHash) {
     const givenPassword = req.nextUrl.searchParams.get('password')
     if (!givenPassword) {
-      return new Response('Password required', { status: 401 })
+      if (raw) {
+        return new Response('Password required', { status: 401 })
+      }
+      const filePath = objectKey.split('/').map(encodeURIComponent).join('/')
+      return Response.redirect(new URL(`/file/${filePath}`, req.url))
     }
     const valid = await verify(givenPassword, file.passwordHash)
     if (!valid) {
-      return new Response('Incorrect password', { status: 401 })
+      if (raw) {
+        return new Response('Incorrect password', { status: 401 })
+      }
+      const filePath = objectKey.split('/').map(encodeURIComponent).join('/')
+      return Response.redirect(new URL(`/file/${filePath}?error=incorrect`, req.url))
     }
   }
-
-  const raw = req.nextUrl.searchParams.has('raw')
 
   if (!mimeTypeFromExt(objectKey).startsWith('image/') && !raw) {
     const passwordParam = file.passwordHash && req.nextUrl.searchParams.get('password')

@@ -74,6 +74,15 @@ export const verification = pgTable('verification', {
 
 // --- App tables ------------------------------------------------------------
 
+export const folders = pgTable('folders', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  userId: text('userId').notNull(),
+  parentFolderId: text('parentFolderId'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+})
+
 export const files = pgTable('files', {
   id: text('id').primaryKey(),
   userId: text('userId').notNull(),
@@ -89,6 +98,7 @@ export const files = pgTable('files', {
   scanResult: text('scanResult'),
   scanDuration: integer('scanDuration'), // milliseconds
   passwordHash: text('passwordHash'),
+  folderId: text('folderId'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
@@ -194,6 +204,7 @@ export const shareLinks = pgTable('share_links', {
   expiresAt: timestamp('expiresAt'),
   maxDownloads: integer('maxDownloads'),
   downloadCount: integer('downloadCount').notNull().default(0),
+  passwordHash: text('passwordHash'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 

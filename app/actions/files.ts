@@ -3,7 +3,7 @@
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { files, user, flaggedHashes, shareLinks } from '@/lib/db/schema'
-import { and, desc, eq, or, isNull } from 'drizzle-orm'
+import { and, desc, eq, or, isNull, ilike } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { s3, S3_BUCKET } from '@/lib/s3'
@@ -24,18 +24,26 @@ async function getUserId() {
   return session.user.id
 }
 
-export async function getFiles() {
+export async function getFiles(opts?: { query?: string; folderId?: string | null }) {
   const userId = await getUserId()
+  const conditions = [
+    eq(files.userId, userId),
+    or(eq(files.scanStatus, 'error'), eq(files.scanResult, 'clean'), isNull(files.scanResult)),
+  ]
+  if (opts?.query) {
+    conditions.push(ilike(files.originalName, `%${opts.query}%`))
+  }
+  if (opts?.folderId !== undefined) {
+    if (opts.folderId === null) {
+      conditions.push(isNull(files.folderId))
+    } else {
+      conditions.push(eq(files.folderId, opts.folderId))
+    }
+  }
   return db
     .select()
     .from(files)
-    .where(
-      and(
-        eq(files.userId, userId),
-        // Exclude blocked/flagged files (stored for admin visibility only)
-        or(eq(files.scanStatus, 'error'), eq(files.scanResult, 'clean'), isNull(files.scanResult)),
-      )
-    )
+    .where(and(...conditions))
     .orderBy(desc(files.createdAt))
 }
 
@@ -247,7 +255,7 @@ export async function getStorageUsage() {
 
 export async function createShareLink(
   fileId: string,
-  options?: { expiresAt?: Date; maxDownloads?: number },
+  options?: { expiresAt?: Date; maxDownloads?: number; password?: string },
 ) {
   const userId = await getUserId()
   const [file] = await db
@@ -256,6 +264,16 @@ export async function createShareLink(
     .where(and(eq(files.id, fileId), eq(files.userId, userId)))
 
   if (!file) throw new Error('File not found')
+
+  const [existing] = await db
+    .select()
+    .from(shareLinks)
+    .where(and(eq(shareLinks.fileId, fileId), eq(shareLinks.userId, userId)))
+  if (existing) {
+    await db.delete(shareLinks).where(and(eq(shareLinks.fileId, fileId), eq(shareLinks.userId, userId)))
+  }
+
+  const passwordHash = options?.password ? await hash(options.password) : null
 
   const id = uuidv4()
   const token = crypto.randomUUID()
@@ -267,10 +285,11 @@ export async function createShareLink(
     token,
     expiresAt: options?.expiresAt ?? null,
     maxDownloads: options?.maxDownloads ?? null,
+    passwordHash,
     downloadCount: 0,
   })
 
-  await logAuditEventWithHeaders(userId, 'share_link.created', JSON.stringify({ fileId, token, expiresAt: options?.expiresAt, maxDownloads: options?.maxDownloads }))
+  await logAuditEventWithHeaders(userId, 'share_link.created', JSON.stringify({ fileId, token, expiresAt: options?.expiresAt, maxDownloads: options?.maxDownloads, hasPassword: !!passwordHash }))
 
   revalidatePath('/dashboard')
   return { id, token }
@@ -299,4 +318,29 @@ export async function getShareLinks(fileId: string) {
     .from(shareLinks)
     .where(and(eq(shareLinks.fileId, fileId), eq(shareLinks.userId, userId)))
     .orderBy(desc(shareLinks.createdAt))
+}
+
+export async function moveFilesToFolder(fileIds: string[], folderId: string | null) {
+  const userId = await getUserId()
+  for (const fileId of fileIds) {
+    await db
+      .update(files)
+      .set({ folderId, updatedAt: new Date() })
+      .where(and(eq(files.id, fileId), eq(files.userId, userId)))
+  }
+  await logAuditEventWithHeaders(userId, 'files.moved', JSON.stringify({ fileIds, folderId }))
+  revalidatePath('/dashboard')
+}
+
+export async function moveFilesToParent(folderId: string) {
+  const filesInFolder = await db
+    .select()
+    .from(files)
+    .where(eq(files.folderId, folderId))
+  for (const file of filesInFolder) {
+    await db
+      .update(files)
+      .set({ folderId: null, updatedAt: new Date() })
+      .where(eq(files.id, file.id))
+  }
 }

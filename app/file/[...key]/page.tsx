@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
 import { files } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, and, desc } from 'drizzle-orm'
 import { s3, S3_BUCKET } from '@/lib/s3'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { verify } from '@/lib/hash'
@@ -54,7 +54,7 @@ export default async function FilePreviewPage({
   searchParams,
 }: {
   params: Promise<{ key: string[] }>
-  searchParams: Promise<{ password?: string }>
+  searchParams: Promise<{ password?: string; error?: string }>
 }) {
   const { key: keyParts } = await params
   const objectKey = keyParts.join('/')
@@ -63,10 +63,21 @@ export default async function FilePreviewPage({
   const hostUrl = getHostUrl(hdrs)
   const reportUrl = `${hostUrl}/takedown`
 
-  const [file] = await db
+  let [file] = await db
     .select()
     .from(files)
     .where(eq(files.key, objectKey))
+
+  if (!file && keyParts.length === 2) {
+    const [ownerId, ...nameParts] = keyParts
+    const fileName = nameParts.join('/')
+    const decodedName = decodeURIComponent(fileName)
+    ;[file] = await db
+      .select()
+      .from(files)
+      .where(and(eq(files.userId, ownerId), eq(files.originalName, decodedName)))
+      .orderBy(desc(files.createdAt))
+  }
 
   if (!file) {
     redirect('/')
@@ -80,12 +91,16 @@ export default async function FilePreviewPage({
     redirect('/')
   }
 
-  const proxyUrl = `${hostUrl}/api/proxy/${objectKey}`
+  const proxyUrl = `${hostUrl}/api/proxy/${file.userId}/${encodeURIComponent(file.originalName)}`
   const rawUrl = `${proxyUrl}?raw${file.passwordHash && sp.password ? `&password=${sp.password}` : ''}`
 
   if (file.passwordHash) {
     const givenPassword = sp.password
+    const errorParam = sp.error
     if (!givenPassword) {
+      if (errorParam === 'incorrect') {
+        return <PasswordGate hostUrl={hostUrl} reportUrl={reportUrl} fileName={file.originalName} error="Incorrect password" />
+      }
       return <PasswordGate hostUrl={hostUrl} reportUrl={reportUrl} fileName={file.originalName} />
     }
     const valid = await verify(givenPassword, file.passwordHash)

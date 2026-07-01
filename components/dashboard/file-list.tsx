@@ -8,14 +8,10 @@ import {
   FileTextIcon,
   FileArchiveIcon,
   Trash2,
-  Link2,
   Globe,
   Lock,
   Copy,
-  Check,
   MoreHorizontal,
-  LockKeyhole,
-  UnlockKeyhole,
   Share2,
   X,
 } from 'lucide-react'
@@ -40,12 +36,13 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
-import { deleteFile, toggleFileVisibility, setFilePassword, removeFilePassword, createShareLink, revokeShareLink, getShareLinks } from '@/app/actions/files'
+import { deleteFile, toggleFileVisibility, createShareLink, revokeShareLink, getShareLinks } from '@/app/actions/files'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
 interface FileRecord {
   id: string
+  userId: string
   name: string
   originalName: string
   key: string
@@ -117,24 +114,15 @@ export function FileList({
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [passwordDialog, setPasswordDialog] = useState<{ fileId: string; hasPassword: boolean } | null>(null)
-  const [passwordValue, setPasswordValue] = useState('')
-  const [savingPassword, setSavingPassword] = useState(false)
   const [shareDialog, setShareDialog] = useState<{ fileId: string; open: boolean } | null>(null)
   const [shareLinksData, setShareLinksData] = useState<{ id: string; token: string; expiresAt: Date | null; maxDownloads: number | null; downloadCount: number; createdAt: Date }[]>([])
   const [shareLoaded, setShareLoaded] = useState(false)
   const [creatingShare, setCreatingShare] = useState(false)
   const [shareExpiry, setShareExpiry] = useState('')
   const [shareMaxDownloads, setShareMaxDownloads] = useState('')
+  const [sharePassword, setSharePassword] = useState('')
+  const [sharePasswordEnabled, setSharePasswordEnabled] = useState(false)
   const [revokingShare, setRevokingShare] = useState<string | null>(null)
-
-  const handleCopy = (url: string, id: string) => {
-    navigator.clipboard.writeText(url)
-    setCopiedId(id)
-    toast.success('URL copied to clipboard')
-    setTimeout(() => setCopiedId(null), 2000)
-  }
 
   const handleToggle = async (id: string) => {
     setTogglingId(id)
@@ -162,41 +150,13 @@ export function FileList({
     }
   }
 
-  const handleSetPassword = async () => {
-    if (!passwordDialog || !passwordValue.trim()) return
-    if (passwordValue.length < 4) {
-      toast.error('Password must be at least 4 characters')
-      return
-    }
-    setSavingPassword(true)
-    try {
-      await setFilePassword(passwordDialog.fileId, passwordValue)
-      onRefresh?.()
-      toast.success('Password set')
-      setPasswordDialog(null)
-      setPasswordValue('')
-    } catch {
-      toast.error('Failed to set password')
-    } finally {
-      setSavingPassword(false)
-    }
-  }
-
-  const handleRemovePassword = async (fileId: string) => {
-    try {
-      await removeFilePassword(fileId)
-      onRefresh?.()
-      toast.success('Password removed')
-    } catch {
-      toast.error('Failed to remove password')
-    }
-  }
-
   const handleOpenShare = async (fileId: string) => {
     setShareDialog({ fileId, open: true })
     setShareLoaded(false)
     setShareExpiry('')
     setShareMaxDownloads('')
+    setSharePassword('')
+    setSharePasswordEnabled(false)
     try {
       const links = await getShareLinks(fileId)
       setShareLinksData(links.map((l) => ({ ...l, expiresAt: l.expiresAt ? new Date(l.expiresAt) : null })))
@@ -210,9 +170,10 @@ export function FileList({
     if (!shareDialog) return
     setCreatingShare(true)
     try {
-      const options: { expiresAt?: Date; maxDownloads?: number } = {}
+      const options: { expiresAt?: Date; maxDownloads?: number; password?: string } = {}
       if (shareExpiry) options.expiresAt = new Date(shareExpiry)
       if (shareMaxDownloads) options.maxDownloads = parseInt(shareMaxDownloads, 10)
+      if (sharePasswordEnabled && sharePassword.trim()) options.password = sharePassword.trim()
       const link = await createShareLink(shareDialog.fileId, options)
       toast.success('Share link created')
       navigator.clipboard.writeText(`${window.location.origin}/api/share/${link.token}`)
@@ -279,7 +240,6 @@ export function FileList({
     <>
       <div className="flex flex-col gap-1.5">
         {files.map((file) => {
-          const proxyUrl = `${window.location.origin}/api/proxy/${file.key}`
           return (
           <div
             key={file.id}
@@ -294,12 +254,6 @@ export function FileList({
               </p>
             </div>
 
-            {file.passwordHash && (
-              <Badge variant="outline" className="text-xs shrink-0 gap-1 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-900">
-                <LockKeyhole className="size-3" />
-                Locked
-              </Badge>
-            )}
             <Badge
               variant={file.isPublic ? 'secondary' : 'outline'}
               className={cn(
@@ -316,22 +270,6 @@ export function FileList({
               )}
               {file.isPublic ? 'Public' : 'Private'}
             </Badge>
-
-            {file.isPublic && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 shrink-0"
-                onClick={() => handleCopy(proxyUrl, file.id)}
-                title="Copy URL"
-              >
-                {copiedId === file.id ? (
-                  <Check className="size-3.5 text-green-600" />
-                ) : (
-                  <Copy className="size-3.5" />
-                )}
-              </Button>
-            )}
 
             <DropdownMenu>
               <DropdownMenuTrigger render={
@@ -352,15 +290,6 @@ export function FileList({
                     <><Globe className="size-3.5" /> Make public</>
                   )}
                 </DropdownMenuItem>
-                {file.isPublic && (
-                  <DropdownMenuItem
-                    onClick={() => handleCopy(proxyUrl, file.id)}
-                    className="gap-2 cursor-pointer"
-                  >
-                    <Link2 className="size-3.5" />
-                    Copy URL
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuItem
                   onClick={() => handleOpenShare(file.id)}
                   className="gap-2 cursor-pointer"
@@ -368,26 +297,6 @@ export function FileList({
                   <Share2 className="size-3.5" />
                   Share
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => setPasswordDialog({ fileId: file.id, hasPassword: !!file.passwordHash })}
-                  className="gap-2 cursor-pointer"
-                >
-                  {file.passwordHash ? (
-                    <><LockKeyhole className="size-3.5" /> Change password</>
-                  ) : (
-                    <><LockKeyhole className="size-3.5" /> Set password</>
-                  )}
-                </DropdownMenuItem>
-                {file.passwordHash && (
-                  <DropdownMenuItem
-                    onClick={() => handleRemovePassword(file.id)}
-                    className="gap-2 cursor-pointer"
-                  >
-                    <UnlockKeyhole className="size-3.5" />
-                    Remove password
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => setConfirmDelete(file.id)}
@@ -403,59 +312,44 @@ export function FileList({
         })}
       </div>
 
-      <AlertDialog open={!!passwordDialog} onOpenChange={() => { setPasswordDialog(null); setPasswordValue('') }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {passwordDialog?.hasPassword ? 'Change password' : 'Set password'}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {passwordDialog?.hasPassword
-                ? 'Enter a new password to protect this file.'
-                : 'Set a password that must be provided to access this file.'}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-2">
-            <Input
-              type="password"
-              value={passwordValue}
-              onChange={(e) => setPasswordValue(e.target.value)}
-              placeholder="Enter a password (min 4 characters)"
-              autoFocus
-              onKeyDown={(e) => { if (e.key === 'Enter') handleSetPassword() }}
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleSetPassword}
-              disabled={savingPassword || passwordValue.length < 4}
-            >
-              {savingPassword ? 'Saving...' : passwordDialog?.hasPassword ? 'Change' : 'Set'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       <AlertDialog
         open={!!shareDialog?.open}
         onOpenChange={() => { setShareDialog(null); setShareLinksData([]) }}
       >
-        <AlertDialogContent className="max-w-md">
+        <AlertDialogContent className="max-w-lg">
           <AlertDialogHeader>
             <AlertDialogTitle>Share file</AlertDialogTitle>
             <AlertDialogDescription>
-              Create a share link that works without authentication.
+              Share a direct link or create a share link that works without authentication.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
+          {shareDialog && (() => {
+            const file = files.find(f => f.id === shareDialog.fileId)
+            if (file) {
+              const directUrl = `${window.location.origin}/api/proxy/${file.userId}/${encodeURIComponent(file.originalName)}`
+              return (
+                <div className="flex items-center gap-2 p-3 rounded-md border border-border bg-secondary/30 mb-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-mono break-all">{directUrl}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Direct link{file.passwordHash ? ' (password protected)' : ''}</p>
+                  </div>
+                  <Button variant="ghost" size="icon" className="size-7 shrink-0" onClick={() => { navigator.clipboard.writeText(directUrl); toast.success('URL copied to clipboard') }} title="Copy link">
+                    <Copy className="size-3" />
+                  </Button>
+                </div>
+              )
+            }
+            return null
+          })()}
+
           {shareLoaded && shareLinksData.length > 0 && (
-            <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
+            <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Existing links</p>
               {shareLinksData.map((link) => (
-                <div key={link.id} className="flex items-center gap-2 p-2 rounded-md border border-border bg-secondary/30">
+                <div key={link.id} className="flex items-center gap-2 p-3 rounded-md border border-border bg-secondary/30">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-mono truncate">{window.location.origin}/api/share/{link.token}</p>
+                    <p className="text-xs font-mono break-all">{window.location.origin}/api/share/{link.token}</p>
                     <p className="text-[10px] text-muted-foreground mt-0.5">
                       {link.downloadCount}/{link.maxDownloads ?? '∞'} downloads
                       {link.expiresAt && ` · expires ${link.expiresAt.toLocaleDateString()}`}
@@ -503,6 +397,24 @@ export function FileList({
                 />
               </div>
             </div>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={sharePasswordEnabled}
+                onChange={(e) => setSharePasswordEnabled(e.target.checked)}
+                className="size-4 accent-foreground"
+              />
+              <span className="text-xs text-muted-foreground">Password protect</span>
+            </label>
+            {sharePasswordEnabled && (
+              <Input
+                type="password"
+                placeholder="Enter a password"
+                value={sharePassword}
+                onChange={(e) => setSharePassword(e.target.value)}
+                className="h-8 text-xs"
+              />
+            )}
           </div>
 
           <AlertDialogFooter className="gap-2">

@@ -4,6 +4,7 @@ import { files, shareLinks } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { s3, S3_BUCKET } from '@/lib/s3'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
+import { verify } from '@/lib/hash'
 
 export async function GET(
   req: NextRequest,
@@ -26,6 +27,39 @@ export async function GET(
 
   if (link.maxDownloads && link.downloadCount >= link.maxDownloads) {
     return NextResponse.json({ error: 'Share link has reached its download limit' }, { status: 410 })
+  }
+
+  if (link.passwordHash) {
+    const givenPassword = req.nextUrl.searchParams.get('password')
+    if (!givenPassword) {
+      return new NextResponse(
+        `<html><body style="display:flex;align-items:center;justify-content:center;min-height:100svh;margin:0;background:#09090b;color:#e4e4e7;font-family:sans-serif">
+          <form method="GET" style="background:#18181b;padding:2rem;border-radius:8px;border:1px solid #27272a;text-align:center;max-width:360px;width:100%">
+            <div style="font-size:1.25rem;font-weight:600;margin-bottom:0.25rem">Password required</div>
+            <p style="font-size:0.875rem;color:#a1a1aa;margin-bottom:1.5rem">This share link is password-protected.</p>
+            <input type="hidden" name="token" value="${token}" />
+            <input type="password" name="password" placeholder="Enter password" style="width:100%;padding:0.5rem 0.75rem;border-radius:6px;border:1px solid #27272a;background:#09090b;color:#e4e4e7;font-size:0.875rem;margin-bottom:0.75rem;box-sizing:border-box" autofocus />
+            <button type="submit" style="width:100%;padding:0.5rem;border-radius:6px;border:none;background:#fafafa;color:#09090b;font-size:0.875rem;font-weight:500;cursor:pointer">Unlock</button>
+          </form>
+        </body></html>`,
+        { status: 401, headers: { 'Content-Type': 'text/html' } }
+      )
+    }
+    const valid = await verify(givenPassword, link.passwordHash)
+    if (!valid) {
+      return new NextResponse(
+        `<html><body style="display:flex;align-items:center;justify-content:center;min-height:100svh;margin:0;background:#09090b;color:#e4e4e7;font-family:sans-serif">
+          <form method="GET" style="background:#18181b;padding:2rem;border-radius:8px;border:1px solid #27272a;text-align:center;max-width:360px;width:100%">
+            <div style="font-size:1.25rem;font-weight:600;margin-bottom:0.25rem">Password required</div>
+            <p style="font-size:0.875rem;color:#ef4444;margin-bottom:1.5rem">Incorrect password. Try again.</p>
+            <input type="hidden" name="token" value="${token}" />
+            <input type="password" name="password" placeholder="Enter password" style="width:100%;padding:0.5rem 0.75rem;border-radius:6px;border:1px solid #27272a;background:#09090b;color:#e4e4e7;font-size:0.875rem;margin-bottom:0.75rem;box-sizing:border-box" autofocus />
+            <button type="submit" style="width:100%;padding:0.5rem;border-radius:6px;border:none;background:#fafafa;color:#09090b;font-size:0.875rem;font-weight:500;cursor:pointer">Unlock</button>
+          </form>
+        </body></html>`,
+        { status: 401, headers: { 'Content-Type': 'text/html' } }
+      )
+    }
   }
 
   const [file] = await db
