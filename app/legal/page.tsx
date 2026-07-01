@@ -5,7 +5,7 @@ import { BackButton } from '@/components/back-button'
 
 export default function LegalPage() {
   const content = fs.readFileSync(
-    path.join(process.cwd(), 'documents', 'legal.md'),
+    path.join(process.cwd(), 'legal', 'legal.md'),
     'utf-8',
   )
 
