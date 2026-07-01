@@ -241,17 +241,49 @@ const statements = [
   `ALTER TABLE "storage_requests" ADD COLUMN IF NOT EXISTS "firstName" TEXT NOT NULL DEFAULT ''`,
   `ALTER TABLE "storage_requests" ADD COLUMN IF NOT EXISTS "lastName" TEXT NOT NULL DEFAULT ''`,
 
-  // Now safe to drop any ALTER that relied on IF NOT EXISTS (already applied via UPDATE)
+  `CREATE TABLE IF NOT EXISTS "share_links" (
+    "id"              TEXT PRIMARY KEY,
+    "fileId"          TEXT NOT NULL,
+    "userId"          TEXT NOT NULL,
+    "token"           TEXT NOT NULL UNIQUE,
+    "expiresAt"       TIMESTAMPTZ,
+    "maxDownloads"    INTEGER,
+    "downloadCount"   INTEGER NOT NULL DEFAULT 0,
+    "createdAt"       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS "share_links_token_idx" ON "share_links"("token")`,
+  `CREATE INDEX IF NOT EXISTS "share_links_fileId_idx" ON "share_links"("fileId")`,
 ]
 
 async function migrate() {
   const client = await pool.connect()
+  let userCountBefore = -1
+  try {
+    const { rows } = await client.query('SELECT COUNT(*)::int AS count FROM "user"')
+    userCountBefore = rows[0].count
+  } catch {
+    // user table doesn't exist yet — first run
+  }
+
   try {
     for (const sql of statements) {
       await client.query(sql)
       const firstLine = sql.trim().split('\n')[0].slice(0, 80)
       console.log('[migrate] OK:', firstLine)
     }
+
+    // Verify user count hasn't dropped (only if table existed before)
+    if (userCountBefore >= 0) {
+      const { rows } = await client.query('SELECT COUNT(*)::int AS count FROM "user"')
+      const userCountAfter = rows[0].count
+      if (userCountAfter < userCountBefore) {
+        console.error(`\n*** WARNING: User count dropped from ${userCountBefore} to ${userCountAfter}! ***`)
+        console.error('*** The migration above should not delete users. Check your DB connection. ***\n')
+      } else {
+        console.log(`[migrate] User count: ${userCountAfter} (unchanged — safe)`)
+      }
+    }
+
     console.log('[migrate] All tables created successfully.')
   } finally {
     client.release()

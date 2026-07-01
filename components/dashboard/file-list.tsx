@@ -16,6 +16,8 @@ import {
   MoreHorizontal,
   LockKeyhole,
   UnlockKeyhole,
+  Share2,
+  X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -38,7 +40,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Input } from '@/components/ui/input'
-import { deleteFile, toggleFileVisibility, setFilePassword, removeFilePassword } from '@/app/actions/files'
+import { deleteFile, toggleFileVisibility, setFilePassword, removeFilePassword, createShareLink, revokeShareLink, getShareLinks } from '@/app/actions/files'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
@@ -119,6 +121,13 @@ export function FileList({
   const [passwordDialog, setPasswordDialog] = useState<{ fileId: string; hasPassword: boolean } | null>(null)
   const [passwordValue, setPasswordValue] = useState('')
   const [savingPassword, setSavingPassword] = useState(false)
+  const [shareDialog, setShareDialog] = useState<{ fileId: string; open: boolean } | null>(null)
+  const [shareLinksData, setShareLinksData] = useState<{ id: string; token: string; expiresAt: Date | null; maxDownloads: number | null; downloadCount: number; createdAt: Date }[]>([])
+  const [shareLoaded, setShareLoaded] = useState(false)
+  const [creatingShare, setCreatingShare] = useState(false)
+  const [shareExpiry, setShareExpiry] = useState('')
+  const [shareMaxDownloads, setShareMaxDownloads] = useState('')
+  const [revokingShare, setRevokingShare] = useState<string | null>(null)
 
   const handleCopy = (url: string, id: string) => {
     navigator.clipboard.writeText(url)
@@ -180,6 +189,57 @@ export function FileList({
       toast.success('Password removed')
     } catch {
       toast.error('Failed to remove password')
+    }
+  }
+
+  const handleOpenShare = async (fileId: string) => {
+    setShareDialog({ fileId, open: true })
+    setShareLoaded(false)
+    setShareExpiry('')
+    setShareMaxDownloads('')
+    try {
+      const links = await getShareLinks(fileId)
+      setShareLinksData(links.map((l) => ({ ...l, expiresAt: l.expiresAt ? new Date(l.expiresAt) : null })))
+    } catch {
+      setShareLinksData([])
+    }
+    setShareLoaded(true)
+  }
+
+  const handleCreateShare = async () => {
+    if (!shareDialog) return
+    setCreatingShare(true)
+    try {
+      const options: { expiresAt?: Date; maxDownloads?: number } = {}
+      if (shareExpiry) options.expiresAt = new Date(shareExpiry)
+      if (shareMaxDownloads) options.maxDownloads = parseInt(shareMaxDownloads, 10)
+      const link = await createShareLink(shareDialog.fileId, options)
+      toast.success('Share link created')
+      navigator.clipboard.writeText(`${window.location.origin}/api/share/${link.token}`)
+      toast.success('Link copied to clipboard')
+      await handleOpenShare(shareDialog.fileId)
+    } catch {
+      toast.error('Failed to create share link')
+    } finally {
+      setCreatingShare(false)
+    }
+  }
+
+  const handleCopyShare = (token: string) => {
+    navigator.clipboard.writeText(`${window.location.origin}/api/share/${token}`)
+    toast.success('Share link copied to clipboard')
+  }
+
+  const handleRevokeShare = async (linkId: string) => {
+    setRevokingShare(linkId)
+    try {
+      await revokeShareLink(linkId)
+      toast.success('Share link revoked')
+      if (shareDialog) await handleOpenShare(shareDialog.fileId)
+    } catch {
+      toast.error('Failed to revoke share link')
+    } finally {
+      setRevokingShare(null)
     }
   }
 
@@ -301,6 +361,13 @@ export function FileList({
                     Copy URL
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem
+                  onClick={() => handleOpenShare(file.id)}
+                  className="gap-2 cursor-pointer"
+                >
+                  <Share2 className="size-3.5" />
+                  Share
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={() => setPasswordDialog({ fileId: file.id, hasPassword: !!file.passwordHash })}
@@ -365,6 +432,86 @@ export function FileList({
               disabled={savingPassword || passwordValue.length < 4}
             >
               {savingPassword ? 'Saving...' : passwordDialog?.hasPassword ? 'Change' : 'Set'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={!!shareDialog?.open}
+        onOpenChange={() => { setShareDialog(null); setShareLinksData([]) }}
+      >
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Share file</AlertDialogTitle>
+            <AlertDialogDescription>
+              Create a share link that works without authentication.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {shareLoaded && shareLinksData.length > 0 && (
+            <div className="flex flex-col gap-2 max-h-40 overflow-y-auto">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Existing links</p>
+              {shareLinksData.map((link) => (
+                <div key={link.id} className="flex items-center gap-2 p-2 rounded-md border border-border bg-secondary/30">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-mono truncate">{window.location.origin}/api/share/{link.token}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {link.downloadCount}/{link.maxDownloads ?? '∞'} downloads
+                      {link.expiresAt && ` · expires ${link.expiresAt.toLocaleDateString()}`}
+                    </p>
+                  </div>
+                  <Button variant="ghost" size="icon" className="size-7 shrink-0" onClick={() => handleCopyShare(link.token)} title="Copy link">
+                    <Copy className="size-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 shrink-0 text-destructive hover:text-destructive"
+                    onClick={() => handleRevokeShare(link.id)}
+                    disabled={revokingShare === link.id}
+                    title="Revoke"
+                  >
+                    <X className="size-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-3 py-2">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Create new link</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Expires</label>
+                <Input
+                  type="date"
+                  value={shareExpiry}
+                  onChange={(e) => setShareExpiry(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-muted-foreground">Max downloads</label>
+                <Input
+                  type="number"
+                  min="1"
+                  placeholder="Unlimited"
+                  value={shareMaxDownloads}
+                  onChange={(e) => setShareMaxDownloads(e.target.value)}
+                  className="h-8 text-xs"
+                />
+              </div>
+            </div>
+          </div>
+
+          <AlertDialogFooter className="gap-2">
+            <AlertDialogCancel>Close</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCreateShare}
+              disabled={creatingShare}
+            >
+              {creatingShare ? 'Creating...' : 'Create link'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

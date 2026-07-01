@@ -5,6 +5,7 @@ import { apiKeys, files } from '@/lib/db/schema'
 import { s3, S3_BUCKET } from '@/lib/s3'
 import { eq } from 'drizzle-orm'
 import { headers } from 'next/headers'
+import { NextRequest } from 'next/server'
 import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { createHash } from 'crypto'
 import sharp from 'sharp'
@@ -28,7 +29,7 @@ function getHostUrl(hdrs: Headers) {
 }
 
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ key: string[] }> },
 ) {
   const { key: keyParts } = await params
@@ -74,8 +75,7 @@ export async function GET(
   const reportUrl = `${hostUrl}/takedown`
 
   if (file.passwordHash) {
-    const url = new URL(_req.url)
-    const givenPassword = url.searchParams.get('password')
+    const givenPassword = req.nextUrl.searchParams.get('password')
     if (!givenPassword) {
       return new Response('Password required', { status: 401 })
     }
@@ -83,6 +83,16 @@ export async function GET(
     if (!valid) {
       return new Response('Incorrect password', { status: 401 })
     }
+  }
+
+  const raw = req.nextUrl.searchParams.has('raw')
+
+  if (!mimeTypeFromExt(objectKey).startsWith('image/') && !raw) {
+    const passwordParam = file.passwordHash && req.nextUrl.searchParams.get('password')
+      ? `?password=${req.nextUrl.searchParams.get('password')}`
+      : ''
+    const filePath = objectKey.split('/').map(encodeURIComponent).join('/')
+    return Response.redirect(new URL(`/file/${filePath}${passwordParam}`, req.url))
   }
 
   const command = new GetObjectCommand({
@@ -130,7 +140,7 @@ export async function GET(
       headers: {
         'Content-Type': mimeType,
         'Content-Length': String(processed.length),
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
       },
     })
   }
@@ -140,9 +150,36 @@ export async function GET(
       'Content-Type': mimeType,
       'Content-Length': String(buffer.length),
       'Content-Disposition': `inline; filename="${file.originalName}"`,
-      'Cache-Control': 'private, max-age=3600',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
       'X-File-Host': hostUrl,
       'X-File-Report': reportUrl,
     },
   })
+}
+
+function mimeTypeFromExt(path: string): string {
+  const ext = path.split('.').pop()?.toLowerCase()
+  if (!ext) return 'application/octet-stream'
+  const map: Record<string, string> = {
+    zip: 'application/zip',
+    gz: 'application/gzip',
+    tar: 'application/x-tar',
+    pdf: 'application/pdf',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    svg: 'image/svg+xml',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    txt: 'text/plain',
+    json: 'application/json',
+    html: 'text/html',
+    css: 'text/css',
+    js: 'application/javascript',
+  }
+  return map[ext] ?? 'application/octet-stream'
 }

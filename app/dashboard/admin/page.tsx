@@ -21,6 +21,11 @@ import {
   adminReplyToTicket,
   adminCloseTicket,
   adminReopenTicket,
+  adminAssignTicket,
+  adminUpdatePriority,
+  adminUpdateStatus,
+  adminGetAdmins,
+  adminGetTicketStats,
   getAppeals,
   approveAppeal,
   rejectAppeal,
@@ -44,7 +49,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Search, Ban, Download, CheckCircle2, RefreshCw, HardDrive, Users, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Key, LayoutDashboard, Mail } from 'lucide-react'
+import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Search, Ban, Download, CheckCircle2, RefreshCw, HardDrive, Users, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Key, LayoutDashboard, Mail, ChevronRight, AlertTriangle, AlertCircle, Info, Tag, Clock, UserCircle, UserPlus, Eye, EyeOff } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -126,9 +131,15 @@ export default function AdminPage() {
   const [adminTickets, setAdminTickets] = useState<AdminTicket[]>([])
   const [appealsList, setAppealsList] = useState<AppealRecord[]>([])
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null)
+  const [ticketFilter, setTicketFilter] = useState('')
+  const [ticketStatusFilter, setTicketStatusFilter] = useState('all')
+  const [ticketPriorityFilter, setTicketPriorityFilter] = useState('all')
+  const [ticketAssignFilter, setTicketAssignFilter] = useState('all')
   const [ticketReplies, setTicketReplies] = useState<AdminReply[]>([])
   const [adminReplyText, setAdminReplyText] = useState('')
   const [adminReplySending, setAdminReplySending] = useState(false)
+  const [ticketStats, setTicketStats] = useState<Awaited<ReturnType<typeof adminGetTicketStats>> | null>(null)
+  const [adminsList, setAdminsList] = useState<Awaited<ReturnType<typeof adminGetAdmins>>>([])
   const [appealNotes, setAppealNotes] = useState<Record<string, string>>({})
   const [deletionNotes, setDeletionNotes] = useState<Record<string, string>>({})
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([])
@@ -154,7 +165,11 @@ export default function AdminPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [u, r, t, ap, dr, al, cron, ac, td, ss, us] = await Promise.all([getUsers(), getRequests(), adminGetTickets(), getAppeals(), getDeletionRequests(), getAuditLogs({ limit: 200 }), getLastCronRun(), getAccessCodes(), getTakedownRequests(), getScanStats(), getUserStats()])
+    const [u, r, t, ap, dr, al, cron, ac, td, ss, us, ts, ad] = await Promise.all([
+      getUsers(), getRequests(), adminGetTickets(), getAppeals(), getDeletionRequests(),
+      getAuditLogs({ limit: 200 }), getLastCronRun(), getAccessCodes(), getTakedownRequests(),
+      getScanStats(), getUserStats(), adminGetTicketStats(), adminGetAdmins(),
+    ])
     setUsers(u)
     setRequests(r)
     setAdminTickets(t)
@@ -166,6 +181,8 @@ export default function AdminPage() {
     setTakedownList(td)
     setScanStats(ss)
     setUserStats(us)
+    setTicketStats(ts)
+    setAdminsList(ad)
     setLoading(false)
   }, [])
 
@@ -214,15 +231,16 @@ export default function AdminPage() {
     setAdminReplyText('')
   }
 
-  const handleAdminReply = async (ticketId: string) => {
+  const handleAdminReply = async (ticketId: string, isInternal = false) => {
     if (!adminReplyText.trim()) return
     setAdminReplySending(true)
     try {
-      await adminReplyToTicket(ticketId, adminReplyText.trim())
+      await adminReplyToTicket(ticketId, adminReplyText.trim(), isInternal)
       setAdminReplyText('')
       const replies = await adminGetTicketReplies(ticketId)
       setTicketReplies(replies)
-      toast.success('Reply sent')
+      if (isInternal) setAdminReplyText('')
+      toast.success(isInternal ? 'Internal note added' : 'Reply sent')
     } catch {
       toast.error('Failed to send reply')
     } finally {
@@ -322,7 +340,11 @@ export default function AdminPage() {
       const h = window.location.hash.replace('#', '') as Tab
       if (h && sidebarTabs.some((t) => t.id === h)) {
         setTab(h)
-        if (h === 'tickets') setSelectedTicket(null)
+        if (h === 'tickets') {
+          setSelectedTicket(null)
+          setTicketFilter('')
+          setTicketStatusFilter('all')
+        }
       }
     }
     window.addEventListener('hashchange', onHashChange)
@@ -340,6 +362,21 @@ export default function AdminPage() {
   }
 
   const pendingRequests = requests.filter((r) => r.request.status === 'pending')
+
+  const filteredTickets = adminTickets.filter((t) => {
+    if (ticketStatusFilter !== 'all' && t.status !== ticketStatusFilter) return false
+    if (ticketPriorityFilter !== 'all' && t.priority !== ticketPriorityFilter) return false
+    if (ticketAssignFilter === 'unassigned' && t.assignedTo) return false
+    if (ticketAssignFilter !== 'all' && ticketAssignFilter !== 'unassigned' && t.assignedTo !== ticketAssignFilter) return false
+    if (!ticketFilter.trim()) return true
+    const q = ticketFilter.toLowerCase()
+    return (
+      t.subject.toLowerCase().includes(q) ||
+      t.userName.toLowerCase().includes(q) ||
+      t.userEmail.toLowerCase().includes(q) ||
+      t.message.toLowerCase().includes(q)
+    )
+  })
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
@@ -392,6 +429,46 @@ export default function AdminPage() {
                 </span>
               </CardContent>
             </Card>
+
+            {ticketStats && (
+              <>
+                <Card className="border-amber-500/20">
+                  <CardContent className="p-3 flex items-center gap-3 text-sm">
+                    <MessageSquare className="size-4 shrink-0 text-amber-500" />
+                    <span className="text-muted-foreground">
+                      Tickets:{' '}
+                      <span className="text-foreground font-medium">{ticketStats.total} total</span>
+                      {' · '}
+                      <span className="text-foreground font-medium">
+                        {ticketStats.byStatus['open'] ?? 0} open
+                      </span>
+                      {' · '}
+                      <span className="text-foreground font-medium">
+                        {ticketStats.byStatus['in_progress'] ?? 0} in progress
+                      </span>
+                    </span>
+                  </CardContent>
+                </Card>
+                <Card className="border-red-500/20">
+                  <CardContent className="p-3 flex items-center gap-3 text-sm">
+                    <AlertTriangle className="size-4 shrink-0 text-red-500" />
+                    <span className="text-muted-foreground">
+                      Alerts:{' '}
+                      {ticketStats.overdue > 0 && (
+                        <span className="text-red-500 font-medium">{ticketStats.overdue} overdue SLA</span>
+                      )}
+                      {ticketStats.overdue > 0 && ticketStats.unassigned > 0 && <span> · </span>}
+                      {ticketStats.unassigned > 0 && (
+                        <span className="text-amber-500 font-medium">{ticketStats.unassigned} unassigned</span>
+                      )}
+                      {ticketStats.overdue === 0 && ticketStats.unassigned === 0 && (
+                        <span className="text-muted-foreground italic">All clear</span>
+                      )}
+                    </span>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </div>
 
           {userStats && (
@@ -941,7 +1018,32 @@ export default function AdminPage() {
       )}
 
       {/* Tickets tab */}
-      {tab === 'tickets' && (
+      {tab === 'tickets' && (() => {
+        const priorityConfig: Record<string, { color: string; label: string; icon: React.ElementType }> = {
+          critical: { color: 'text-red-500', label: 'Critical', icon: AlertTriangle },
+          urgent: { color: 'text-orange-500', label: 'Urgent', icon: AlertCircle },
+          high: { color: 'text-amber-500', label: 'High', icon: AlertCircle },
+          normal: { color: 'text-blue-500', label: 'Normal', icon: Info },
+          low: { color: 'text-muted-foreground', label: 'Low', icon: Info },
+        }
+
+        const statusConfig: Record<string, { label: string; variant: 'secondary' | 'outline' | 'default' | 'destructive' }> = {
+          open: { label: 'Open', variant: 'secondary' },
+          in_progress: { label: 'In Progress', variant: 'default' },
+          waiting_on_customer: { label: 'Waiting', variant: 'outline' },
+          resolved: { label: 'Resolved', variant: 'outline' },
+          closed: { label: 'Closed', variant: 'outline' },
+        }
+
+        const categoryLabels: Record<string, string> = {
+          account: 'Account', billing: 'Billing', technical: 'Technical',
+          abuse: 'Abuse', feature_request: 'Feature Request', general: 'General',
+        }
+
+        const statusOptions = ['all', 'open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']
+        const priorityOptions = ['all', 'critical', 'urgent', 'high', 'normal', 'low']
+
+        return (
         <section className="flex flex-col gap-3">
           {selectedTicket ? (
             <>
@@ -957,69 +1059,200 @@ export default function AdminPage() {
                 const t = adminTickets.find((x) => x.id === selectedTicket)
                 if (!t) return null
                 const all = [
-                  { id: t.id, message: t.message, createdAt: t.createdAt, userId: t.userId, userName: t.userName, userRole: 'user' as const },
+                  { id: t.id, message: t.message, createdAt: t.createdAt, userId: t.userId, userName: t.userName, userRole: 'user' as const, isInternal: false as const },
                   ...ticketReplies,
                 ]
+                const pConfig = priorityConfig[t.priority] ?? priorityConfig.normal
+                const PrioIcon = pConfig.icon
+                const sConfig = statusConfig[t.status] ?? statusConfig.open
+                const isSlaOverdue = t.slaTarget && new Date(t.slaTarget) < new Date() && !['resolved', 'closed'].includes(t.status)
                 return (
                   <div className="flex flex-col gap-3">
                     <Card>
                       <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <CardTitle className="text-sm font-medium">{t.subject}</CardTitle>
-                            <p className="text-xs text-muted-foreground mt-0.5">{t.userName} &middot; {formatDate(t.createdAt)}</p>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <CardTitle className="text-sm font-medium">{t.subject}</CardTitle>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {t.userName} &lt;{t.userEmail}&gt; &middot; {formatDate(t.createdAt)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {t.status === 'closed' ? (
+                                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={async () => { await adminReopenTicket(t.id); await refresh(); openTicket(t.id); toast.success('Ticket reopened') }}>
+                                  <RotateCcw className="size-3" /> Reopen
+                                </Button>
+                              ) : (
+                                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={async () => { await adminCloseTicket(t.id); await refresh(); setSelectedTicket(null); toast.success('Ticket closed') }}>
+                                  <XCircle className="size-3" /> Close
+                                </Button>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={t.status === 'open' ? 'secondary' : 'outline'}>
-                              {t.status === 'open' ? 'Open' : 'Closed'}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant={sConfig.variant as any} className="text-[10px] px-1.5 py-0">
+                              {sConfig.label}
                             </Badge>
-                            {t.status === 'open' ? (
-                              <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={async () => { await adminCloseTicket(t.id); await refresh(); setSelectedTicket(null); toast.success('Ticket closed') }}>
-                                <XCircle className="size-3" /> Close
-                              </Button>
-                            ) : (
-                              <Button size="sm" variant="outline" className="gap-1 h-7 text-xs" onClick={async () => { await adminReopenTicket(t.id); await refresh(); openTicket(t.id); toast.success('Ticket reopened') }}>
-                                Reopen
-                              </Button>
+                            <Badge variant="outline" className={`text-[10px] px-1.5 py-0 gap-0.5 ${pConfig.color}`}>
+                              <PrioIcon className="size-2.5" />
+                              {pConfig.label}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5">
+                              <Tag className="size-2.5" />
+                              {categoryLabels[t.category] ?? t.category}
+                            </Badge>
+                            {t.replyCount > 0 && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                {t.replyCount} {t.replyCount === 1 ? 'reply' : 'replies'}
+                              </Badge>
                             )}
+                            {t.assignedTo && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5 text-green-500">
+                                <UserCircle className="size-2.5" />
+                                {t.assignedName ?? 'Assigned'}
+                              </Badge>
+                            )}
+                            {isSlaOverdue && (
+                              <Badge variant="destructive" className="text-[10px] px-1.5 py-0 gap-0.5">
+                                <Clock className="size-2.5" />
+                                SLA overdue
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-wrap pt-1">
+                            {/* Priority change */}
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] text-muted-foreground">Priority:</span>
+                              <select
+                                value={t.priority}
+                                onChange={async (e) => {
+                                  await adminUpdatePriority(t.id, e.target.value)
+                                  await refresh()
+                                  openTicket(t.id)
+                                  toast.success('Priority updated')
+                                }}
+                                className="h-6 rounded border border-input bg-card px-1.5 py-0 text-[11px] text-foreground focus-visible:outline-none"
+                              >
+                                {priorityOptions.filter(p => p !== 'all').map((p) => (
+                                  <option key={p} value={p} className="bg-card text-foreground">{p}</option>
+                                ))}
+                              </select>
+                            </div>
+                            {/* Status change */}
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] text-muted-foreground">Status:</span>
+                              <select
+                                value={t.status}
+                                onChange={async (e) => {
+                                  await adminUpdateStatus(t.id, e.target.value)
+                                  await refresh()
+                                  openTicket(t.id)
+                                  toast.success('Status updated')
+                                }}
+                                className="h-6 rounded border border-input bg-card px-1.5 py-0 text-[11px] text-foreground focus-visible:outline-none"
+                              >
+                                {statusOptions.filter(s => s !== 'all').map((s) => (
+                                  <option key={s} value={s} className="bg-card text-foreground">{statusConfig[s]?.label ?? s}</option>
+                                ))}
+                              </select>
+                            </div>
+                            {/* Assignment */}
+                            <div className="flex items-center gap-1">
+                              <span className="text-[10px] text-muted-foreground">Assignee:</span>
+                              <select
+                                value={t.assignedTo ?? ''}
+                                onChange={async (e) => {
+                                  await adminAssignTicket(t.id, e.target.value || null)
+                                  await refresh()
+                                  openTicket(t.id)
+                                  toast.success('Ticket assigned')
+                                }}
+                                className="h-6 rounded border border-input bg-card px-1.5 py-0 text-[11px] text-foreground focus-visible:outline-none"
+                              >
+                                <option value="" className="bg-card text-foreground">Unassigned</option>
+                                {adminsList.map((a) => (
+                                  <option key={a.id} value={a.id} className="bg-card text-foreground">
+                                    {a.name ?? a.email}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
                           </div>
                         </div>
                       </CardHeader>
                     </Card>
 
-                    {all.map((msg, i) => (
-                      <div key={msg.id} className={`flex ${msg.userRole === 'admin' ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[80%] rounded-xl px-4 py-3 ${msg.userRole === 'admin' ? 'text-primary-foreground' : 'bg-secondary text-foreground'}`}
-                          style={msg.userRole === 'admin' ? { backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' } : {}}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs font-medium">{msg.userRole === 'admin' ? 'You' : t.userName}</span>
-                            {i === 0 && <Badge variant="outline" className="text-[10px] px-1 py-0">Original</Badge>}
+                    <div className="flex flex-col gap-3 px-1">
+                      {all.map((msg, i) => {
+                        const isAdmin = msg.userRole === 'admin'
+                        const isInternal = (msg as any).isInternal === true
+                        return (
+                          <div key={msg.id} className={`flex ${isAdmin ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[85%] rounded-xl px-4 py-3 ${
+                              isInternal
+                                ? 'bg-yellow-500/10 border border-yellow-500/30 text-foreground'
+                                : isAdmin
+                                  ? 'text-primary-foreground'
+                                  : 'bg-secondary text-foreground'
+                            }`}
+                              style={isAdmin && !isInternal ? { backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' } : {}}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                {isInternal && <EyeOff className="size-3 text-yellow-500" />}
+                                <span className="text-xs font-medium">
+                                  {isInternal ? 'Internal note' : isAdmin ? 'You (Admin)' : t.userName}
+                                </span>
+                                {i === 0 && <Badge variant="outline" className="text-[10px] px-1.5 py-0 leading-none">Original</Badge>}
+                                {isInternal && <Badge variant="outline" className="text-[10px] px-1.5 py-0 leading-none text-yellow-500 border-yellow-500/30">Internal</Badge>}
+                              </div>
+                              <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
+                              <p className="text-[10px] opacity-60 mt-1.5">{formatDate(msg.createdAt)}</p>
+                            </div>
                           </div>
-                          <p className="text-sm whitespace-pre-wrap">{msg.message}</p>
-                          <p className="text-[10px] opacity-60 mt-1">{formatDate(msg.createdAt)}</p>
-                        </div>
-                      </div>
-                    ))}
+                        )
+                      })}
+                    </div>
 
-                    {t.status === 'open' && (
-                      <div className="flex gap-2 pt-2">
-                        <textarea
-                          value={adminReplyText}
-                          onChange={(e) => setAdminReplyText(e.target.value)}
-                          placeholder="Type your reply..."
-                          rows={2}
-                          className="flex-1 min-h-[40px] rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        />
-                        <Button
-                          size="icon"
-                          className="shrink-0 self-end"
-                          disabled={adminReplySending || !adminReplyText.trim()}
-                          style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
-                          onClick={() => handleAdminReply(selectedTicket)}
-                        >
-                          <Send className="size-4" />
-                        </Button>
+                    {!['resolved', 'closed'].includes(t.status) && (
+                      <div className="flex flex-col gap-2 pt-2 border-t border-border mt-2">
+                        <div className="flex gap-2">
+                          <textarea
+                            value={adminReplyText}
+                            onChange={(e) => setAdminReplyText(e.target.value)}
+                            placeholder="Type your reply... (Enter to send, Shift+Enter for newline)"
+                            rows={2}
+                            className="flex-1 min-h-[40px] rounded-lg border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && !e.shiftKey && adminReplyText.trim()) {
+                                e.preventDefault()
+                                handleAdminReply(selectedTicket, false)
+                              }
+                            }}
+                          />
+                          <div className="flex flex-col gap-1 shrink-0">
+                            <Button
+                              size="icon"
+                              className="shrink-0"
+                              disabled={adminReplySending || !adminReplyText.trim()}
+                              style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+                              onClick={() => handleAdminReply(selectedTicket, false)}
+                              title="Send reply"
+                            >
+                              <Send className="size-4" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="outline"
+                              className="shrink-0"
+                              disabled={adminReplySending || !adminReplyText.trim()}
+                              onClick={() => handleAdminReply(selectedTicket, true)}
+                              title="Add internal note"
+                            >
+                              <EyeOff className="size-4" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1028,36 +1261,137 @@ export default function AdminPage() {
             </>
           ) : adminTickets.length === 0 ? (
             <Card>
-              <CardContent className="p-6 text-center text-sm text-muted-foreground">
-                No tickets yet.
+              <CardContent className="p-8 text-center">
+                <div className="size-10 rounded-full bg-secondary flex items-center justify-center mx-auto mb-3">
+                  <MessageSquare className="size-4 text-muted-foreground" />
+                </div>
+                <p className="text-sm font-medium">No tickets yet</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Support tickets from users will appear here.
+                </p>
               </CardContent>
             </Card>
           ) : (
-            <div className="flex flex-col gap-2">
-              {adminTickets.map((t) => (
-                <button key={t.id} onClick={() => openTicket(t.id)} className="w-full text-left">
-                  <Card className="hover:bg-secondary/30 transition-colors cursor-pointer">
-                    <CardContent className="p-4 flex items-center justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <MessageSquare className="size-3.5 text-muted-foreground shrink-0" />
-                          <p className="text-sm font-medium truncate">{t.subject}</p>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {t.userName} ({t.userEmail}) &middot; {formatDate(t.createdAt)}
-                        </p>
-                      </div>
-                      <Badge variant={t.status === 'open' ? 'secondary' : 'outline'}>
-                        {t.status === 'open' ? 'Open' : 'Closed'}
-                      </Badge>
+            <>
+              <div className="flex gap-2 flex-wrap">
+                <div className="relative flex-1 min-w-[200px]">
+                  <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <input
+                    type="text"
+                    placeholder="Search tickets..."
+                    value={ticketFilter}
+                    onChange={(e) => setTicketFilter(e.target.value)}
+                    className="w-full h-9 rounded-md border border-input bg-transparent pl-8 pr-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                </div>
+                <select
+                  value={ticketStatusFilter}
+                  onChange={(e) => setTicketStatusFilter(e.target.value as any)}
+                  className="h-9 rounded-md border border-input bg-card px-2.5 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {statusOptions.map((s) => (
+                    <option key={s} value={s} className="bg-card text-foreground">
+                      {s === 'all' ? 'All statuses' : statusConfig[s]?.label ?? s}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={ticketPriorityFilter}
+                  onChange={(e) => setTicketPriorityFilter(e.target.value as any)}
+                  className="h-9 rounded-md border border-input bg-card px-2.5 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {priorityOptions.map((p) => (
+                    <option key={p} value={p} className="bg-card text-foreground">
+                      {p === 'all' ? 'All priorities' : p}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={ticketAssignFilter}
+                  onChange={(e) => setTicketAssignFilter(e.target.value)}
+                  className="h-9 rounded-md border border-input bg-card px-2.5 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="all" className="bg-card text-foreground">All assignments</option>
+                  <option value="unassigned" className="bg-card text-foreground">Unassigned</option>
+                  {adminsList.map((a) => (
+                    <option key={a.id} value={a.id} className="bg-card text-foreground">{a.name ?? a.email}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                {filteredTickets.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                      No tickets match your filters.
                     </CardContent>
                   </Card>
-                </button>
-              ))}
-            </div>
+                ) : (
+                  filteredTickets.map((t) => {
+                    const pCfg = priorityConfig[t.priority] ?? priorityConfig.normal
+                    const PrioIcon = pCfg.icon
+                    const sCfg = statusConfig[t.status] ?? statusConfig.open
+                    const isSlaOverdue = t.slaTarget && new Date(t.slaTarget) < new Date() && !['resolved', 'closed'].includes(t.status)
+                    return (
+                    <button key={t.id} onClick={() => openTicket(t.id)} className="w-full text-left group">
+                      <Card className={`hover:bg-secondary/30 transition-colors cursor-pointer ${isSlaOverdue ? 'border-red-500/30' : ''}`}>
+                        <CardContent className="p-4 flex items-center justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <MessageSquare className="size-3.5 text-muted-foreground shrink-0" />
+                              <p className="text-sm font-medium truncate">{t.subject}</p>
+                              {t.replyCount > 0 && (
+                                <span className="text-[11px] text-muted-foreground shrink-0">
+                                  {t.replyCount} {t.replyCount === 1 ? 'reply' : 'replies'}
+                                </span>
+                              )}
+                              {t.assignedTo && t.assignedName && (
+                                <span className="text-[11px] text-green-500 shrink-0 flex items-center gap-0.5">
+                                  <UserCircle className="size-2.5" />
+                                  {t.assignedName}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                              {t.userName} &lt;{t.userEmail}&gt;
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                              {t.message}
+                            </p>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <Badge variant={sCfg.variant as any} className="text-[10px] px-1.5 py-0">
+                                {sCfg.label}
+                              </Badge>
+                              <Badge variant="outline" className={`text-[10px] px-1.5 py-0 gap-0.5 ${pCfg.color}`}>
+                                <PrioIcon className="size-2.5" />
+                                {pCfg.label}
+                              </Badge>
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5">
+                                <Tag className="size-2.5" />
+                                {categoryLabels[t.category] ?? t.category}
+                              </Badge>
+                              {isSlaOverdue && (
+                                <Badge variant="destructive" className="text-[10px] px-1.5 py-0 gap-0.5">
+                                  <Clock className="size-2.5" />
+                                  Overdue
+                                </Badge>
+                              )}
+                              <span className="text-[11px] text-muted-foreground">{formatDate(t.createdAt)}</span>
+                            </div>
+                          </div>
+                          <ChevronRight className="size-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+                        </CardContent>
+                      </Card>
+                    </button>
+                    )
+                  })
+                )}
+              </div>
+            </>
           )}
         </section>
-      )}
+        )
+      })()}
 
       {/* Users tab */}
       {tab === 'users' && (

@@ -2,7 +2,7 @@
 
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { files, user, flaggedHashes } from '@/lib/db/schema'
+import { files, user, flaggedHashes, shareLinks } from '@/lib/db/schema'
 import { and, desc, eq, or, isNull } from 'drizzle-orm'
 import { headers } from 'next/headers'
 import { revalidatePath } from 'next/cache'
@@ -243,4 +243,60 @@ export async function getStorageUsage() {
     )
 
   return userFiles.reduce((acc, f) => acc + f.size, 0)
+}
+
+export async function createShareLink(
+  fileId: string,
+  options?: { expiresAt?: Date; maxDownloads?: number },
+) {
+  const userId = await getUserId()
+  const [file] = await db
+    .select()
+    .from(files)
+    .where(and(eq(files.id, fileId), eq(files.userId, userId)))
+
+  if (!file) throw new Error('File not found')
+
+  const id = uuidv4()
+  const token = crypto.randomUUID()
+
+  await db.insert(shareLinks).values({
+    id,
+    fileId,
+    userId,
+    token,
+    expiresAt: options?.expiresAt ?? null,
+    maxDownloads: options?.maxDownloads ?? null,
+    downloadCount: 0,
+  })
+
+  await logAuditEventWithHeaders(userId, 'share_link.created', JSON.stringify({ fileId, token, expiresAt: options?.expiresAt, maxDownloads: options?.maxDownloads }))
+
+  revalidatePath('/dashboard')
+  return { id, token }
+}
+
+export async function revokeShareLink(linkId: string) {
+  const userId = await getUserId()
+  const [link] = await db
+    .select()
+    .from(shareLinks)
+    .where(and(eq(shareLinks.id, linkId), eq(shareLinks.userId, userId)))
+
+  if (!link) throw new Error('Share link not found')
+
+  await db.delete(shareLinks).where(and(eq(shareLinks.id, linkId), eq(shareLinks.userId, userId)))
+
+  await logAuditEventWithHeaders(userId, 'share_link.revoked', JSON.stringify({ linkId, fileId: link.fileId, token: link.token }))
+
+  revalidatePath('/dashboard')
+}
+
+export async function getShareLinks(fileId: string) {
+  const userId = await getUserId()
+  return db
+    .select()
+    .from(shareLinks)
+    .where(and(eq(shareLinks.fileId, fileId), eq(shareLinks.userId, userId)))
+    .orderBy(desc(shareLinks.createdAt))
 }

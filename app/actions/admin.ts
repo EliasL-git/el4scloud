@@ -3,20 +3,16 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, account, storageRequests, files, tickets, ticketReplies, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, accessCodes, takedownRequests, session as sessionTable, warnings } from '@/lib/db/schema'
+import { user, account, storageRequests, files, tickets, ticketReplies, ticketAttachments, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, accessCodes, takedownRequests, session as sessionTable, warnings } from '@/lib/db/schema'
 import { eq, desc, ilike, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
 import { recordWarning } from '@/lib/warnings'
 import { s3, S3_BUCKET } from '@/lib/s3'
 import { DeleteObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3'
-import { Resend } from 'resend'
-import { StorageApprovedEmail } from '@/components/emails/storage-approved'
-import { StorageRejectedEmail } from '@/components/emails/storage-rejected'
+import { sendMail } from '@/lib/mail'
 import { parseStorageAmount, NO_VERIFICATION_LIMIT } from '@/lib/storage'
 import crypto from 'crypto'
-
-const resend = new Resend(process.env.RESEND_API_KEY ?? '')
 
 async function assertAdmin() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -78,18 +74,18 @@ export async function approveRequest(requestId: string, approvedAmount: string, 
     .set({ storageLimit: limitBytes })
     .where(eq(user.id, req.userId))
 
-  if (process.env.RESEND_API_KEY) {
-    await resend.emails.send({
-      from: process.env.RESEND_FROM ?? 'noreply@example.com',
-      to: u.email,
-      subject: 'Storage upgrade approved',
-      react: StorageApprovedEmail({
-        name: u.name,
-        requestedAmount: req.amount,
-        approvedAmount,
-        adminNote: adminNote ?? undefined,
-      }),
-    })
+  try {
+    const { renderToString } = await import('react-dom/server')
+    const { StorageApprovedEmail } = await import('@/components/emails/storage-approved')
+    const html = renderToString(StorageApprovedEmail({
+      name: u.name,
+      requestedAmount: req.amount,
+      approvedAmount,
+      adminNote: adminNote ?? undefined,
+    }))
+    await sendMail({ to: u.email, subject: 'Storage upgrade approved', html })
+  } catch (err: any) {
+    console.error('[admin] Failed to send approval email:', err?.message ?? err)
   }
 
   await logAuditEventWithHeaders(adminId, 'admin.storage_request_approved', JSON.stringify({ requestId, approvedAmount, targetUserId: req.userId }))
@@ -118,17 +114,17 @@ export async function rejectRequest(requestId: string, adminNote?: string) {
     .set({ status: 'rejected', adminNote: adminNote ?? null, updatedAt: new Date() })
     .where(eq(storageRequests.id, requestId))
 
-  if (process.env.RESEND_API_KEY) {
-    await resend.emails.send({
-      from: process.env.RESEND_FROM ?? 'noreply@example.com',
-      to: u.email,
-      subject: 'Storage upgrade request',
-      react: StorageRejectedEmail({
-        name: u.name,
-        requestedAmount: req.amount,
-        adminNote: adminNote ?? undefined,
-      }),
-    })
+  try {
+    const { renderToString } = await import('react-dom/server')
+    const { StorageRejectedEmail } = await import('@/components/emails/storage-rejected')
+    const html = renderToString(StorageRejectedEmail({
+      name: u.name,
+      requestedAmount: req.amount,
+      adminNote: adminNote ?? undefined,
+    }))
+    await sendMail({ to: u.email, subject: 'Storage upgrade request', html })
+  } catch (err: any) {
+    console.error('[admin] Failed to send rejection email:', err?.message ?? err)
   }
 
   await logAuditEventWithHeaders(adminId, 'admin.storage_request_rejected', JSON.stringify({ requestId, targetUserId: req.userId }))
@@ -180,21 +176,57 @@ export async function revokePublicFiles(userId: string) {
 
 export async function adminGetTickets() {
   const adminId = await assertAdmin()
-  return db
-    .select({
-      id: tickets.id,
-      subject: tickets.subject,
-      message: tickets.message,
-      status: tickets.status,
-      createdAt: tickets.createdAt,
-      updatedAt: tickets.updatedAt,
-      userName: user.name,
-      userEmail: user.email,
-      userId: tickets.userId,
-    })
-    .from(tickets)
-    .innerJoin(user, eq(tickets.userId, user.id))
-    .orderBy(desc(tickets.createdAt))
+
+  const result = await db.execute<{
+    id: string
+    subject: string
+    message: string
+    status: string
+    priority: string
+    category: string
+    assignedTo: string | null
+    assignedName: string | null
+    createdAt: Date
+    updatedAt: Date
+    slaTarget: Date | null
+    firstResponseAt: Date | null
+    userName: string
+    userEmail: string
+    userId: string
+    replyCount: number
+  }>(sql`
+    SELECT
+      tickets.id,
+      tickets.subject,
+      tickets.message,
+      tickets.status,
+      tickets.priority,
+      tickets.category,
+      tickets."assignedTo",
+      assignee.name AS "assignedName",
+      tickets."createdAt",
+      tickets."updatedAt",
+      tickets."slaTarget",
+      tickets."firstResponseAt",
+      "user".name AS "userName",
+      "user".email AS "userEmail",
+      tickets."userId",
+      (SELECT COUNT(*)::int FROM ticket_replies WHERE ticket_replies."ticketId" = tickets.id AND ticket_replies."isInternal" = false) AS "replyCount"
+    FROM tickets
+    INNER JOIN "user" ON "user".id = tickets."userId"
+    LEFT JOIN "user" AS assignee ON assignee.id = tickets."assignedTo"
+    ORDER BY
+      CASE tickets.priority
+        WHEN 'critical' THEN 0
+        WHEN 'urgent' THEN 1
+        WHEN 'high' THEN 2
+        WHEN 'normal' THEN 3
+        WHEN 'low' THEN 4
+      END,
+      tickets."createdAt" DESC
+  `)
+
+  return result.rows ?? []
 }
 
 export async function adminGetTicketReplies(ticketId: string) {
@@ -207,6 +239,7 @@ export async function adminGetTicketReplies(ticketId: string) {
       userId: ticketReplies.userId,
       userName: user.name,
       userRole: user.role,
+      isInternal: ticketReplies.isInternal,
     })
     .from(ticketReplies)
     .innerJoin(user, eq(ticketReplies.userId, user.id))
@@ -214,21 +247,82 @@ export async function adminGetTicketReplies(ticketId: string) {
     .orderBy(ticketReplies.createdAt)
 }
 
-export async function adminReplyToTicket(ticketId: string, message: string) {
+export async function adminReplyToTicket(ticketId: string, message: string, isInternal = false) {
   const adminId = await assertAdmin()
+
+  if (!isInternal) {
+    const [current] = await db
+      .select({ firstResponseAt: tickets.firstResponseAt, status: tickets.status })
+      .from(tickets)
+      .where(eq(tickets.id, ticketId))
+
+    if (current && !current.firstResponseAt) {
+      const now = new Date()
+      await db
+        .update(tickets)
+        .set({
+          firstResponseAt: now,
+          status: current.status === 'open' ? 'in_progress' : current.status,
+          updatedAt: now,
+        })
+        .where(eq(tickets.id, ticketId))
+    } else {
+      await db
+        .update(tickets)
+        .set({ status: 'in_progress', updatedAt: new Date() })
+        .where(eq(tickets.id, ticketId))
+    }
+  } else {
+    await db
+      .update(tickets)
+      .set({ updatedAt: new Date() })
+      .where(eq(tickets.id, ticketId))
+  }
 
   await db.insert(ticketReplies).values({
     id: crypto.randomUUID(),
     ticketId,
-    userId: (await auth.api.getSession({ headers: await headers() }))!.user!.id,
+    userId: adminId,
     message,
+    isInternal,
   })
-  await db
-    .update(tickets)
-    .set({ updatedAt: new Date() })
-    .where(eq(tickets.id, ticketId))
 
-  await logAuditEventWithHeaders(adminId, 'admin.ticket_replied', JSON.stringify({ ticketId }))
+  await logAuditEventWithHeaders(
+    adminId,
+    isInternal ? 'admin.ticket_internal_note' : 'admin.ticket_replied',
+    JSON.stringify({ ticketId, isInternal }),
+  )
+
+  if (!isInternal) {
+    try {
+      const [ticket] = await db
+        .select({ userId: tickets.userId, subject: tickets.subject, priority: tickets.priority })
+        .from(tickets)
+        .where(eq(tickets.id, ticketId))
+
+      if (ticket) {
+        const [owner] = await db
+          .select({ name: user.name, email: user.email })
+          .from(user)
+          .where(eq(user.id, ticket.userId))
+
+        if (owner?.email) {
+          const { renderToString } = await import('react-dom/server')
+          const { TicketReplyEmail } = await import('@/components/emails/ticket-reply')
+          const html = renderToString(TicketReplyEmail({
+            name: owner.name ?? owner.email,
+            subject: ticket.subject,
+            message,
+            ticketId,
+          }))
+          await sendMail({ to: owner.email, subject: `Re: ${ticket.subject}`, html })
+        }
+      }
+    } catch (err: any) {
+      console.error('[admin] Failed to send ticket reply email:', err?.message ?? err)
+    }
+  }
+
   return { ok: true }
 }
 
@@ -250,6 +344,156 @@ export async function adminReopenTicket(ticketId: string) {
     .where(eq(tickets.id, ticketId))
   await logAuditEventWithHeaders(adminId, 'admin.ticket_reopened', JSON.stringify({ ticketId }))
   return { ok: true }
+}
+
+export async function adminAssignTicket(ticketId: string, assignToUserId: string | null) {
+  const adminId = await assertAdmin()
+
+  if (assignToUserId) {
+    const [assignee] = await db
+      .select({ role: user.role })
+      .from(user)
+      .where(eq(user.id, assignToUserId))
+
+    if (assignee?.role !== 'admin') throw new Error('Can only assign to admins')
+  }
+
+  await db
+    .update(tickets)
+    .set({ assignedTo: assignToUserId, updatedAt: new Date() })
+    .where(eq(tickets.id, ticketId))
+
+  await logAuditEventWithHeaders(adminId, 'admin.ticket_assigned', JSON.stringify({
+    ticketId,
+    assignedTo: assignToUserId,
+  }))
+
+  return { ok: true }
+}
+
+export async function adminUpdatePriority(ticketId: string, priority: string) {
+  const adminId = await assertAdmin()
+
+  const validPriorities = ['low', 'normal', 'high', 'urgent', 'critical']
+  if (!validPriorities.includes(priority)) throw new Error('Invalid priority')
+
+  await db
+    .update(tickets)
+    .set({ priority, updatedAt: new Date() })
+    .where(eq(tickets.id, ticketId))
+
+  await logAuditEventWithHeaders(adminId, 'admin.ticket_priority_changed', JSON.stringify({
+    ticketId,
+    priority,
+  }))
+
+  return { ok: true }
+}
+
+export async function adminUpdateStatus(ticketId: string, status: string) {
+  const adminId = await assertAdmin()
+
+  const validStatuses = ['open', 'in_progress', 'waiting_on_customer', 'resolved', 'closed']
+  if (!validStatuses.includes(status)) throw new Error('Invalid status')
+
+  await db
+    .update(tickets)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(tickets.id, ticketId))
+
+  await logAuditEventWithHeaders(adminId, 'admin.ticket_status_changed', JSON.stringify({
+    ticketId,
+    status,
+  }))
+
+  return { ok: true }
+}
+
+export async function adminGetAdmins() {
+  const adminId = await assertAdmin()
+  return db
+    .select({ id: user.id, name: user.name, email: user.email })
+    .from(user)
+    .where(eq(user.role, 'admin'))
+}
+
+export async function adminGetTicketStats() {
+  const adminId = await assertAdmin()
+
+  const counts = await db.execute<{
+    status: string
+    count: number
+  }>(sql`
+    SELECT status, COUNT(*)::int AS count
+    FROM tickets
+    GROUP BY status
+  `)
+
+  const priorityCounts = await db.execute<{
+    priority: string
+    count: number
+  }>(sql`
+    SELECT priority, COUNT(*)::int AS count
+    FROM tickets
+    WHERE status NOT IN ('resolved', 'closed')
+    GROUP BY priority
+  `)
+
+  const overdueCount = await db.execute<{ count: number }>(sql`
+    SELECT COUNT(*)::int AS count
+    FROM tickets
+    WHERE status NOT IN ('resolved', 'closed')
+      AND "slaTarget" IS NOT NULL
+      AND "slaTarget" < NOW()
+  `)
+
+  const unassignedCount = await db.execute<{ count: number }>(sql`
+    SELECT COUNT(*)::int AS count
+    FROM tickets
+    WHERE status NOT IN ('resolved', 'closed')
+      AND "assignedTo" IS NULL
+  `)
+
+  const statusMap: Record<string, number> = {}
+  for (const row of counts.rows ?? []) {
+    statusMap[row.status] = row.count
+  }
+
+  const priorityMap: Record<string, number> = {}
+  for (const row of priorityCounts.rows ?? []) {
+    priorityMap[row.priority] = row.count
+  }
+
+  return {
+    byStatus: statusMap,
+    byPriority: priorityMap,
+    overdue: overdueCount.rows?.[0]?.count ?? 0,
+    unassigned: unassignedCount.rows?.[0]?.count ?? 0,
+    total: Object.values(statusMap).reduce((a, b) => a + b, 0),
+  }
+}
+
+export async function adminGetTicketAttachments(ticketId: string) {
+  const adminId = await assertAdmin()
+
+  const result = await db.execute<{
+    id: string
+    fileName: string
+    fileSize: number
+    mimeType: string
+    createdAt: Date
+    uploadedByName: string
+  }>(sql`
+    SELECT
+      ta.id, ta."fileName", ta."fileSize", ta."mimeType", ta."createdAt",
+      "user".name AS "uploadedByName"
+    FROM ticket_attachments ta
+    INNER JOIN "user" ON "user".id = ta."uploadedBy"
+    WHERE ta."ticketId" = ${ticketId}
+    ORDER BY ta."createdAt"
+  `)
+
+  return result.rows ?? []
 }
 
 export async function suspendUser(userId: string, reason: string, appealable: boolean, type: 'suspended' | 'terminated' = 'suspended') {

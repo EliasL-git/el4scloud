@@ -3,4 +3,6 @@ node_modules
 .git
 .env
 .gitignore
-README.md
+documentation/
+examples/
+scripts/

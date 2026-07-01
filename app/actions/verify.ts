@@ -7,6 +7,7 @@ import { eq } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { auth } from '@/lib/auth'
 import { NO_VERIFICATION_LIMIT, MANUAL_VERIFICATION_LIMIT } from '@/lib/storage'
+import { sendMail } from '@/lib/mail'
 
 export async function resendVerificationEmail(email: string) {
   console.log('[verify:resend] Request for:', email)
@@ -154,30 +155,13 @@ export async function sendUpgradeCode(email: string) {
     expiresAt,
   })
 
-  // Send email via Resend
-  const apiKey = process.env.RESEND_API_KEY
-  if (!apiKey) {
-    console.error('[verify:sendUpgradeCode] RESEND_API_KEY not set')
-    return { ok: false, error: 'Email service not configured.' }
-  }
-  const from = process.env.RESEND_FROM || 'noreply@example.com'
-
   try {
-    const { Resend } = await import('resend')
+    const { renderToString } = await import('react-dom/server')
     const { VerifyEmailEmail } = await import('@/components/emails/verify-email')
-    const resend = new Resend(apiKey)
-    const { error } = await resend.emails.send({
-      from,
-      to: email,
-      subject: 'Upgrade your storage — verification code',
-      react: VerifyEmailEmail({ username: u.name, code }),
-    })
-    if (error) {
-      console.error('[verify:sendUpgradeCode] Resend error:', JSON.stringify(error))
-      return { ok: false, error: 'Failed to send email.' }
-    }
+    const html = renderToString(VerifyEmailEmail({ username: u.name, code }))
+    await sendMail({ to: email, subject: 'Upgrade your storage — verification code', html })
   } catch (err: any) {
-    console.error('[verify:sendUpgradeCode] Exception:', err?.message ?? err)
+    console.error('[verify:sendUpgradeCode] Failed:', err?.message ?? err)
     return { ok: false, error: 'Failed to send email.' }
   }
 

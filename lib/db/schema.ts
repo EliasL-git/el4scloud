@@ -132,7 +132,12 @@ export const tickets = pgTable('tickets', {
   userId: text('userId').notNull(),
   subject: text('subject').notNull(),
   message: text('message').notNull(),
-  status: text('status').notNull().default('open'), // open | closed
+  status: text('status').notNull().default('open'), // open | in_progress | waiting_on_customer | resolved | closed
+  priority: text('priority').notNull().default('normal'), // low | normal | high | urgent | critical
+  category: text('category').notNull().default('general'), // account | billing | technical | abuse | feature_request | general
+  assignedTo: text('assignedTo'), // admin user id
+  slaTarget: timestamp('slaTarget'), // expected response due time
+  firstResponseAt: timestamp('firstResponseAt'), // when admin first replied
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
@@ -164,6 +169,7 @@ export const ticketReplies = pgTable('ticket_replies', {
     .references(() => tickets.id, { onDelete: 'cascade' }),
   userId: text('userId').notNull(),
   message: text('message').notNull(),
+  isInternal: boolean('isInternal').notNull().default(false), // admin-only internal note
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 
@@ -180,6 +186,17 @@ export const accessCodes = pgTable('access_codes', {
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
 
+export const shareLinks = pgTable('share_links', {
+  id: text('id').primaryKey(),
+  fileId: text('fileId').notNull(),
+  userId: text('userId').notNull(),
+  token: text('token').notNull().unique(),
+  expiresAt: timestamp('expiresAt'),
+  maxDownloads: integer('maxDownloads'),
+  downloadCount: integer('downloadCount').notNull().default(0),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
 export const takedownRequests = pgTable('takedown_requests', {
   id: text('id').primaryKey(),
   fileId: text('fileId'),
@@ -192,6 +209,21 @@ export const takedownRequests = pgTable('takedown_requests', {
   adminNote: text('adminNote'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+})
+
+export const ticketAttachments = pgTable('ticket_attachments', {
+  id: text('id').primaryKey(),
+  ticketId: text('ticketId')
+    .notNull()
+    .references(() => tickets.id, { onDelete: 'cascade' }),
+  replyId: text('replyId')
+    .references(() => ticketReplies.id, { onDelete: 'set null' }),
+  fileName: text('fileName').notNull(),
+  fileSize: bigint('fileSize', { mode: 'number' }).notNull(),
+  mimeType: text('mimeType').notNull(),
+  key: text('key').notNull(), // S3 object key
+  uploadedBy: text('uploadedBy').notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 
 export const warnings = pgTable('warnings', {
