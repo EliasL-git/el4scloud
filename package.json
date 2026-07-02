@@ -10,7 +10,8 @@
     "migrate": "node --env-file .env scripts/migrate.mjs",
     "admin:promote": "node --env-file .env scripts/admin-promote.mjs",
     "lookup": "node scripts/user-lookup.mjs",
-    "reset": "node --env-file .env scripts/reset-password.mjs"
+    "reset": "node --env-file .env scripts/reset-password.mjs",
+    "unban": "node --env-file .env scripts/unban.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1073.0",
