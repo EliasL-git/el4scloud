@@ -18,6 +18,7 @@ export const user = pgTable('user', {
   terminatedAt: timestamp('terminatedAt'),
   warningCount: integer('warningCount').notNull().default(0),
   appealable: boolean('appealable').notNull().default(true),
+  introductionText: text('introductionText'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
@@ -234,6 +235,14 @@ export const ticketAttachments = pgTable('ticket_attachments', {
   mimeType: text('mimeType').notNull(),
   key: text('key').notNull(), // S3 object key
   uploadedBy: text('uploadedBy').notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
+export const aiUsage = pgTable('ai_usage', {
+  id: text('id').primaryKey(),
+  userId: text('userId').notNull(),
+  model: text('model').notNull(),
+  cost: real('cost').notNull().default(0),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 

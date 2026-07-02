@@ -4,14 +4,15 @@ import { useEffect, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import Link from 'next/link'
-import { ArrowLeft, BookOpen, Upload, Download, LifeBuoy } from 'lucide-react'
+import { ArrowLeft, BookOpen, Upload, Download, LifeBuoy, Sparkles } from 'lucide-react'
 
-type Tab = 'overview' | 'upload' | 'download' | 'support'
+type Tab = 'overview' | 'upload' | 'download' | 'ai' | 'support'
 
 const tabs: { id: Tab; label: string; icon: typeof BookOpen; file: string }[] = [
   { id: 'overview', label: 'Overview', icon: BookOpen, file: 'overview.md' },
   { id: 'upload', label: 'Upload', icon: Upload, file: 'upload.md' },
   { id: 'download', label: 'Download', icon: Download, file: 'download.md' },
+  { id: 'ai', label: 'AI Chat', icon: Sparkles, file: 'ai.md' },
   { id: 'support', label: 'Support', icon: LifeBuoy, file: 'support.md' },
 ]
 

@@ -44,6 +44,10 @@ import {
   rejectTakedown,
   getScanStats,
   getUserStats,
+  getPendingIntroductions,
+  approveIntroduction,
+  rejectIntroduction,
+  resetIntroduction,
 } from '@/app/actions/admin'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -60,6 +64,7 @@ const sidebarTabs: { id: Tab; label: string; icon: React.ElementType; badge?: (c
   { id: 'tickets', label: 'Tickets', icon: MessageSquare },
   { id: 'appeals', label: 'Appeals', icon: Scale, badge: (n) => n },
   { id: 'files', label: 'Files', icon: FileText },
+  { id: 'introductions', label: 'Introductions', icon: UserPlus, badge: (n) => n },
   { id: 'deletions', label: 'Deletion Requests', icon: Trash2, badge: (n) => n },
   { id: 'audit', label: 'Audit Log', icon: ClipboardList },
   { id: 'access-codes', label: 'Access Codes', icon: Key },
@@ -145,6 +150,7 @@ export default function AdminPage() {
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([])
   const [accessCodesList, setAccessCodesList] = useState<Awaited<ReturnType<typeof getAccessCodes>>>([])
   const [takedownList, setTakedownList] = useState<Awaited<ReturnType<typeof getTakedownRequests>>>([])
+  const [pendingIntros, setPendingIntros] = useState<Awaited<ReturnType<typeof getPendingIntroductions>>>([])
   const [newCodeMaxUses, setNewCodeMaxUses] = useState(1)
   const [newCodeExpires, setNewCodeExpires] = useState('')
   const [newCodeNote, setNewCodeNote] = useState('')
@@ -165,10 +171,11 @@ export default function AdminPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [u, r, t, ap, dr, al, cron, ac, td, ss, us, ts, ad] = await Promise.all([
+    const [u, r, t, ap, dr, al, cron, ac, td, ss, us, ts, ad, pi] = await Promise.all([
       getUsers(), getRequests(), adminGetTickets(), getAppeals(), getDeletionRequests(),
       getAuditLogs({ limit: 200 }), getLastCronRun(), getAccessCodes(), getTakedownRequests(),
       getScanStats(), getUserStats(), adminGetTicketStats(), adminGetAdmins(),
+      getPendingIntroductions(),
     ])
     setUsers(u)
     setRequests(r)
@@ -183,6 +190,7 @@ export default function AdminPage() {
     setUserStats(us)
     setTicketStats(ts)
     setAdminsList(ad)
+    setPendingIntros(pi)
     setLoading(false)
   }, [])
 
@@ -1523,6 +1531,14 @@ export default function AdminPage() {
                   Reset verification
                 </Button>
 
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs"
+                  onClick={() => { handleAction(selectedUser.id, 'reset-intro', () => resetIntroduction(selectedUser.id), 'Introduction reset'); setSelectedUser(null) }}
+                  disabled={processing[`reset-intro-${selectedUser.id}`]}
+                >
+                  <RotateCcw className="size-3" />
+                  Reset intro
+                </Button>
+
                 <Button size="sm" variant="outline" className="gap-1 h-7 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
                   onClick={() => { handleAction(selectedUser.id, 'delete', () => deleteUser(selectedUser.id), 'User deleted'); setSelectedUser(null) }}
                   disabled={processing[`delete-${selectedUser.id}`]}
@@ -1776,6 +1792,78 @@ export default function AdminPage() {
                         </Button>
                       </div>
                     )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </section>
+      )}
+
+      {tab === 'introductions' && (
+        <section className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground">
+            Users whose AI-verified introduction was rejected. Review their text and approve or reject.
+          </p>
+          {pendingIntros.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">
+                No pending introductions.
+              </CardContent>
+            </Card>
+          ) : (
+            pendingIntros.map((u) => (
+              <Card key={u.id}>
+                <CardContent className="p-4 flex flex-col gap-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{u.name}</span>
+                        <span className="text-xs text-muted-foreground">{u.email}</span>
+                      </div>
+                      {u.introductionText && (
+                        <div className="mt-2 rounded-lg bg-secondary/50 p-3 text-xs leading-relaxed whitespace-pre-wrap">
+                          {u.introductionText}
+                        </div>
+                      )}
+                      {u.suspensionReason && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          <span className="text-destructive">AI:</span> {u.suspensionReason.replace('AI rejected: ', '')}
+                        </p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-1">{formatDate(u.createdAt)}</p>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <Button
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={async () => {
+                          try {
+                            await approveIntroduction(u.id)
+                            toast.success('Introduction approved')
+                            await refresh()
+                          } catch { toast.error('Failed') }
+                        }}
+                      >
+                        <Check className="size-3.5" />
+                        Approve
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 text-destructive border-destructive/40"
+                        onClick={async () => {
+                          try {
+                            await rejectIntroduction(u.id)
+                            toast.success('Introduction rejected')
+                            await refresh()
+                          } catch { toast.error('Failed') }
+                        }}
+                      >
+                        <X className="size-3.5" />
+                        Reject
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

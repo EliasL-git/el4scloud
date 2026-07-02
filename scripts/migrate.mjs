@@ -268,6 +268,29 @@ const statements = [
   `CREATE INDEX IF NOT EXISTS "files_folderId_idx" ON "files"("folderId")`,
 
   `ALTER TABLE "share_links" ADD COLUMN IF NOT EXISTS "passwordHash" TEXT`,
+
+  `CREATE TABLE IF NOT EXISTS "ai_usage" (
+    "id"               TEXT PRIMARY KEY,
+    "userId"           TEXT NOT NULL,
+    "model"            TEXT NOT NULL,
+    "createdAt"        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `ALTER TABLE "ai_usage" ADD COLUMN IF NOT EXISTS "cost" REAL NOT NULL DEFAULT 0`,
+  `ALTER TABLE "ai_usage" DROP COLUMN IF EXISTS "credits"`,
+  `ALTER TABLE "ai_usage" DROP COLUMN IF EXISTS "promptTokens"`,
+  `ALTER TABLE "ai_usage" DROP COLUMN IF EXISTS "completionTokens"`,
+  `ALTER TABLE "ai_usage" DROP COLUMN IF EXISTS "totalTokens"`,
+
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "introductionText" TEXT`,
+
+  `ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "priority" TEXT NOT NULL DEFAULT 'normal'`,
+  `ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "category" TEXT NOT NULL DEFAULT 'general'`,
+  `ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "assignedTo" TEXT`,
+  `ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "slaTarget" TIMESTAMPTZ`,
+  `ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "firstResponseAt" TIMESTAMPTZ`,
+  `ALTER TABLE "ticket_replies" ADD COLUMN IF NOT EXISTS "isInternal" BOOLEAN NOT NULL DEFAULT FALSE`,
+  `CREATE INDEX IF NOT EXISTS "ai_usage_userId_idx" ON "ai_usage"("userId")`,
+  `CREATE INDEX IF NOT EXISTS "ai_usage_createdAt_idx" ON "ai_usage"("createdAt")`,
 ]
 
 async function migrate() {

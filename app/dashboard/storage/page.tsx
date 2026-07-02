@@ -6,17 +6,26 @@ import { getAccountStatus } from '@/app/actions/warnings'
 import { FileUploader } from '@/components/dashboard/file-uploader'
 import { FileManager } from '@/components/dashboard/file-manager'
 import { StatsCards } from '@/components/dashboard/stats-cards'
-import { Separator } from '@/components/ui/separator'
 import { Card, CardContent } from '@/components/ui/card'
 import { Toaster } from '@/components/ui/sonner'
 import { ViolationWarningDialog } from '@/components/dashboard/violation-warning-dialog'
 import { WarningBanner } from '@/components/dashboard/warning-banner'
-import { HardDrive, IdCard } from 'lucide-react'
+import { HardDrive, IdCard, HardDriveUpload, Files, LayoutDashboard, Upload } from 'lucide-react'
 import { HC_STORAGE_LIMIT } from '@/lib/storage'
+import { cn } from '@/lib/utils'
+
+type Tab = 'overview' | 'upload' | 'files'
+
+const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'upload', label: 'Upload', icon: Upload },
+  { id: 'files', label: 'Files', icon: Files },
+]
 
 type Stats = Awaited<ReturnType<typeof getFileStats>>
 
 export default function StoragePage() {
+  const [tab, setTab] = useState<Tab>('overview')
   const [stats, setStats] = useState<Stats>({
     totalFiles: 0,
     totalSize: 0,
@@ -51,7 +60,6 @@ export default function StoragePage() {
   }, [refresh])
 
   const handleWarningClose = async () => {
-    const prev = warnedInfo
     setWarnedInfo(null)
     await refresh()
     const status = await getAccountStatus()
@@ -92,65 +100,126 @@ export default function StoragePage() {
           onDismiss={handleBannerDismiss}
         />
       )}
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Storage</h1>
+
+      <div className="hidden lg:block">
+        <h1 className="text-xl font-semibold tracking-tight flex items-center gap-2">
+          <HardDrive className="size-5" />
+          Storage
+        </h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           {isSuspended ? 'You can download your data. Upload is disabled.' : 'Upload and manage your files.'}
         </p>
       </div>
 
-      <StatsCards stats={stats} storageLimit={storageLimit} />
-
-      {storageLimit > 0 && storageLimit < HC_STORAGE_LIMIT && (
-        <Card>
-          <CardContent className="p-6 flex items-start gap-4">
-            <div className="size-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
-              <IdCard className="size-5 text-muted-foreground" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-semibold">Verify your identity</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Please verify your identity in order to unlock higher tiers!
-              </p>
-              <a
-                href="/dashboard/settings"
-                className="inline-flex items-center gap-1 text-sm font-medium mt-2 underline underline-offset-2 hover:text-foreground transition-colors"
-              >
-                Go to settings
-              </a>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {storageLimit === 0 && (
-        <Card>
-          <CardContent className="p-6 flex flex-col items-center gap-3 text-center">
-            <HardDrive className="size-8 text-muted-foreground" />
-            <div>
-              <h3 className="text-sm font-semibold">No storage allocated yet</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                You need to apply for storage before you can upload files.{' '}
-                Use the <strong>Need more storage? Apply.</strong> link in the footer to request storage from an admin.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {!isSuspended && storageLimit > 0 && (
-        <div className="flex flex-col gap-4">
-          <h2 className="text-sm font-medium text-foreground">Upload files</h2>
-          <FileUploader onUploadComplete={refresh} onWarningDismissed={handleFileUploaderWarningDismissed} />
-        </div>
-      )}
-
-      <Separator />
-
-      <div className="flex flex-col gap-4">
-        <h2 className="text-sm font-medium text-foreground">Your files</h2>
-        <FileManager onRefresh={refresh} />
+      <div className="flex gap-2 border-b border-border pb-0.5 overflow-x-auto">
+        {tabs.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={cn(
+              'flex items-center gap-1.5 px-3 py-2 text-sm border-b-2 transition-colors shrink-0',
+              tab === id
+                ? 'border-foreground text-foreground font-medium'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Icon className="size-4" />
+            {label}
+          </button>
+        ))}
       </div>
+
+      {/* ===== OVERVIEW ===== */}
+      {tab === 'overview' && (
+        <section className="flex flex-col gap-6">
+          <StatsCards stats={stats} storageLimit={storageLimit} />
+
+          {storageLimit > 0 && storageLimit < HC_STORAGE_LIMIT && (
+            <Card>
+              <CardContent className="p-6 flex items-start gap-4">
+                <div className="size-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
+                  <IdCard className="size-5 text-muted-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold">Verify your identity</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Please verify your identity in order to unlock higher tiers!
+                  </p>
+                  <a
+                    href="/dashboard/settings"
+                    className="inline-flex items-center gap-1 text-sm font-medium mt-2 underline underline-offset-2 hover:text-foreground transition-colors"
+                  >
+                    Go to settings
+                  </a>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {storageLimit === 0 && (
+            <Card>
+              <CardContent className="p-6 flex flex-col items-center gap-3 text-center">
+                <HardDrive className="size-8 text-muted-foreground" />
+                <div>
+                  <h3 className="text-sm font-semibold">No storage allocated yet</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    You need to apply for storage before you can upload files.{' '}
+                    Use the <strong>Need more storage? Apply.</strong> link in the footer to request storage from an admin.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </section>
+      )}
+
+      {/* ===== UPLOAD ===== */}
+      {tab === 'upload' && (
+        <section>
+          {isSuspended ? (
+            <Card>
+              <CardContent className="p-6 flex flex-col items-center gap-3 text-center">
+                <HardDriveUpload className="size-8 text-muted-foreground" />
+                <div>
+                  <h3 className="text-sm font-semibold">Upload disabled</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Your account has been suspended. You can download your data but cannot upload new files.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : storageLimit === 0 ? (
+            <Card>
+              <CardContent className="p-6 flex flex-col items-center gap-3 text-center">
+                <HardDrive className="size-8 text-muted-foreground" />
+                <div>
+                  <h3 className="text-sm font-semibold">No storage allocated</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    You need to apply for storage before you can upload files.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <p className="text-sm text-muted-foreground">
+                Drag and drop files or click to browse. Max upload size is determined by your storage quota.
+              </p>
+              <FileUploader onUploadComplete={refresh} onWarningDismissed={handleFileUploaderWarningDismissed} />
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ===== FILES ===== */}
+      {tab === 'files' && (
+        <section className="flex flex-col gap-4">
+          <p className="text-sm text-muted-foreground">
+            Browse, download, and manage your uploaded files.
+          </p>
+          <FileManager onRefresh={refresh} />
+        </section>
+      )}
 
       <Toaster />
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users } from 'lucide-react'
+import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users, Sparkles } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -22,6 +22,7 @@ import {
 
 const serviceNavItems = [
   { href: '/dashboard/storage', label: 'Storage', icon: HardDrive },
+  { href: '/dashboard/ai', label: 'AI Chat', icon: Sparkles },
 ]
 
 const accountNavItems = [

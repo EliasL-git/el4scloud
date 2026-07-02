@@ -25,11 +25,16 @@ export default async function DashboardLayout({
       appealable: user.appealable,
       agreedToTerms: user.agreedToTerms,
       storageLimit: user.storageLimit,
+      emailVerified: user.emailVerified,
     })
     .from(user)
     .where(eq(user.id, session.user.id))
 
   if (!u) redirect('/sign-in')
+
+  if (process.env.NO_EMAIL === 'true' && !u.emailVerified && !u.banned) {
+    redirect('/introduction')
+  }
 
   if (!u?.agreedToTerms) {
     await db

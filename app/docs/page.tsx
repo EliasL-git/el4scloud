@@ -6,6 +6,7 @@ const markdownFiles = [
   'overview.md',
   'upload.md',
   'download.md',
+  'ai.md',
   'support.md',
 ]
 

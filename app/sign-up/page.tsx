@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { register } from '@/app/actions/register'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { HardDrive, Mail, Loader2 } from 'lucide-react'
 
 export default function SignUpPage() {
+  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
@@ -50,6 +52,10 @@ export default function SignUpPage() {
       return
     }
 
+    if ('needsIntro' in result && result.needsIntro) {
+      router.push('/introduction')
+      return
+    }
     setRegisteredEmail(email)
     setSuccess(true)
   }

@@ -903,6 +903,51 @@ export async function rejectTakedown(requestId: string, adminNote?: string) {
   return { ok: true }
 }
 
+export async function getPendingIntroductions() {
+  const adminId = await assertAdmin()
+  if (process.env.NO_EMAIL !== 'true') return []
+  return db
+    .select()
+    .from(user)
+    .where(and(eq(user.banned, true), eq(user.suspensionType, 'pending_intro')))
+    .orderBy(user.createdAt)
+}
+
+export async function approveIntroduction(userId: string) {
+  const adminId = await assertAdmin()
+  const [u] = await db
+    .select({ introductionText: user.introductionText })
+    .from(user)
+    .where(eq(user.id, userId))
+  if (!u) throw new Error('User not found')
+  await db
+    .update(user)
+    .set({ emailVerified: true, banned: false, suspensionType: null, suspensionReason: null })
+    .where(eq(user.id, userId))
+  await logAuditEventWithHeaders(adminId, 'admin.introduction_approved', JSON.stringify({ targetUserId: userId }))
+  return { ok: true }
+}
+
+export async function rejectIntroduction(userId: string) {
+  const adminId = await assertAdmin()
+  await db
+    .update(user)
+    .set({ suspensionType: 'suspended', suspensionReason: 'Introduction rejected by admin.' })
+    .where(eq(user.id, userId))
+  await logAuditEventWithHeaders(adminId, 'admin.introduction_rejected', JSON.stringify({ targetUserId: userId }))
+  return { ok: true }
+}
+
+export async function resetIntroduction(userId: string) {
+  const adminId = await assertAdmin()
+  await db
+    .update(user)
+    .set({ emailVerified: false, banned: false, suspensionType: null, suspensionReason: null, introductionText: null })
+    .where(eq(user.id, userId))
+  await logAuditEventWithHeaders(adminId, 'admin.introduction_reset', JSON.stringify({ targetUserId: userId }))
+  return { ok: true }
+}
+
 export async function deleteUser(userId: string) {
   const adminId = await assertAdmin()
 

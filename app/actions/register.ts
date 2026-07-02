@@ -43,21 +43,23 @@ export async function register(data: {
     password: hashedPassword,
   })
 
-  try {
-    const hdrs = await headers()
-    const cleanHeaders = new Headers(hdrs)
-    cleanHeaders.delete('cookie')
-    await auth.api.sendVerificationEmail({
-      headers: cleanHeaders,
-      body: { email: data.email, callbackURL: '/dashboard' },
-    })
-  } catch (err: any) {
-    console.error('[register] Failed to send verification email:', err?.message ?? err)
+  const noEmail = process.env.NO_EMAIL === 'true'
+
+  if (!noEmail) {
+    try {
+      const hdrs = await headers()
+      const cleanHeaders = new Headers(hdrs)
+      cleanHeaders.delete('cookie')
+      await auth.api.sendVerificationEmail({
+        headers: cleanHeaders,
+        body: { email: data.email, callbackURL: '/dashboard' },
+      })
+    } catch (err: any) {
+      console.error('[register] Failed to send verification email:', err?.message ?? err)
+    }
   }
 
-  return {
-    ok: true,
-    needsVerification: true,
-    email: data.email,
-  }
+  return noEmail
+    ? { ok: true, needsIntro: true }
+    : { ok: true, needsVerification: true, email: data.email }
 }
