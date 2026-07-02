@@ -7,7 +7,8 @@ import { user } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 
 export async function submitIntroduction(text: string) {
-  if (process.env.NO_EMAIL !== 'true') {
+  const _check = process.env.NO_EMAIL?.trim().toLowerCase()
+  if (!(_check === 'true' || _check === '1' || _check === 'yes')) {
     return { error: 'Not available.' }
   }
 

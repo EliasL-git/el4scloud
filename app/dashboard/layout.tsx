@@ -32,7 +32,9 @@ export default async function DashboardLayout({
 
   if (!u) redirect('/sign-in')
 
-  if (process.env.NO_EMAIL === 'true' && !u.emailVerified && !u.banned) {
+  const _isNoEmail = process.env.NO_EMAIL?.trim().toLowerCase()
+  const _noEmailCheck = _isNoEmail === 'true' || _isNoEmail === '1' || _isNoEmail === 'yes'
+  if (_noEmailCheck && !u.emailVerified && !u.banned) {
     redirect('/introduction')
   }
 

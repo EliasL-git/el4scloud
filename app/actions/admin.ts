@@ -905,7 +905,8 @@ export async function rejectTakedown(requestId: string, adminNote?: string) {
 
 export async function getPendingIntroductions() {
   const adminId = await assertAdmin()
-  if (process.env.NO_EMAIL !== 'true') return []
+  const _ne = process.env.NO_EMAIL?.trim().toLowerCase()
+  if (!(_ne === 'true' || _ne === '1' || _ne === 'yes')) return []
   return db
     .select()
     .from(user)

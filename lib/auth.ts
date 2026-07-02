@@ -21,11 +21,16 @@ const trustedOrigins = [
   ...(productionUrl ? [productionUrl] : []),
 ]
 
-const noEmail = process.env.NO_EMAIL === 'true'
-
 function generateCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString()
 }
+
+function isNoEmail(): boolean {
+  const val = process.env.NO_EMAIL?.trim().toLowerCase()
+  return val === 'true' || val === '1' || val === 'yes'
+}
+
+console.log('[auth] NO_EMAIL env =', JSON.stringify(process.env.NO_EMAIL), '→ isNoEmail =', isNoEmail())
 
 export const auth = betterAuth({
   database: pool,
@@ -44,7 +49,7 @@ export const auth = betterAuth({
     enabled: true,
     disableSignUp: true,
     autoSignIn: true,
-    requireEmailVerification: !noEmail,
+    get requireEmailVerification() { return !isNoEmail() },
     revokeSessionsOnPasswordReset: true,
     sendResetPassword: async ({ user, url }) => {
       try {
@@ -57,35 +62,34 @@ export const auth = betterAuth({
       }
     },
   },
-  ...(noEmail
-    ? {}
-    : {
-        emailVerification: {
-          sendOnSignUp: false,
-          autoSignInAfterVerification: true,
-          sendVerificationEmail: async ({ user }) => {
-            const code = generateCode()
-            const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
+  get emailVerification() {
+    if (isNoEmail()) return undefined
+    return {
+      sendOnSignUp: false,
+      autoSignInAfterVerification: true,
+      sendVerificationEmail: async ({ user }) => {
+        const code = generateCode()
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
 
-            await db.delete(verification).where(eq(verification.identifier, user.email))
-            await db.insert(verification).values({
-              id: uuidv4(),
-              identifier: user.email,
-              value: code,
-              expiresAt,
-            })
+        await db.delete(verification).where(eq(verification.identifier, user.email))
+        await db.insert(verification).values({
+          id: uuidv4(),
+          identifier: user.email,
+          value: code,
+          expiresAt,
+        })
 
-            try {
-              const { renderToString } = await import('react-dom/server')
-              const { VerifyEmailEmail } = await import('@/components/emails/verify-email')
-              const html = renderToString(VerifyEmailEmail({ username: user.name, code }))
-              await sendMail({ to: user.email, subject: 'Your verification code', html })
-            } catch (err: any) {
-              console.error('[auth:sendVerificationEmail] Failed:', err?.message ?? err)
-            }
-          },
-        },
-      }),
+        try {
+          const { renderToString } = await import('react-dom/server')
+          const { VerifyEmailEmail } = await import('@/components/emails/verify-email')
+          const html = renderToString(VerifyEmailEmail({ username: user.name, code }))
+          await sendMail({ to: user.email, subject: 'Your verification code', html })
+        } catch (err: any) {
+          console.error('[auth:sendVerificationEmail] Failed:', err?.message ?? err)
+        }
+      },
+    }
+  },
 
   advanced: {
     defaultCookieAttributes: {

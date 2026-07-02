@@ -22,7 +22,8 @@ export async function register(data: {
     return { error: 'An account with this email already exists.' }
   }
 
-  const noEmail = process.env.NO_EMAIL === 'true'
+  const _noEmailVal = process.env.NO_EMAIL?.trim().toLowerCase()
+  const noEmail = _noEmailVal === 'true' || _noEmailVal === '1' || _noEmailVal === 'yes'
   const userId = uuidv4()
   const hashedPassword = await bcrypt.hash(data.password, 10)
 
