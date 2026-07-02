@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { submitIntroduction } from '@/app/actions/introduction'
+import { submitIntroduction, getUserIntroductionStatus } from '@/app/actions/introduction'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { HardDrive, Loader2, Sparkles, CheckCircle, Clock, Frown, MessageSquare, Mail, LogOut } from 'lucide-react'
@@ -17,12 +17,24 @@ export default function IntroductionPage() {
   const [approved, setApproved] = useState(false)
   const [locked, setLocked] = useState(false)
   const [lockReason, setLockReason] = useState('')
+  const [checking, setChecking] = useState(true)
 
   useEffect(() => {
     if (session?.user) {
       if ((session.user as any).emailVerified) {
         router.push('/dashboard')
+        return
       }
+      // Check if user already has a pending intro
+      getUserIntroductionStatus().then((status) => {
+        if ('suspensionType' in status && status.suspensionType === 'pending_intro') {
+          setLocked(true)
+          setLockReason('Your introduction is pending admin review.')
+        }
+        setChecking(false)
+      })
+    } else {
+      setChecking(false)
     }
   }, [session, router])
 
@@ -43,6 +55,14 @@ export default function IntroductionPage() {
     }
     setApproved(true)
     setTimeout(() => router.push('/dashboard'), 1500)
+  }
+
+  if (checking) {
+    return (
+      <div className="flex min-h-svh items-center justify-center bg-background">
+        <Loader2 className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    )
   }
 
   if (locked) {

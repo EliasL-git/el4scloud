@@ -910,7 +910,7 @@ export async function getPendingIntroductions() {
   return db
     .select()
     .from(user)
-    .where(and(eq(user.banned, true), eq(user.suspensionType, 'pending_intro')))
+    .where(eq(user.suspensionType, 'pending_intro'))
     .orderBy(user.createdAt)
 }
 

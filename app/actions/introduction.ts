@@ -6,6 +6,22 @@ import { db } from '@/lib/db'
 import { user } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 
+export async function getUserIntroductionStatus() {
+  const session = await auth.api.getSession({ headers: await headers() })
+  if (!session?.user) return { signedIn: false as const }
+  const [u] = await db
+    .select({ suspensionType: user.suspensionType, emailVerified: user.emailVerified, banned: user.banned })
+    .from(user)
+    .where(eq(user.id, session.user.id))
+  if (!u) return { signedIn: false as const }
+  return {
+    signedIn: true as const,
+    emailVerified: u.emailVerified,
+    suspensionType: u.suspensionType,
+    banned: u.banned,
+  }
+}
+
 export async function submitIntroduction(text: string) {
   const _check = process.env.NO_EMAIL?.trim().toLowerCase()
   if (!(_check === 'true' || _check === '1' || _check === 'yes')) {
@@ -22,7 +38,7 @@ export async function submitIntroduction(text: string) {
 
   if (!u) return { error: 'User not found' }
   if (u.emailVerified) return { error: 'Already verified.' }
-  if (u.banned && u.suspensionType === 'pending_intro') {
+  if (u.suspensionType === 'pending_intro') {
     return { error: 'Your introduction is pending admin review.' }
   }
 
@@ -78,12 +94,11 @@ export async function submitIntroduction(text: string) {
       return { ok: true }
     }
 
-    // Lock the account — one strike, admin must review
+    // Lock to pending review — admin must approve or reject
     const aiReason = parsed.reason ?? 'Introduction was not approved.'
     await db
       .update(user)
       .set({
-        banned: true,
         suspensionType: 'pending_intro',
         suspensionReason: `AI rejected: ${aiReason}`,
       })
