@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { submitIntroduction } from '@/app/actions/introduction'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { HardDrive, Loader2, Sparkles, CheckCircle, Clock, LogOut } from 'lucide-react'
+import { HardDrive, Loader2, Sparkles, CheckCircle, Clock, Frown, MessageSquare, Mail, LogOut } from 'lucide-react'
 import { useSession } from '@/lib/auth-client'
 
 export default function IntroductionPage() {
@@ -20,7 +20,6 @@ export default function IntroductionPage() {
 
   useEffect(() => {
     if (session?.user) {
-      // If already verified, redirect
       if ((session.user as any).emailVerified) {
         router.push('/dashboard')
       }
@@ -69,6 +68,10 @@ export default function IntroductionPage() {
             Not from Slack? Then shoot me a message at{' '}
             <a href="mailto:elias.lindholm2010@outlook.com" className="underline underline-offset-2 hover:text-foreground">elias.lindholm2010@outlook.com</a>.
           </p>
+          <Button variant="outline" className="gap-2" onClick={() => router.push('/sign-in')}>
+            <LogOut className="size-4" />
+            Back to sign in
+          </Button>
         </div>
       </div>
     )
@@ -98,22 +101,25 @@ export default function IntroductionPage() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2 mb-1">
-              <Sparkles className="size-5 text-muted-foreground" />
-              <CardTitle className="text-xl">Tell us about yourself</CardTitle>
-            </div>
-              <CardDescription>
-                Our automated systems will review this reason and approve or deny it.
-              </CardDescription>
-              <div className="px-6 pb-0 pt-0">
-                <div className="rounded-lg border border-border bg-secondary/30 p-3 text-xs space-y-1.5">
-                  <p className="font-medium text-foreground">Examples</p>
-                  <p><span className="text-green-600 dark:text-green-400">Good:</span> &ldquo;I&rsquo;m a student working on a game and need to store assets.&rdquo;</p>
-                  <p><span className="text-destructive">Bad:</span> &ldquo;give me storage&rdquo;</p>
-                </div>
+            <div className="flex items-start gap-3">
+              <div className="size-10 rounded-lg bg-destructive/10 flex items-center justify-center shrink-0">
+                <Frown className="size-5 text-destructive" />
               </div>
+              <div>
+                <CardTitle className="text-lg">Our mail provider broke :(</CardTitle>
+                <CardDescription className="mt-1">
+                  We can&apos;t send verification emails right now. Instead, tell us why you want to use this service and an automated system will review it.
+                </CardDescription>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex flex-col gap-4">
+            <div className="rounded-lg border border-border bg-secondary/30 p-3 text-xs space-y-1.5">
+              <p className="font-medium text-foreground">Examples</p>
+              <p><span className="text-green-600 dark:text-green-400">Good:</span> &ldquo;I&rsquo;m a student working on a game and need to store assets.&rdquo;</p>
+              <p><span className="text-destructive">Bad:</span> &ldquo;give me storage&rdquo;</p>
+            </div>
+
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <textarea
                 value={text}
@@ -146,6 +152,18 @@ export default function IntroductionPage() {
                 )}
               </Button>
             </form>
+
+            <div className="text-xs text-muted-foreground text-center space-y-1 pt-2 border-t border-border">
+              <p>Having issues? Contact us:</p>
+              <div className="flex items-center justify-center gap-4">
+                <a href="https://hackclub.enterprise.slack.com/team/U08J9R1TUT1" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline underline-offset-2 hover:text-foreground">
+                  <MessageSquare className="size-3" /> Slack
+                </a>
+                <a href="mailto:elias.lindholm2010@outlook.com" className="inline-flex items-center gap-1 underline underline-offset-2 hover:text-foreground">
+                  <Mail className="size-3" /> Email
+                </a>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>
