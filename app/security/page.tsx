@@ -3,9 +3,9 @@ import path from 'path'
 import ReactMarkdown from 'react-markdown'
 import { BackButton } from '@/components/back-button'
 
-export default function LegalPage() {
+export default function SecurityPage() {
   const content = fs.readFileSync(
-    path.join(process.cwd(), 'legal', 'legal.md'),
+    path.join(process.cwd(), 'security', 'security.md'),
     'utf-8',
   )
 
@@ -16,10 +16,6 @@ export default function LegalPage() {
         <article className="prose prose-sm dark:prose-invert max-w-none text-foreground prose-headings:text-foreground prose-headings:font-semibold prose-headings:tracking-tight prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-h1:text-xl prose-h2:text-lg prose-h3:text-base prose-hr:border-border prose-li:marker:text-muted-foreground">
           <ReactMarkdown>{content}</ReactMarkdown>
         </article>
-        <div className="mt-8 flex items-center gap-3 text-xs text-muted-foreground">
-          <a href="/docs" className="underline underline-offset-2 hover:text-foreground">Documentation</a>
-          <a href="/security" className="underline underline-offset-2 hover:text-foreground">Security</a>
-        </div>
       </div>
     </div>
   )

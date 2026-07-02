@@ -186,6 +186,10 @@ export default function SignInPage() {
               Resend verification email
             </a>
           </p>
+          <div className="flex items-center gap-3 pt-2 text-xs">
+            <a href="/legal" className="underline underline-offset-2 hover:text-foreground">Terms</a>
+            <a href="/security" className="underline underline-offset-2 hover:text-foreground">Security</a>
+          </div>
         </div>
       </div>
     </div>

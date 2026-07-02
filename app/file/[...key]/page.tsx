@@ -252,9 +252,11 @@ export default async function FilePreviewPage({
             This file is hosted on{' '}
             <a href={hostUrl} className="underline underline-offset-2 hover:text-foreground">{hostUrl}</a>
             .{' '}
-            Is it violating our{' '}
-            <a href="/legal" className="underline underline-offset-2 hover:text-foreground">TOS</a>
-            {' '}or a law?{' '}
+            See our{' '}
+            <a href="/legal" className="underline underline-offset-2 hover:text-foreground">Terms</a>
+            {' '}and{' '}
+            <a href="/security" className="underline underline-offset-2 hover:text-foreground">Security</a>
+            {' '}policies. Is it violating our TOS or a law?{' '}
             <a href={reportUrl} className="underline underline-offset-2 hover:text-foreground font-medium">Report it here</a>.
           </p>
         </div>
