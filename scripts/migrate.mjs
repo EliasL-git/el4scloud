@@ -1,5 +1,6 @@
 import pg from 'pg'
 import { readFileSync } from 'fs'
+import { randomBytes } from 'crypto'
 
 const env = Object.fromEntries(
   readFileSync('./.env', 'utf8')
@@ -308,6 +309,30 @@ async function migrate() {
       await client.query(sql)
       const firstLine = sql.trim().split('\n')[0].slice(0, 80)
       console.log('[migrate] OK:', firstLine)
+    }
+
+    // Repair: find users missing an email credential account row and create one
+    const orphaned = await client.query(`
+      SELECT u.id, u.email FROM "user" u
+      WHERE NOT EXISTS (
+        SELECT 1 FROM account a
+        WHERE a."userId" = u.id AND a."providerId" = 'email'
+      )
+    `)
+    if (orphaned.rows.length > 0) {
+      console.log(`[migrate] Found ${orphaned.rows.length} user(s) with no email credential account. Repairing...`)
+      const bcrypt = (await import('bcryptjs')).default
+      for (const u of orphaned.rows) {
+        const randomPass = randomBytes(16).toString('hex')
+        const hashed = await bcrypt.hash(randomPass, 10)
+        await client.query({
+          text: `INSERT INTO account (id, "accountId", "providerId", "userId", password) VALUES ($1, $2, 'email', $3, $4)`,
+          values: [randomBytes(16).toString('hex'), u.email, u.id, hashed],
+        })
+        console.log(`  → Created account row for ${u.email} (user ${u.id}) — user must reset password`)
+      }
+    } else {
+      console.log('[migrate] All users have email credential accounts — no repair needed.')
     }
 
     // Verify user count hasn't dropped (only if table existed before)

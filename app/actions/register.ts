@@ -22,28 +22,33 @@ export async function register(data: {
     return { error: 'An account with this email already exists.' }
   }
 
+  const noEmail = process.env.NO_EMAIL === 'true'
   const userId = uuidv4()
   const hashedPassword = await bcrypt.hash(data.password, 10)
 
-  await db.insert(user).values({
-    id: userId,
-    name: data.name,
-    email: data.email,
-    emailVerified: false,
-    role: 'user',
-    storageLimit: NO_VERIFICATION_LIMIT,
-    agreedToTerms: true,
-  })
+  try {
+    await db.transaction(async (tx) => {
+      await tx.insert(user).values({
+        id: userId,
+        name: data.name,
+        email: data.email,
+        emailVerified: false,
+        role: 'user',
+        storageLimit: NO_VERIFICATION_LIMIT,
+        agreedToTerms: true,
+      })
 
-  await db.insert(account).values({
-    id: uuidv4(),
-    userId,
-    accountId: data.email,
-    providerId: 'email',
-    password: hashedPassword,
-  })
-
-  const noEmail = process.env.NO_EMAIL === 'true'
+      await tx.insert(account).values({
+        id: uuidv4(),
+        userId,
+        accountId: data.email,
+        providerId: 'email',
+        password: hashedPassword,
+      })
+    })
+  } catch (err: any) {
+    return { error: 'Registration failed. Please try again.' }
+  }
 
   if (!noEmail) {
     try {
