@@ -3,7 +3,7 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { account, aiUsage } from '@/lib/db/schema'
+import { user, aiUsage } from '@/lib/db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { chatCompletion, FREE_DAILY_USD_LIMIT, AI_MODELS, calculateCost, type ChatMessage } from '@/lib/ai'
@@ -15,17 +15,12 @@ export async function sendChatMessage(
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
 
-  const [hcAccount] = await db
-    .select({ id: account.id })
-    .from(account)
-    .where(
-      and(
-        eq(account.userId, session.user.id),
-        eq(account.providerId, 'hackclub'),
-      )
-    )
+  const [u] = await db
+    .select({ verifiedViaHackclub: user.verifiedViaHackclub })
+    .from(user)
+    .where(eq(user.id, session.user.id))
 
-  if (!hcAccount) {
+  if (!u?.verifiedViaHackclub) {
     throw new Error('Only Hack Club students can access AI features. Link your Hack Club account in Settings.')
   }
 
@@ -112,17 +107,12 @@ export async function getAiUsage() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
 
-  const [hcAccount] = await db
-    .select({ id: account.id })
-    .from(account)
-    .where(
-      and(
-        eq(account.userId, session.user.id),
-        eq(account.providerId, 'hackclub'),
-      )
-    )
+  const [u] = await db
+    .select({ verifiedViaHackclub: user.verifiedViaHackclub })
+    .from(user)
+    .where(eq(user.id, session.user.id))
 
-  if (!hcAccount) {
+  if (!u?.verifiedViaHackclub) {
     return { hasAccess: false, usedToday: 0, limit: FREE_DAILY_USD_LIMIT }
   }
 

@@ -19,6 +19,9 @@ export const user = pgTable('user', {
   warningCount: integer('warningCount').notNull().default(0),
   appealable: boolean('appealable').notNull().default(true),
   introductionText: text('introductionText'),
+  verifiedViaHackclub: boolean('verifiedViaHackclub').notNull().default(false),
+  verifiedManually: boolean('verifiedManually').notNull().default(false),
+  verificationMeta: text('verificationMeta'), // JSON string with verification context
   createdAt: timestamp('createdAt').notNull().defaultNow(),
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })

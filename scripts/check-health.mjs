@@ -1,5 +1,4 @@
 import pg from 'pg'
-import bcrypt from 'bcryptjs'
 import { readFileSync } from 'fs'
 
 const env = Object.fromEntries(
@@ -23,13 +22,16 @@ async function main() {
   try {
     // ── 1. Fetch all users ──────────────────────────────────────────────
     const { rows: users } = await client.query(
-      `SELECT id, name, email, "emailVerified", banned, "suspensionType" FROM "user" ORDER BY email`
+      `SELECT id, name, email, "emailVerified", banned, "suspensionType",
+              "verifiedViaHackclub", "verifiedManually", "verificationMeta"
+       FROM "user" ORDER BY email`
     )
     console.log(`\n🔍 Checking ${users.length} user(s)...\n`)
 
     for (const u of users) {
       const issues = []
       const info = []
+      const repairs = []
 
       // ── 2. Check account rows ───────────────────────────────────────
       const { rows: accounts } = await client.query(
@@ -55,7 +57,7 @@ async function main() {
         } else if (!emailAcct.password.startsWith('$2')) {
           issues.push(`❌ Email credential row has invalid password hash (starts with "${emailAcct.password.slice(0, 6)}...")`)
         } else {
-          info.push('✅ Email credential row OK (bcrypt hash present)')
+          info.push('✅ Email credential OK')
         }
 
         // Check accountId matches email
@@ -64,20 +66,32 @@ async function main() {
         }
       }
 
-      // HackClub row info
+      // ── 3. HackClub verification flag ─────────────────────────────
       if (hackclubAcct) {
-        // Check for password on hackclub row (sign of old bug residue)
+        // Clean stale password on hackclub row
         if (hackclubAcct.password) {
-          await client.query(
-            `UPDATE account SET password = NULL WHERE id = $1`,
-            [hackclubAcct.id]
-          )
-          info.push('🔧 Cleaned stale password hash from HackClub account row (OAuth bug residue)')
+          await client.query(`UPDATE account SET password = NULL WHERE id = $1`, [hackclubAcct.id])
+          repairs.push('🔧 Cleaned stale password from HackClub row')
         }
-        info.push(`✅ HackClub linked (accountId: ${hackclubAcct.accountId})`)
+
+        // Set verifiedViaHackclub if not already set
+        if (!u.verifiedViaHackclub) {
+          const meta = JSON.stringify({
+            method: 'hackclub_oauth',
+            hackclubId: hackclubAcct.accountId,
+            verifiedAt: new Date().toISOString(),
+            setBy: 'check:health',
+          })
+          await client.query(
+            `UPDATE "user" SET "verifiedViaHackclub" = TRUE, "verificationMeta" = $1, "updatedAt" = NOW() WHERE id = $2`,
+            [meta, u.id]
+          )
+          repairs.push('🔧 Set verifiedViaHackclub = true')
+        }
+        info.push(`✅ HackClub verified (${hackclubAcct.accountId})`)
       }
 
-      // Duplicate provider rows
+      // ── 4. Duplicate provider rows ────────────────────────────────
       const providerCounts = {}
       for (const a of accounts) {
         providerCounts[a.providerId] = (providerCounts[a.providerId] || 0) + 1
@@ -88,7 +102,7 @@ async function main() {
         }
       }
 
-      // ── 3. Check sessions ──────────────────────────────────────────
+      // ── 5. Sessions ───────────────────────────────────────────────
       const { rows: [sessionInfo] } = await client.query(
         `SELECT COUNT(*)::int AS total,
                 COUNT(*) FILTER (WHERE "expiresAt" > NOW())::int AS active
@@ -96,29 +110,36 @@ async function main() {
         [u.id]
       )
 
-      // ── 4. Account flags ──────────────────────────────────────────
-      if (u.banned) info.push(`🚫 Banned (type: ${u.suspensionType || 'unknown'})`)
+      // ── 6. Flags ──────────────────────────────────────────────────
+      if (u.banned) info.push(`🚫 Banned (${u.suspensionType || 'unknown'})`)
       if (!u.emailVerified) info.push('📧 Email NOT verified')
+      if (u.verifiedViaHackclub || hackclubAcct) info.push('🟢 verifiedViaHackclub = true')
+      if (u.verifiedManually) info.push('🟢 verifiedManually = true')
 
-      // ── 5. Print results ──────────────────────────────────────────
+      // ── 7. Print results ──────────────────────────────────────────
       if (issues.length > 0) {
         hasIssues = true
         console.log(`━━━ ${u.email} (${u.name}) ━━━ ⛔ BROKEN`)
-        console.log(`    User ID: ${u.id}`)
-        console.log(`    Accounts: ${accounts.length} row(s) [${accounts.map(a => a.providerId).join(', ') || 'none'}]`)
-        console.log(`    Sessions: ${sessionInfo.active} active / ${sessionInfo.total} total`)
-        for (const issue of issues) console.log(`    ${issue}`)
-        for (const i of info) console.log(`    ${i}`)
-        console.log()
       } else {
         console.log(`✅ ${u.email} (${u.name}) — OK`)
-        for (const i of info) console.log(`    ${i}`)
-        console.log(`    Sessions: ${sessionInfo.active} active / ${sessionInfo.total} total`)
       }
+      console.log(`    User ID: ${u.id}`)
+      console.log(`    Accounts: [${accounts.map(a => a.providerId).join(', ') || 'none'}]`)
+      console.log(`    Sessions: ${sessionInfo.active} active / ${sessionInfo.total} total`)
+      for (const issue of issues) console.log(`    ${issue}`)
+      for (const r of repairs) console.log(`    ${r}`)
+      for (const i of info) console.log(`    ${i}`)
+      if (u.verificationMeta) {
+        try {
+          const meta = JSON.parse(u.verificationMeta)
+          console.log(`    📋 Verification meta: ${JSON.stringify(meta)}`)
+        } catch { /* ignore parse errors */ }
+      }
+      console.log()
     }
 
-    // ── 6. Summary ────────────────────────────────────────────────────
-    console.log('\n' + '═'.repeat(60))
+    // ── 8. Summary ────────────────────────────────────────────────────
+    console.log('═'.repeat(60))
     if (hasIssues) {
       console.log('⛔ ISSUES FOUND — run `npm run reset` to fix broken passwords')
       console.log('   or re-run `npm run migrate` to auto-repair missing email rows')

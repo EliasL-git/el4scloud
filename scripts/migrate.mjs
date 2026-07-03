@@ -292,6 +292,10 @@ const statements = [
   `ALTER TABLE "ticket_replies" ADD COLUMN IF NOT EXISTS "isInternal" BOOLEAN NOT NULL DEFAULT FALSE`,
   `CREATE INDEX IF NOT EXISTS "ai_usage_userId_idx" ON "ai_usage"("userId")`,
   `CREATE INDEX IF NOT EXISTS "ai_usage_createdAt_idx" ON "ai_usage"("createdAt")`,
+
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "verifiedViaHackclub" BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "verifiedManually" BOOLEAN NOT NULL DEFAULT FALSE`,
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "verificationMeta" TEXT`,
 ]
 
 async function migrate() {

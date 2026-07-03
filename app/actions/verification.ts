@@ -2,7 +2,7 @@
 
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { storageRequests, account } from '@/lib/db/schema'
+import { storageRequests, user } from '@/lib/db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 
@@ -20,18 +20,13 @@ export async function getVerificationStatus() {
       )
     )
 
-  const [hcAccount] = await db
-    .select({ id: account.id })
-    .from(account)
-    .where(
-      and(
-        eq(account.userId, session.user.id),
-        eq(account.providerId, 'hackclub'),
-      )
-    )
+  const [u] = await db
+    .select({ verifiedViaHackclub: user.verifiedViaHackclub })
+    .from(user)
+    .where(eq(user.id, session.user.id))
 
   return {
     hasPendingRequest: pendingCount.count > 0,
-    hasHackClubAccount: !!hcAccount,
+    hasHackClubAccount: u?.verifiedViaHackclub ?? false,
   }
 }

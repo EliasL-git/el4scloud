@@ -1,16 +1,6 @@
-import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
 
-function getTransport() {
-  return nodemailer.createTransport({
-    host: process.env.MAILCOW_HOST,
-    port: Number(process.env.MAILCOW_PORT) || 587,
-    secure: Number(process.env.MAILCOW_PORT) === 465,
-    auth: {
-      user: process.env.MAILCOW_USER,
-      pass: process.env.MAILCOW_PASS,
-    },
-  })
-}
+const resend = new Resend(process.env.RESEND_API_KEY)
 
 export async function sendMail({
   to,
@@ -21,13 +11,9 @@ export async function sendMail({
   subject: string
   html: string
 }) {
-  if (!process.env.MAILCOW_HOST) return
+  if (!process.env.RESEND_API_KEY) return
 
-  const transporter = getTransport()
-  await transporter.sendMail({
-    from: process.env.MAILCOW_FROM ?? process.env.MAILCOW_USER,
-    to,
-    subject,
-    html,
-  })
+  const from = process.env.RESEND_FROM ?? 'noreply@el4s.dev'
+
+  await resend.emails.send({ from, to, subject, html })
 }

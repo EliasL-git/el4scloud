@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { account } from '@/lib/db/schema'
+import { account, user } from '@/lib/db/schema'
 import { eq, and } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { v4 as uuidv4 } from 'uuid'
@@ -64,6 +64,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard/settings?error=no_identity', request.url))
   }
 
+  if (identity.ysws_eligible !== true) {
+    return NextResponse.redirect(new URL('/dashboard/settings?error=not_ysws_eligible', request.url))
+  }
+
   const session = await auth.api.getSession({ headers: request.headers })
   if (!session?.user) {
     return NextResponse.redirect(new URL('/dashboard/settings?error=not_authenticated', request.url))
@@ -91,6 +95,21 @@ export async function GET(request: NextRequest) {
       accessToken,
     })
   }
+
+  // Mark user as verified via HackClub with metadata
+  await db
+    .update(user)
+    .set({
+      verifiedViaHackclub: true,
+      verificationMeta: JSON.stringify({
+        method: 'hackclub_oauth',
+        hackclubId: hcUserId,
+        verifiedAt: new Date().toISOString(),
+        ip: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || null,
+      }),
+      updatedAt: new Date(),
+    })
+    .where(eq(user.id, session.user.id))
 
   const response = NextResponse.redirect(new URL('/dashboard/settings?hc=linked', request.url))
   response.cookies.delete('hc_oauth_state')

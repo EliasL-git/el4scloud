@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { account, aiUsage } from '@/lib/db/schema'
+import { user, aiUsage } from '@/lib/db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { AI_MODELS, FREE_DAILY_USD_LIMIT, calculateCost } from '@/lib/ai'
@@ -13,12 +13,12 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const [hcAccount] = await db
-      .select({ id: account.id })
-      .from(account)
-      .where(and(eq(account.userId, session.user.id), eq(account.providerId, 'hackclub')))
+    const [u] = await db
+      .select({ verifiedViaHackclub: user.verifiedViaHackclub })
+      .from(user)
+      .where(eq(user.id, session.user.id))
 
-    if (!hcAccount) {
+    if (!u?.verifiedViaHackclub) {
       return Response.json({ error: 'Only Hack Club students can access AI features.' }, { status: 403 })
     }
 

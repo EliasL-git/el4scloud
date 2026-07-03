@@ -573,13 +573,9 @@ export async function resetVerificationStatus(userId: string) {
     and(eq(storageRequests.userId, userId), eq(storageRequests.status, 'pending'))
   )
 
-  await db.delete(account).where(
-    and(eq(account.userId, userId), eq(account.providerId, 'hackclub'))
-  )
-
   await db
     .update(user)
-    .set({ storageLimit: NO_VERIFICATION_LIMIT, updatedAt: new Date() })
+    .set({ verifiedViaHackclub: false, storageLimit: NO_VERIFICATION_LIMIT, updatedAt: new Date() })
     .where(eq(user.id, userId))
 
   await logAuditEventWithHeaders(adminId, 'admin.verification_reset', JSON.stringify({ targetUserId: userId }))

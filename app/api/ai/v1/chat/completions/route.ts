@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { account, aiUsage } from '@/lib/db/schema'
+import { user, aiUsage } from '@/lib/db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { AI_MODELS, FREE_DAILY_USD_LIMIT, calculateCost } from '@/lib/ai'
@@ -29,11 +29,11 @@ function oaiId() {
 async function checkAccess(req: NextRequest) {
   const session = await auth.api.getSession({ headers: req.headers })
   if (!session?.user) return { error: 'Unauthorized', status: 401 } as const
-  const [hcAccount] = await db
-    .select({ id: account.id })
-    .from(account)
-    .where(and(eq(account.userId, session.user.id), eq(account.providerId, 'hackclub')))
-  if (!hcAccount) return { error: 'Only Hack Club students can access AI features.', status: 403 } as const
+  const [u] = await db
+    .select({ verifiedViaHackclub: user.verifiedViaHackclub })
+    .from(user)
+    .where(eq(user.id, session.user.id))
+  if (!u?.verifiedViaHackclub) return { error: 'Only Hack Club students can access AI features.', status: 403 } as const
 
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
