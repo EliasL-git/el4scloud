@@ -17,6 +17,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { logAuditEvent, logAuditEventWithHeaders } from '@/lib/audit'
 import { recordWarning } from '@/lib/warnings'
 import { hash } from '@/lib/hash'
+import { fireWebhook } from '@/lib/webhooks/fire'
 
 async function getUserId() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -106,6 +107,7 @@ export async function deleteFile(fileId: string) {
   await db.delete(files).where(and(eq(files.id, fileId), eq(files.userId, userId)))
 
   await logAuditEventWithHeaders(userId, 'file.deleted', JSON.stringify({ fileId, fileName: file.originalName, size: file.size }))
+  await fireWebhook(userId, 'file.deleted', { fileId, name: file.originalName, size: file.size }).catch(() => undefined)
 
   revalidatePath('/dashboard')
 }
@@ -125,6 +127,7 @@ export async function toggleFileVisibility(fileId: string) {
     .where(and(eq(files.id, fileId), eq(files.userId, userId)))
 
   await logAuditEventWithHeaders(userId, `file.${file.isPublic ? 'made_private' : 'made_public'}`, JSON.stringify({ fileId, fileName: file.originalName }))
+  await fireWebhook(userId, 'file.visibility_changed', { fileId, isPublic: !file.isPublic }).catch(() => undefined)
 
   revalidatePath('/dashboard')
 }
@@ -232,6 +235,7 @@ export async function flagFile(fileId: string) {
     .where(eq(user.id, file.userId))
 
   await logAuditEventWithHeaders(userId, 'file.flagged', JSON.stringify({ fileId, fileName: file.originalName, fileHash: file.fileHash, targetUserId: file.userId }))
+  await fireWebhook(file.userId, 'file.flagged', { fileId, fileName: file.originalName, fileHash: file.fileHash }).catch(() => undefined)
 
   revalidatePath('/dashboard')
 }
@@ -290,6 +294,7 @@ export async function createShareLink(
   })
 
   await logAuditEventWithHeaders(userId, 'share_link.created', JSON.stringify({ fileId, token, expiresAt: options?.expiresAt, maxDownloads: options?.maxDownloads, hasPassword: !!passwordHash }))
+  await fireWebhook(userId, 'share_link.created', { fileId, linkId: id, token, expiresAt: options?.expiresAt, maxDownloads: options?.maxDownloads }).catch(() => undefined)
 
   revalidatePath('/dashboard')
   return { id, token }
@@ -307,6 +312,7 @@ export async function revokeShareLink(linkId: string) {
   await db.delete(shareLinks).where(and(eq(shareLinks.id, linkId), eq(shareLinks.userId, userId)))
 
   await logAuditEventWithHeaders(userId, 'share_link.revoked', JSON.stringify({ linkId, fileId: link.fileId, token: link.token }))
+  await fireWebhook(userId, 'share_link.revoked', { linkId, fileId: link.fileId }).catch(() => undefined)
 
   revalidatePath('/dashboard')
 }

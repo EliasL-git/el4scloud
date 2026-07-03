@@ -10,6 +10,7 @@ import { revalidatePath } from 'next/cache'
 import { createHash, randomBytes } from 'crypto'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
+import { fireWebhook } from '@/lib/webhooks/fire'
 
 async function getUserId() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -42,9 +43,10 @@ export async function createApiKey(name: string) {
   const rawKey = `sk_${randomBytes(32).toString('hex')}`
   const keyHash = hashKey(rawKey)
   const keyPrefix = rawKey.slice(0, 10)
+  const id = uuidv4()
 
   await db.insert(apiKeys).values({
-    id: uuidv4(),
+    id,
     userId,
     name,
     keyHash,
@@ -53,17 +55,23 @@ export async function createApiKey(name: string) {
 
   revalidatePath('/dashboard/keys')
 
-  await logAuditEventWithHeaders(userId, 'apikey.created', JSON.stringify({ name }))
+  await logAuditEventWithHeaders(userId, 'apikey.created', JSON.stringify({ name, keyId: id, keyPrefix }))
 
-  // Return the raw key only once — it won't be retrievable again
+  await fireWebhook(userId, 'api.key.created', { keyId: id, name, keyPrefix }).catch(() => undefined)
+
   return rawKey
 }
 
 export async function deleteApiKey(keyId: string) {
   const userId = await getUserId()
+
+  const [existing] = await db.select({ name: apiKeys.name }).from(apiKeys).where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)))
+
   await db.delete(apiKeys).where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)))
 
   await logAuditEventWithHeaders(userId, 'apikey.deleted', JSON.stringify({ keyId }))
+
+  await fireWebhook(userId, 'api.key.deleted', { keyId, name: existing?.name }).catch(() => undefined)
 
   revalidatePath('/dashboard/keys')
 }

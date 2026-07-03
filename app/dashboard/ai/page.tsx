@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { getAiUsage, getAiModels } from '@/app/actions/ai'
-import { Sparkles, Send, Loader2, Terminal, Bot, User, RefreshCw, MessageSquare, CreditCard, Cpu, BarChart3, LayoutDashboard, ChevronRight } from 'lucide-react'
+import { getAiUsage, getAiModels, getConversations, getConversation, createConversation, deleteConversation } from '@/app/actions/ai'
+import { Sparkles, Send, Loader2, Terminal, Bot, User, RefreshCw, MessageSquare, CreditCard, Cpu, BarChart3, LayoutDashboard, ChevronRight, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -31,7 +31,7 @@ interface UsageData {
   hasAccess: boolean
   usedToday: number
   limit: number
-  requestCount: number
+  requestCount?: number
 }
 
 function formatUsd(n: number): string {
@@ -51,6 +51,8 @@ export default function AIPage() {
   const [selectedModel, setSelectedModel] = useState('deepseek-4-flash')
   const [error, setError] = useState('')
   const [fallbackNotice, setFallbackNotice] = useState('')
+  const [conversations, setConversations] = useState<Array<{ id: string; title: string; messageCount: number }>>([])
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const requestCount = usage?.requestCount ?? 0
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -59,7 +61,13 @@ export default function AIPage() {
   useEffect(() => {
     getAiUsage().then(setUsage)
     getAiModels().then(setModels)
+    loadConversations()
   }, [])
+
+  const loadConversations = async () => {
+    const convs = await getConversations()
+    setConversations(convs)
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -88,6 +96,7 @@ export default function AIPage() {
           messages: [...messages, userMessage].map((m) => ({ role: m.role, content: m.content })),
           model: selectedModel,
           stream: true,
+          conversation_id: conversationId,
         }),
         signal: controller.signal,
       })
@@ -157,9 +166,33 @@ export default function AIPage() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
   }
 
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
     if (abortRef.current) abortRef.current.abort()
-    setMessages([]); setError(''); setFallbackNotice(''); setInput('')
+    try {
+      const conv = await createConversation('New chat')
+      setConversationId(conv.id)
+      setMessages([]); setError(''); setFallbackNotice(''); setInput('')
+      await loadConversations()
+    } catch {}
+  }
+
+  const handleSelectConversation = async (id: string) => {
+    if (abortRef.current) abortRef.current.abort()
+    try {
+      const conv = await getConversation(id)
+      setConversationId(conv.id)
+      setMessages(conv.messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })))
+      setError(''); setFallbackNotice(''); setInput('')
+    } catch {}
+  }
+
+  const handleDeleteConversation = async (id: string) => {
+    await deleteConversation(id)
+    if (conversationId === id) {
+      setConversationId(null)
+      setMessages([])
+    }
+    await loadConversations()
   }
 
   if (usage === null) {
@@ -351,11 +384,35 @@ export default function AIPage() {
                     </select>
                   )}
                 </div>
-                <Button variant="ghost" size="sm" onClick={handleNewChat} className="gap-1.5 text-xs">
-                  <RefreshCw className="size-3.5" />
-                  New chat
-                </Button>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="sm" onClick={handleNewChat} className="gap-1.5 text-xs">
+                    <Plus className="size-3.5" />
+                    New chat
+                  </Button>
+                </div>
               </div>
+
+              <Separator />
+
+              {conversations.length > 0 && (
+                <div className="px-4 py-2 flex gap-2 overflow-x-auto border-b border-border">
+                  {conversations.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => handleSelectConversation(c.id)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs border transition-colors shrink-0 ${conversationId === c.id ? 'border-foreground/40 bg-secondary' : 'border-border hover:bg-secondary/50'}`}
+                    >
+                      <span className="truncate max-w-[120px]">{c.title}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteConversation(c.id) }}
+                        className="text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <Trash2 className="size-3" />
+                      </button>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <Separator />
 

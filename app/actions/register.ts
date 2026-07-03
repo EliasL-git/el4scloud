@@ -8,6 +8,7 @@ import bcrypt from 'bcryptjs'
 import { headers } from 'next/headers'
 import { NO_VERIFICATION_LIMIT } from '@/lib/storage'
 import { auth } from '@/lib/auth'
+import { fireWebhook } from '@/lib/webhooks/fire'
 
 export async function register(data: {
   name: string
@@ -50,6 +51,8 @@ export async function register(data: {
   } catch (err: any) {
     return { error: 'Registration failed. Please try again.' }
   }
+
+  await fireWebhook(userId, 'user.signed_up', { userId, name: data.name, email: data.email }).catch(() => undefined)
 
   if (!noEmail) {
     try {

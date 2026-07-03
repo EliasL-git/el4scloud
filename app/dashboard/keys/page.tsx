@@ -31,6 +31,8 @@ function formatDate(date: Date) {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   }).format(new Date(date))
 }
 
@@ -57,7 +59,7 @@ export default function ApiKeysPage() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim()) return
+    if (!name.trim() || creating) return
     setCreating(true)
     try {
       const raw = await createApiKey(name.trim())
@@ -103,12 +105,11 @@ export default function ApiKeysPage() {
         </p>
       </div>
 
-      {/* New key reveal */}
       {newKey && (
-        <Card className="border" style={{ borderColor: 'var(--brand)', backgroundColor: 'var(--brand-muted)' }}>
+        <Card className="border-green-500/30 bg-green-500/5">
           <CardHeader className="pb-3">
             <CardTitle className="text-sm flex items-center gap-2">
-              <Key className="size-4" style={{ color: 'var(--brand)' }} />
+              <Key className="size-4 text-green-600" />
               Your new API key
             </CardTitle>
             <CardDescription>
@@ -146,10 +147,10 @@ export default function ApiKeysPage() {
         </Card>
       )}
 
-      {/* Create key form */}
       <Card>
         <CardHeader className="pb-4">
           <CardTitle className="text-sm">Create new key</CardTitle>
+          <CardDescription>Give it a name so you can recognize it later</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleCreate} className="flex items-end gap-3">
@@ -161,6 +162,7 @@ export default function ApiKeysPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
+                disabled={creating}
               />
             </div>
             <Button
@@ -168,14 +170,13 @@ export default function ApiKeysPage() {
               disabled={creating || !name.trim()}
               style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
             >
-              <Plus className="size-4" data-icon="inline-start" />
+              <Plus className="size-4" />
               {creating ? 'Creating...' : 'Create'}
             </Button>
           </form>
         </CardContent>
       </Card>
 
-      {/* Keys list */}
       <div className="flex flex-col gap-3">
         <h2 className="text-sm font-medium">Your keys</h2>
 
@@ -193,15 +194,15 @@ export default function ApiKeysPage() {
             ))}
           </div>
         ) : keys.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 gap-3 text-center border border-dashed border-border rounded-xl">
-            <div className="size-10 rounded-full bg-secondary flex items-center justify-center">
-              <Key className="size-4 text-muted-foreground" />
-            </div>
-            <div>
+          <Card className="border-dashed">
+            <CardContent className="py-10 text-center">
+              <div className="size-10 rounded-full bg-secondary flex items-center justify-center mx-auto mb-3">
+                <Key className="size-4 text-muted-foreground" />
+              </div>
               <p className="text-sm font-medium">No API keys</p>
               <p className="text-xs text-muted-foreground mt-0.5">Create a key to start using the API</p>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         ) : (
           <div className="flex flex-col gap-1.5">
             {keys.map((key) => (
@@ -241,7 +242,6 @@ export default function ApiKeysPage() {
 
       <Separator />
 
-      {/* Docs link */}
       <div className="flex flex-col gap-3">
         <h2 className="text-sm font-medium flex items-center gap-2">
           <BookOpen className="size-4 text-muted-foreground" />

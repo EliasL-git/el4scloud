@@ -74,7 +74,7 @@ function logFileSize(filePath: string): string {
 let scanQueue: Promise<void> = Promise.resolve()
 
 export async function scanFile(filePath: string): Promise<ScanResult> {
-  let release: () => void
+  let release: () => void = () => {}
   const wait = new Promise<void>((r) => { release = r })
   const prev = scanQueue
   scanQueue = prev.then(() => wait)

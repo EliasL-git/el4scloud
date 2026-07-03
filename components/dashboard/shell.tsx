@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users, Sparkles } from 'lucide-react'
+import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users, Sparkles, Webhook } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -27,6 +27,7 @@ const serviceNavItems = [
 
 const accountNavItems = [
   { href: '/dashboard/keys', label: 'API Keys', icon: Key },
+  { href: '/dashboard/webhooks', label: 'Webhooks', icon: Webhook },
   { href: '/dashboard/support', label: 'Support', icon: MessageSquare },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ]
@@ -88,7 +89,7 @@ export function DashboardShell({
   const isSupportRoute = pathname.startsWith('/dashboard/support')
   const isAdminRoute = pathname.startsWith('/dashboard/admin')
 
-  const suspendedAllowedRoutes = ['/dashboard', '/dashboard/storage', '/dashboard/support', '/dashboard/settings']
+  const suspendedAllowedRoutes = ['/dashboard', '/dashboard/storage', '/dashboard/support', '/dashboard/settings', '/dashboard/webhooks']
   const visibleServiceItems = suspended
     ? serviceNavItems.filter((item) => suspendedAllowedRoutes.includes(item.href))
     : serviceNavItems
@@ -116,56 +117,6 @@ export function DashboardShell({
 
   return (
     <div className="min-h-svh bg-background flex flex-col">
-      {/* Top bar */}
-      <header className="border-b border-border bg-background sticky top-0 z-40">
-        <div className="h-14 flex items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="text-muted-foreground hover:text-foreground -ml-1 lg:hidden"
-            >
-              <Menu className="size-5" />
-            </button>
-            <Link href="/dashboard" className="flex items-center gap-2 shrink-0">
-              <div
-                className="size-7 rounded-md flex items-center justify-center"
-                style={{ backgroundColor: 'var(--brand)' }}
-              >
-                <HardDrive className="size-3.5" style={{ color: 'var(--brand-foreground)' }} />
-              </div>
-              <span className="text-sm font-semibold tracking-tight">el4scloud</span>
-            </Link>
-          </div>
-
-          {/* User menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger render={
-              <Button variant="ghost" size="sm" className="gap-2 px-2">
-                <Avatar className="size-6">
-                  <AvatarFallback className="text-xs">{initials}</AvatarFallback>
-                </Avatar>
-                <span className="text-sm hidden sm:block max-w-32 truncate">{user.name}</span>
-              </Button>
-            } />
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuGroup>
-              <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-sm font-medium">{user.name}</span>
-                  <span className="text-xs text-muted-foreground truncate">{user.email}</span>
-                </div>
-              </DropdownMenuLabel>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive gap-2 cursor-pointer">
-                <LogOut className="size-3.5" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
-
       <div className="flex flex-1">
         {/* Mobile sidebar overlay */}
         {sidebarOpen && (
@@ -174,16 +125,28 @@ export function DashboardShell({
 
         {/* Sidebar */}
         <aside className={cn(
-          "fixed lg:sticky top-14 z-50 h-[calc(100svh-3.5rem)] w-56 shrink-0 border-r border-border bg-background transition-transform duration-200 lg:translate-x-0",
+          "fixed lg:sticky top-0 z-50 h-svh w-56 shrink-0 border-r border-border bg-background transition-transform duration-200 lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}>
-          <div className="flex flex-col gap-0.5 p-3">
-            <div className="flex items-center justify-between mb-2 lg:hidden">
-              <span className="text-xs font-semibold tracking-tight">Menu</span>
-              <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground hover:text-foreground">
+          <div className="flex flex-col h-full">
+            {/* Sidebar header */}
+            <div className="flex items-center justify-between p-3 border-b border-border">
+              <Link href="/dashboard" className="flex items-center gap-2 shrink-0" onClick={() => setSidebarOpen(false)}>
+                <div
+                  className="size-7 rounded-md flex items-center justify-center"
+                  style={{ backgroundColor: 'var(--brand)' }}
+                >
+                  <HardDrive className="size-3.5" style={{ color: 'var(--brand-foreground)' }} />
+                </div>
+                <span className="text-sm font-semibold tracking-tight">el4scloud</span>
+              </Link>
+              <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground hover:text-foreground lg:hidden">
                 <XIcon className="size-4" />
               </button>
             </div>
+
+            {/* Navigation */}
+            <div className="flex-1 overflow-y-auto p-3">
             <Link
               href="/dashboard"
               onClick={() => setSidebarOpen(false)}
@@ -305,10 +268,46 @@ export function DashboardShell({
               </>
             )}
           </div>
+
+            {/* User section */}
+            <div className="border-t border-border p-3">
+              <DropdownMenu>
+                <DropdownMenuTrigger render={
+                  <Button variant="ghost" size="sm" className="w-full gap-2 px-2 justify-start">
+                    <Avatar className="size-6">
+                      <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm truncate max-w-32">{user.name}</span>
+                  </Button>
+                } />
+                <DropdownMenuContent align="start" className="w-48">
+                  <DropdownMenuGroup>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm font-medium">{user.name}</span>
+                      <span className="text-xs text-muted-foreground truncate">{user.email}</span>
+                    </div>
+                  </DropdownMenuLabel>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive gap-2 cursor-pointer">
+                    <LogOut className="size-3.5" />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
         </aside>
 
         {/* Page content */}
-        <main className="flex-1 min-w-0">
+        <main className="flex-1 min-w-0 relative">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="fixed top-3 left-3 z-50 lg:hidden text-muted-foreground hover:text-foreground"
+          >
+            <Menu className="size-5" />
+          </button>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             {suspended && !suspendedAllowedRoutes.includes(pathname) && !pathname.startsWith('/dashboard/admin') ? (
               <SuspensionBanner reason={suspensionReason ?? 'Account suspended'} appealable={appealable} suspensionType={suspensionType ?? undefined} />

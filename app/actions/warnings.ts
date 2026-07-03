@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { user } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { logAuditEventWithHeaders } from '@/lib/audit'
+import { fireWebhook } from '@/lib/webhooks/fire'
 
 export type AccountStatus =
   | { warned: false; suspended: false }
@@ -84,6 +85,7 @@ export async function acknowledgeWarning() {
     'account.warning_acknowledged',
     JSON.stringify({})
   )
+  await fireWebhook(session.user.id, 'user.warning_acknowledged', {}).catch(() => undefined)
 
   return { ok: true }
 }

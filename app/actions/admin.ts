@@ -8,6 +8,7 @@ import { eq, desc, ilike, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
 import { recordWarning } from '@/lib/warnings'
+import { fireWebhook } from '@/lib/webhooks/fire'
 import { s3, S3_BUCKET } from '@/lib/s3'
 import { DeleteObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3'
 import { sendMail } from '@/lib/mail'
@@ -89,6 +90,7 @@ export async function approveRequest(requestId: string, approvedAmount: string, 
   }
 
   await logAuditEventWithHeaders(adminId, 'admin.storage_request_approved', JSON.stringify({ requestId, approvedAmount, targetUserId: req.userId }))
+  await fireWebhook(req.userId, 'storage.request_approved', { requestId, approvedAmount }).catch(() => undefined)
   return { ok: true }
 }
 
@@ -114,7 +116,13 @@ export async function rejectRequest(requestId: string, adminNote?: string) {
     .set({ status: 'rejected', adminNote: adminNote ?? null, updatedAt: new Date() })
     .where(eq(storageRequests.id, requestId))
 
+  await logAuditEventWithHeaders(adminId, 'admin.storage_request_rejected', JSON.stringify({ requestId, targetUserId: req.userId }))
+  await fireWebhook(req.userId, 'storage.request_rejected', { requestId }).catch(() => undefined)
+
   try {
+    const hdrs = await headers()
+    const cleanHeaders = new Headers(hdrs)
+    cleanHeaders.delete('cookie')
     const { renderToString } = await import('react-dom/server')
     const { StorageRejectedEmail } = await import('@/components/emails/storage-rejected')
     const html = renderToString(StorageRejectedEmail({
@@ -127,7 +135,6 @@ export async function rejectRequest(requestId: string, adminNote?: string) {
     console.error('[admin] Failed to send rejection email:', err?.message ?? err)
   }
 
-  await logAuditEventWithHeaders(adminId, 'admin.storage_request_rejected', JSON.stringify({ requestId, targetUserId: req.userId }))
   return { ok: true }
 }
 
@@ -323,6 +330,50 @@ export async function adminReplyToTicket(ticketId: string, message: string, isIn
     }
   }
 
+  if (!isInternal) {
+    try {
+      const [ticket] = await db
+        .select({ userId: tickets.userId, subject: tickets.subject, priority: tickets.priority })
+        .from(tickets)
+        .where(eq(tickets.id, ticketId))
+
+      if (ticket) {
+        const [owner] = await db
+          .select({ name: user.name, email: user.email })
+          .from(user)
+          .where(eq(user.id, ticket.userId))
+
+        if (owner?.email) {
+          const { renderToString } = await import('react-dom/server')
+          const { TicketReplyEmail } = await import('@/components/emails/ticket-reply')
+          const html = renderToString(TicketReplyEmail({
+            name: owner.name ?? owner.email,
+            subject: ticket.subject,
+            message,
+            ticketId,
+          }))
+          await sendMail({ to: owner.email, subject: `Re: ${ticket.subject}`, html })
+        }
+      }
+    } catch (err: any) {
+      console.error('[admin] Failed to send ticket reply email:', err?.message ?? err)
+    }
+  }
+
+  await logAuditEventWithHeaders(
+    adminId,
+    isInternal ? 'admin.ticket_internal_note' : 'admin.ticket_replied',
+    JSON.stringify({ ticketId, isInternal }),
+  )
+
+  const [ticketRow] = await db
+    .select({ userId: tickets.userId })
+    .from(tickets)
+    .where(eq(tickets.id, ticketId))
+    .limit(1)
+
+  await fireWebhook(ticketRow?.userId ?? adminId, isInternal ? 'ticket.internal_note' : 'ticket.replied', { ticketId, isInternal }).catch(() => undefined)
+
   return { ok: true }
 }
 
@@ -333,6 +384,7 @@ export async function adminCloseTicket(ticketId: string) {
     .set({ status: 'closed', updatedAt: new Date() })
     .where(eq(tickets.id, ticketId))
   await logAuditEventWithHeaders(adminId, 'admin.ticket_closed', JSON.stringify({ ticketId }))
+  await fireWebhook(adminId, 'ticket.closed', { ticketId }).catch(() => undefined)
   return { ok: true }
 }
 
@@ -343,6 +395,7 @@ export async function adminReopenTicket(ticketId: string) {
     .set({ status: 'open', updatedAt: new Date() })
     .where(eq(tickets.id, ticketId))
   await logAuditEventWithHeaders(adminId, 'admin.ticket_reopened', JSON.stringify({ ticketId }))
+  await fireWebhook(adminId, 'ticket.reopened', { ticketId }).catch(() => undefined)
   return { ok: true }
 }
 
@@ -511,6 +564,7 @@ export async function suspendUser(userId: string, reason: string, appealable: bo
     })
     .where(eq(user.id, userId))
   await logAuditEventWithHeaders(adminId, `admin.user_${type}`, JSON.stringify({ targetUserId: userId, reason, appealable }))
+  await fireWebhook(userId, type === 'terminated' ? 'user.terminated' : 'user.suspended', { userId, reason, appealable }).catch(() => undefined)
   return { ok: true }
 }
 
@@ -592,6 +646,7 @@ export async function flagHash(hash: string) {
     flaggedBy: 'admin',
   }).catch(() => { throw new Error('Hash already exists') })
   await logAuditEventWithHeaders(adminId, 'admin.hash_flagged', JSON.stringify({ hash: hash.trim().toLowerCase() }))
+  await fireWebhook(adminId, 'admin.hash_flagged', { hash: hash.trim().toLowerCase() }).catch(() => undefined)
   return { ok: true }
 }
 
@@ -642,16 +697,24 @@ export async function approveDeletionRequest(requestId: string, adminNote?: stri
     .where(eq(deletionRequests.id, requestId))
 
   await logAuditEventWithHeaders(adminId, 'admin.deletion_approved', JSON.stringify({ requestId, targetUserId: uid }))
+  await fireWebhook(uid, 'deletion.request_approved', { requestId }).catch(() => undefined)
   return { ok: true }
 }
 
 export async function rejectDeletionRequest(requestId: string, adminNote?: string) {
   const adminId = await assertAdmin()
+  const [req] = await db
+    .select({ userId: deletionRequests.userId })
+    .from(deletionRequests)
+    .where(eq(deletionRequests.id, requestId))
+    .limit(1)
+
   await db
     .update(deletionRequests)
     .set({ status: 'rejected', adminNote: adminNote ?? null, updatedAt: new Date() })
     .where(eq(deletionRequests.id, requestId))
   await logAuditEventWithHeaders(adminId, 'admin.deletion_rejected', JSON.stringify({ requestId }))
+  await fireWebhook(req?.userId ?? adminId, 'deletion.request_rejected', { requestId }).catch(() => undefined)
   return { ok: true }
 }
 
@@ -715,6 +778,7 @@ export async function approveAppeal(appealId: string, adminNote?: string) {
     .where(eq(user.id, a.userId))
 
   await logAuditEventWithHeaders(adminId, 'admin.appeal_approved', JSON.stringify({ appealId, targetUserId: a.userId }))
+  await fireWebhook(a.userId, 'user.appeal_approved', { appealId }).catch(() => undefined)
   return { ok: true }
 }
 
@@ -734,6 +798,7 @@ export async function rejectAppeal(appealId: string, adminNote?: string) {
     .where(eq(appeals.id, appealId))
 
   await logAuditEventWithHeaders(adminId, 'admin.appeal_rejected', JSON.stringify({ appealId }))
+  await fireWebhook(a.userId, 'user.appeal_rejected', { appealId }).catch(() => undefined)
   return { ok: true }
 }
 
@@ -886,6 +951,7 @@ export async function approveTakedown(requestId: string) {
     .where(eq(takedownRequests.id, requestId))
 
   await logAuditEventWithHeaders(adminId, 'admin.takedown_approved', JSON.stringify({ requestId }))
+  await fireWebhook(adminId, 'admin.takedown_approved', { requestId, fileId: req.fileId }).catch(() => undefined)
   return { ok: true }
 }
 
@@ -896,6 +962,7 @@ export async function rejectTakedown(requestId: string, adminNote?: string) {
     .set({ status: 'rejected', adminNote: adminNote ?? null, updatedAt: new Date() })
     .where(eq(takedownRequests.id, requestId))
   await logAuditEventWithHeaders(adminId, 'admin.takedown_rejected', JSON.stringify({ requestId }))
+  await fireWebhook(adminId, 'admin.takedown_rejected', { requestId }).catch(() => undefined)
   return { ok: true }
 }
 
@@ -982,5 +1049,91 @@ export async function deleteUser(userId: string) {
   await db.delete(user).where(eq(user.id, userId))
 
   await logAuditEventWithHeaders(adminId, 'admin.user_deleted', JSON.stringify({ targetUserId: userId, email: u.email }))
+  await fireWebhook(userId, 'user.deleted', { userId, email: u.email }).catch(() => undefined)
+  return { ok: true }
+}
+
+export async function getFlaggedFiles() {
+  const adminId = await assertAdmin()
+
+  const rows = await db.execute<{
+    id: string
+    hash: string
+    fileId: string
+    flaggedBy: string
+    createdAt: Date
+    fileName: string | null
+    userId: string | null
+    userName: string | null
+  }>(sql`
+    SELECT
+      fh.id,
+      fh.hash,
+      fh."fileId",
+      fh."flaggedBy",
+      fh."createdAt",
+      files.name AS "fileName",
+      files."userId" AS "userId",
+      "user".name AS "userName"
+    FROM "flagged_hashes" fh
+    LEFT JOIN "files" ON files.id = fh."fileId"
+    LEFT JOIN "user" ON "user".id = files."userId"
+    ORDER BY fh."createdAt" DESC
+  `)
+
+  return rows.rows ?? []
+}
+
+export async function removeFlaggedHash(hashId: string) {
+  const adminId = await assertAdmin()
+  await db.delete(flaggedHashes).where(eq(flaggedHashes.id, hashId))
+  await logAuditEventWithHeaders(adminId, 'admin.hash_removed', JSON.stringify({ hashId }))
+  return { ok: true }
+}
+
+export async function getWebhookDeliveries(limit = 50, offset = 0) {
+  const adminId = await assertAdmin()
+
+  const rows = await db.execute<{
+    id: string
+    event: string
+    status: string
+    responseCode: number | null
+    attempt: number
+    createdAt: Date
+    url: string
+  }>(sql`
+    SELECT
+      wd.id,
+      wd.event,
+      wd.status,
+      wd."responseCode",
+      wd.attempt,
+      wd."createdAt",
+      w.url
+    FROM "webhook_deliveries" wd
+    INNER JOIN "webhooks" w ON w.id = wd."webhookId"
+    ORDER BY wd."createdAt" DESC
+    LIMIT ${limit}
+    OFFSET ${offset}
+  `)
+
+  return rows.rows ?? []
+}
+
+export async function testWebhook(webhookId: string) {
+  const adminId = await assertAdmin()
+
+  const [webhook] = await db
+    .select()
+    .from(webhooks)
+    .where(eq(webhooks.id, webhookId))
+
+  if (!webhook) throw new Error('Webhook not found')
+
+  await fireWebhook(webhook.userId, 'webhook.test', { webhookId, testedBy: adminId })
+
+  await logAuditEventWithHeaders(adminId, 'admin.webhook_tested', JSON.stringify({ webhookId, url: webhook.url }))
+
   return { ok: true }
 }

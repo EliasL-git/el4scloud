@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { user, aiUsage } from '@/lib/db/schema'
+import { user, aiUsage, aiConversations, aiMessages } from '@/lib/db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { AI_MODELS, FREE_DAILY_USD_LIMIT, calculateCost } from '@/lib/ai'
@@ -72,6 +72,16 @@ export async function POST(req: NextRequest) {
     const stream = body.stream !== false
     const maxTokens = body.max_tokens ?? body.maxTokens ?? 2048
     const temperature = body.temperature ?? 0.7
+    let conversationId = body.conversation_id as string | undefined
+
+    if (!conversationId) {
+      conversationId = uuidv4()
+      await db.insert(aiConversations).values({
+        id: conversationId,
+        userId: session.user.id,
+        title: (messages.find((m) => m.role === 'user')?.content ?? 'New chat').slice(0, 60),
+      })
+    }
 
     const modelIndex = AI_MODELS.findIndex((m) => m.id === selectedModel)
     if (modelIndex === -1) {
@@ -122,11 +132,17 @@ export async function POST(req: NextRequest) {
         await db.insert(aiUsage).values({ id: uuidv4(), userId: session.user.id, model: doModel, cost })
       }
 
+      const userContent = messages[messages.length - 1]?.content ?? ''
+      await db.insert(aiMessages).values({ id: uuidv4(), conversationId: conversationId!, role: 'user', content: userContent, model: selectedModel })
+      await db.insert(aiMessages).values({ id: uuidv4(), conversationId: conversationId!, role: 'assistant', content: data.choices?.[0]?.message?.content ?? '', model: doModel })
+      await db.update(aiConversations).set({ updatedAt: new Date() }).where(eq(aiConversations.id, conversationId!))
+
       return Response.json({
         id: oaiId(),
         object: 'chat.completion',
         created: Math.floor(Date.now() / 1000),
         model: doModel,
+        conversation_id: conversationId,
         choices: [{
           index: 0,
           message: data.choices?.[0]?.message ?? { role: 'assistant', content: '' },
@@ -183,7 +199,12 @@ export async function POST(req: NextRequest) {
           await db.insert(aiUsage).values({ id: uuidv4(), userId: session.user.id, model: doModel, cost })
         }
 
-        const meta = {
+        const userContent = messages[messages.length - 1]?.content ?? ''
+        await db.insert(aiMessages).values({ id: uuidv4(), conversationId: conversationId!, role: 'user', content: userContent, model: selectedModel })
+        await db.insert(aiMessages).values({ id: uuidv4(), conversationId: conversationId!, role: 'assistant', content: fullContent, model: doModel })
+        await db.update(aiConversations).set({ updatedAt: new Date() }).where(eq(aiConversations.id, conversationId!))
+
+        const meta = JSON.stringify({
           _meta: true,
           _cost: cost,
           _usedToday: usedToday + cost,
@@ -191,8 +212,9 @@ export async function POST(req: NextRequest) {
           _fallback: didFallback,
           _fallbackFrom: didFallback ? selectedModel : undefined,
           _model: doModel,
-        }
-        await writer.write(encoder.encode(`data: ${JSON.stringify(meta)}\n\n`))
+          _conversationId: conversationId,
+        })
+        await writer.write(encoder.encode(`data: ${meta}\n\n`))
         await writer.write(encoder.encode('data: [DONE]\n\n'))
         await writer.close()
       }

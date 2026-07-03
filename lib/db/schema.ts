@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import { pgTable, text, timestamp, boolean, bigint, integer, real } from 'drizzle-orm/pg-core'
 import { NON_HC_STORAGE_LIMIT } from '@/lib/storage'
 
@@ -255,5 +256,46 @@ export const warnings = pgTable('warnings', {
   type: text('type').notNull(), // 'warning' | 'suspension' | 'termination'
   reason: text('reason').notNull(),
   fileName: text('fileName'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
+export const webhooks = pgTable('webhooks', {
+  id: text('id').primaryKey(),
+  userId: text('userId').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  url: text('url').notNull(),
+  secret: text('secret').notNull(),
+  events: text('events').notNull(),
+  active: boolean('active').notNull().default(true),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
+export const webhookDeliveries = pgTable('webhook_deliveries', {
+  id: text('id').primaryKey(),
+  webhookId: text('webhookId').notNull().references(() => webhooks.id, { onDelete: 'cascade' }),
+  event: text('event').notNull(),
+  payload: text('payload').notNull(),
+  status: text('status').notNull(),
+  responseCode: integer('responseCode'),
+  attempt: integer('attempt').notNull().default(1),
+  nextRetryAt: timestamp('nextRetryAt'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
+export const aiConversations = pgTable('ai_conversations', {
+  id: text('id').primaryKey(),
+  userId: text('userId').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  title: text('title').notNull().default('New chat'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+})
+
+export const aiMessages = pgTable('ai_messages', {
+  id: text('id').primaryKey(),
+  conversationId: text('conversationId').notNull().references(() => aiConversations.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(),
+  content: text('content').notNull(),
+  model: text('model'),
+  tokensIn: integer('tokensIn'),
+  tokensOut: integer('tokensOut'),
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 })

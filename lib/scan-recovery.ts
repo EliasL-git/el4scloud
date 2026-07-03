@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm'
 import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { checkFile } from '@/lib/file-scan'
 import { recordWarning } from '@/lib/warnings'
+import { fireWebhook } from '@/lib/webhooks/fire'
 import * as fs from 'fs'
 import * as path from 'path'
 import * as os from 'os'
@@ -77,6 +78,8 @@ async function scanPendingFile(fileId: string, key: string, fileName: string, us
         .set({ scanStatus: 'scanned', scanResult, scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
 
+      await fireWebhook(userId, 'file.flagged', { fileId, scanResult, fileName }).catch(() => undefined)
+
       if (newCount >= 2) {
         await recordWarning(userId, 'suspension', `Account suspended: repeated Terms of Service violations (${checkResult.reason || 'Blocked file'} - ${fileName})`, fileName)
         await db
@@ -88,6 +91,8 @@ async function scanPendingFile(fileId: string, key: string, fileName: string, us
             updatedAt: new Date(),
           })
           .where(eq(user.id, userId))
+
+        await fireWebhook(userId, 'user.suspended', { userId, reason: `Repeated upload violations: ${fileName}` }).catch(() => undefined)
       } else {
         await recordWarning(userId, 'warning', `Upload violation: ${checkResult.reason || 'Blocked file'} (${fileName})`, fileName)
         await db
@@ -99,6 +104,8 @@ async function scanPendingFile(fileId: string, key: string, fileName: string, us
             updatedAt: new Date(),
           })
           .where(eq(user.id, userId))
+
+        await fireWebhook(userId, 'user.suspended', { userId, reason: `Upload violation: ${fileName}`, warning: true }).catch(() => undefined)
       }
 
       console.log(`[scan-recovery] Flagged + deleted file ${fileId} (${fileName}) — user ${newCount >= 2 ? 'suspended' : 'warned'}`)
@@ -107,12 +114,16 @@ async function scanPendingFile(fileId: string, key: string, fileName: string, us
         .update(files)
         .set({ scanStatus: 'error', scanResult: checkResult.scanError, scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
+
+      await fireWebhook(userId, 'file.scanned', { fileId, scanStatus: 'error', scanResult: checkResult.scanError }).catch(() => undefined)
       console.log(`[scan-recovery] Scan error for ${fileId} (${fileName}): ${checkResult.scanError}`)
     } else {
       await db
         .update(files)
         .set({ scanStatus: 'scanned', scanResult: 'clean', scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
+
+      await fireWebhook(userId, 'file.scanned', { fileId, scanStatus: 'scanned', scanResult: 'clean' }).catch(() => undefined)
       console.log(`[scan-recovery] File ${fileId} (${fileName}) marked clean`)
     }
   } catch (err: any) {

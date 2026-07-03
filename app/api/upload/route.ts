@@ -12,6 +12,7 @@ import * as path from 'path'
 import * as os from 'os'
 import { checkFile } from '@/lib/file-scan'
 import { recordWarning } from '@/lib/warnings'
+import { fireWebhook } from '@/lib/webhooks/fire'
 
 function hashKey(key: string) {
   return createHash('sha256').update(key).digest('hex')
@@ -148,7 +149,10 @@ export async function POST(req: Request) {
     scanStatus: 'pending',
   })
 
-  // Respond immediately — scanning happens asynchronously
+  ;(async () => {
+    await fireWebhook(userId, 'file.uploaded', { fileId, key, name: fileName, size, mimeType, isPublic }).catch(() => undefined)
+  })()
+
   const response = Response.json({
     fileId,
     key,
@@ -180,7 +184,6 @@ async function scanAndHandle(
     const checkResult = await checkFile(fileName, tmpPath)
 
     if (!checkResult.allowed) {
-      // Malware detected — delete from S3, update record, warn user
       try {
         await s3.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: key }))
       } catch { /* object may already be deleted */ }
@@ -198,12 +201,13 @@ async function scanAndHandle(
         .set({ warningCount: newCount, updatedAt: new Date() })
         .where(eq(user.id, userId))
 
-      // Update file record to reflect flagged status
       const scanResult = checkResult.virusName || checkResult.reason || 'flagged'
       await db
         .update(files)
         .set({ scanStatus: 'scanned', scanResult, scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
+
+      await fireWebhook(userId, 'file.flagged', { fileId, scanResult, fileName }).catch(() => undefined)
 
       if (newCount >= 2) {
         await recordWarning(userId, 'suspension', `Account suspended: repeated Terms of Service violations (${checkResult.reason || 'Blocked file'} - ${fileName})`, fileName)
@@ -218,6 +222,8 @@ async function scanAndHandle(
           .where(eq(user.id, userId))
 
         console.log(`[upload] Suspended user ${userId} (violation #${newCount}): ${checkResult.reason} for ${fileName}`)
+
+        await fireWebhook(userId, 'user.suspended', { userId, reason: `Repeated upload violations: ${fileName}` }).catch(() => undefined)
       } else {
         await recordWarning(userId, 'warning', `Upload violation: ${checkResult.reason || 'Blocked file'} (${fileName})`, fileName)
         await db
@@ -231,19 +237,23 @@ async function scanAndHandle(
           .where(eq(user.id, userId))
 
         console.log(`[upload] Warned user ${userId} (violation #${newCount}): ${checkResult.reason} for ${fileName}`)
+
+        await fireWebhook(userId, 'user.suspended', { userId, reason: `Upload violation: ${fileName}`, warning: true }).catch(() => undefined)
       }
     } else if (checkResult.scanError) {
-      // ClamAV unavailable or error — update record to reflect scan error
       await db
         .update(files)
         .set({ scanStatus: 'error', scanResult: checkResult.scanError, scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
+
+      await fireWebhook(userId, 'file.scanned', { fileId, scanStatus: 'error', scanResult: checkResult.scanError }).catch(() => undefined)
     } else {
-      // File is clean
       await db
         .update(files)
         .set({ scanStatus: 'scanned', scanResult: 'clean', scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
+
+      await fireWebhook(userId, 'file.scanned', { fileId, scanStatus: 'scanned', scanResult: 'clean' }).catch(() => undefined)
     }
   } catch (err: any) {
     console.error(`[upload] Scan error for ${fileId}:`, err)

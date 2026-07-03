@@ -27,3 +27,4 @@ See the individual pages for full documentation:
 - [Upload & presigned upload](./upload.md)
 - [Download & password-protected files](./download.md)
 - [AI Chat](./ai.md)
+- [Webhooks](./webhooks.md)

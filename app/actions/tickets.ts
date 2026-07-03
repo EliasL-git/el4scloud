@@ -8,6 +8,7 @@ import { eq, and, desc, sql, isNull } from 'drizzle-orm'
 import crypto from 'crypto'
 import { logAuditEventWithHeaders } from '@/lib/audit'
 import { sendMail } from '@/lib/mail'
+import { fireWebhook } from '@/lib/webhooks/fire'
 
 const SLA_HOURS: Record<string, number> = {
   critical: 1,
@@ -80,6 +81,8 @@ export async function createTicket(subject: string, message: string, category = 
   await logAuditEventWithHeaders(session.user.id, 'ticket.created', JSON.stringify({
     ticketId: id, subject, category, priority,
   }))
+
+  await fireWebhook(session.user.id, 'ticket.created', { ticketId: id, subject, category, priority }).catch(() => undefined)
 
   notifyAdmins({
     userName: session.user.name ?? session.user.email ?? 'Unknown',

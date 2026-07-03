@@ -296,6 +296,48 @@ const statements = [
   `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "verifiedViaHackclub" BOOLEAN NOT NULL DEFAULT FALSE`,
   `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "verifiedManually" BOOLEAN NOT NULL DEFAULT FALSE`,
   `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "verificationMeta" TEXT`,
+  `CREATE TABLE IF NOT EXISTS "webhooks" (
+    "id"          TEXT PRIMARY KEY,
+    "userId"      TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+    "url"         TEXT NOT NULL,
+    "secret"      TEXT NOT NULL,
+    "events"      TEXT NOT NULL,
+    "active"      BOOLEAN NOT NULL DEFAULT TRUE,
+    "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS "webhooks_userId_idx" ON "webhooks"("userId")`,
+  `CREATE TABLE IF NOT EXISTS "webhook_deliveries" (
+    "id"          TEXT PRIMARY KEY,
+    "webhookId"   TEXT NOT NULL REFERENCES "webhooks"("id") ON DELETE CASCADE,
+    "event"       TEXT NOT NULL,
+    "payload"     TEXT NOT NULL,
+    "status"      TEXT NOT NULL,
+    "responseCode" INTEGER,
+    "attempt"     INTEGER NOT NULL DEFAULT 1,
+    "nextRetryAt" TIMESTAMPTZ,
+    "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS "webhook_deliveries_webhookId_idx" ON "webhook_deliveries"("webhookId")`,
+  `CREATE INDEX IF NOT EXISTS "webhook_deliveries_nextRetryAt_idx" ON "webhook_deliveries"("nextRetryAt")`,
+  `CREATE TABLE IF NOT EXISTS "ai_conversations" (
+    "id"          TEXT PRIMARY KEY,
+    "userId"      TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+    "title"       TEXT NOT NULL DEFAULT 'New chat',
+    "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS "ai_conversations_userId_idx" ON "ai_conversations"("userId")`,
+  `CREATE TABLE IF NOT EXISTS "ai_messages" (
+    "id"            TEXT PRIMARY KEY,
+    "conversationId" TEXT NOT NULL REFERENCES "ai_conversations"("id") ON DELETE CASCADE,
+    "role"          TEXT NOT NULL,
+    "content"       TEXT NOT NULL,
+    "model"         TEXT,
+    "tokensIn"      INTEGER,
+    "tokensOut"     INTEGER,
+    "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS "ai_messages_conversationId_idx" ON "ai_messages"("conversationId")`,
 ]
 
 async function migrate() {
