@@ -1,6 +1,6 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+let resend: Resend | undefined
 
 export async function sendMail({
   to,
@@ -11,9 +11,14 @@ export async function sendMail({
   subject: string
   html: string
 }) {
-  if (!process.env.RESEND_API_KEY) {
+  const apiKey = process.env.RESEND_API_KEY
+  if (!apiKey) {
     console.error('[mail] RESEND_API_KEY is not set — cannot send email')
     return
+  }
+
+  if (!resend) {
+    resend = new Resend(apiKey)
   }
 
   const from = process.env.RESEND_FROM ?? 'noreply@el4s.dev'
