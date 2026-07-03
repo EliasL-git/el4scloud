@@ -312,8 +312,11 @@ async function migrate() {
     }
 
     // Repair: find users missing an email credential account row and create one
+    // This detects users damaged by the HackClub OAuth bug that overwrote email rows
     const orphaned = await client.query(`
-      SELECT u.id, u.email FROM "user" u
+      SELECT u.id, u.email,
+             EXISTS(SELECT 1 FROM account a WHERE a."userId" = u.id AND a."providerId" = 'hackclub') AS "hasHackclub"
+      FROM "user" u
       WHERE NOT EXISTS (
         SELECT 1 FROM account a
         WHERE a."userId" = u.id AND a."providerId" = 'email'
@@ -329,7 +332,11 @@ async function migrate() {
           text: `INSERT INTO account (id, "accountId", "providerId", "userId", password) VALUES ($1, $2, 'email', $3, $4)`,
           values: [randomBytes(16).toString('hex'), u.email, u.id, hashed],
         })
-        console.log(`  → Created account row for ${u.email} (user ${u.id}) — user must reset password`)
+        if (u.hasHackclub) {
+          console.log(`  → Created email account for ${u.email} (user ${u.id}) — had hackclub row but email row was missing (likely overwritten by OAuth bug) — user must reset password`)
+        } else {
+          console.log(`  → Created account row for ${u.email} (user ${u.id}) — user must reset password`)
+        }
       }
     } else {
       console.log('[migrate] All users have email credential accounts — no repair needed.')

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { account } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -71,16 +71,17 @@ export async function GET(request: NextRequest) {
 
   const hcUserId = String(identity.id)
 
+  // Only look for an existing *hackclub* account row — never touch the email credential row
   const [existing] = await db
     .select({ id: account.id })
     .from(account)
-    .where(eq(account.userId, session.user.id))
+    .where(and(eq(account.userId, session.user.id), eq(account.providerId, 'hackclub')))
 
   if (existing) {
     await db
       .update(account)
-      .set({ accountId: hcUserId, accessToken, providerId: 'hackclub', updatedAt: new Date() })
-      .where(eq(account.userId, session.user.id))
+      .set({ accountId: hcUserId, accessToken, updatedAt: new Date() })
+      .where(eq(account.id, existing.id))
   } else {
     await db.insert(account).values({
       id: uuidv4(),
