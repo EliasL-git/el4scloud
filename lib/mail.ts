@@ -11,7 +11,10 @@ export async function sendMail({
   subject: string
   html: string
 }) {
-  if (!process.env.RESEND_API_KEY) return
+  if (!process.env.RESEND_API_KEY) {
+    console.error('[mail] RESEND_API_KEY is not set — cannot send email')
+    return
+  }
 
   const from = process.env.RESEND_FROM ?? 'noreply@el4s.dev'
 

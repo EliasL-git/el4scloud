@@ -58,7 +58,9 @@ export const auth = betterAuth({
         const html = renderToString(ResetPasswordEmail({ username: user.name, resetUrl: url }))
         await sendMail({ to: user.email, subject: 'Reset your password', html })
       } catch (err: any) {
-        console.error('[auth:sendResetPassword] Failed:', err?.message ?? err)
+        const msg = err?.message ?? err
+        console.error('[auth:sendResetPassword] Failed:', msg)
+        throw new Error(`Failed to send reset email: ${msg}`)
       }
     },
   },
