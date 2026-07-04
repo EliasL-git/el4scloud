@@ -143,6 +143,7 @@ export default function AdminPage() {
   const [fileSearching, setFileSearching] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null)
   const [resetModal, setResetModal] = useState<{ userId: string; userName: string } | null>(null)
+  const [metaModal, setMetaModal] = useState<{ userId: string; userName: string; meta: Record<string, unknown> } | null>(null)
   const [resetOptions, setResetOptions] = useState({ storage: false, verification: false, introduction: false })
   const [resetSending, setResetSending] = useState(false)
   const [suspendModal, setSuspendModal] = useState<{ userId: string; userName: string } | null>(null)
@@ -689,6 +690,9 @@ export default function AdminPage() {
                         )}
                         <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { setResetOptions({ storage: false, verification: false, introduction: false }); setResetModal({ userId: u.id, userName: u.name ?? u.email }) }}>
                           <RotateCcw className="size-3" /> Reset
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { try { setMetaModal({ userId: u.id, userName: u.name ?? u.email, meta: JSON.parse(u.verificationMeta ?? '{}') }) } catch { setMetaModal({ userId: u.id, userName: u.name ?? u.email, meta: { raw: u.verificationMeta ?? '(empty)' } }) }}}>
+                          <Eye className="size-3" /> Meta
                         </Button>
                         <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" disabled={processing[`delete-${u.id}`]} onClick={() => { if (confirm(`Delete user ${u.name ?? u.email}?`)) handleAction(u.id, 'delete', () => deleteUser(u.id), 'User deleted') }}>
                           <Trash2 className="size-3" /> Delete
@@ -1328,6 +1332,35 @@ export default function AdminPage() {
                 <Ban className="size-3.5" />
                 {suspendSending ? (suspendType === 'terminated' ? 'Terminating...' : 'Suspending...') : (suspendType === 'terminated' ? 'Terminate' : 'Suspend')}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Meta modal */}
+      {metaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setMetaModal(null)}>
+          <div className="bg-background rounded-xl shadow-lg max-w-lg w-full mx-4 p-6 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Meta — {metaModal.userName}</h3>
+              <button onClick={() => setMetaModal(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="flex flex-col gap-2 max-h-96 overflow-y-auto">
+              {Object.entries(metaModal.meta).length === 0 ? (
+                <p className="text-xs text-muted-foreground">No metadata</p>
+              ) : (
+                Object.entries(metaModal.meta).map(([key, value]) => (
+                  <div key={key} className="flex items-start gap-3 p-2 rounded-md bg-muted/30">
+                    <span className="text-xs font-medium text-muted-foreground w-28 shrink-0 pt-0.5">{key}</span>
+                    <span className="text-xs font-mono break-all">{typeof value === 'object' && value !== null ? JSON.stringify(value, null, 2) : String(value)}</span>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex justify-end">
+              <Button size="sm" variant="outline" onClick={() => setMetaModal(null)}>Close</Button>
             </div>
           </div>
         </div>
