@@ -3,52 +3,38 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createTicket, getMyTickets } from '@/app/actions/tickets'
+import { CATEGORIES, getSubcategories, getCategoryLabel, getSubcategoryLabel, getDefaultPriority } from '@/lib/ticket-categories'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Plus, MessageSquare, ChevronRight, Clock, AlertTriangle, AlertCircle, Info } from 'lucide-react'
+import { Separator } from '@/components/ui/separator'
+import {
+  Plus, MessageSquare, ChevronRight, Clock, AlertTriangle, AlertCircle, Info,
+  ArrowLeft, User, Shield, CreditCard, Wrench, Lightbulb, HelpCircle, Send
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
 
 type Ticket = Awaited<ReturnType<typeof getMyTickets>>[number]
 
-const CATEGORIES = [
-  { value: 'general', label: 'General' },
-  { value: 'account', label: 'Account' },
-  { value: 'billing', label: 'Billing' },
-  { value: 'technical', label: 'Technical' },
-  { value: 'abuse', label: 'Abuse' },
-  { value: 'feature_request', label: 'Feature Request' },
-] as const
+const CATEGORY_ICONS: Record<string, React.ElementType> = {
+  account: User,
+  billing: CreditCard,
+  technical: Wrench,
+  abuse: Shield,
+  feature_request: Lightbulb,
+  general: HelpCircle,
+}
 
 const PRIORITIES = [
-  { value: 'low', label: 'Low' },
-  { value: 'normal', label: 'Normal' },
-  { value: 'high', label: 'High' },
-  { value: 'urgent', label: 'Urgent' },
   { value: 'critical', label: 'Critical' },
+  { value: 'urgent', label: 'Urgent' },
+  { value: 'high', label: 'High' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'low', label: 'Low' },
 ] as const
-
-const priorityConfig: Record<string, { color: string; icon: React.ElementType }> = {
-  critical: { color: 'text-red-500 border-red-500/30 bg-red-500/10', icon: AlertTriangle },
-  urgent: { color: 'text-orange-500 border-orange-500/30 bg-orange-500/10', icon: AlertCircle },
-  high: { color: 'text-amber-500 border-amber-500/30 bg-amber-500/10', icon: AlertCircle },
-  normal: { color: 'text-blue-500 border-blue-500/30 bg-blue-500/10', icon: Info },
-  low: { color: 'text-muted-foreground', icon: Info },
-}
 
 const statusConfig: Record<string, { label: string; variant: 'secondary' | 'outline' | 'default' | 'destructive' }> = {
   open: { label: 'Open', variant: 'secondary' },
@@ -80,10 +66,11 @@ export default function SupportPage() {
   const router = useRouter()
   const [tickets, setTickets] = useState<Ticket[]>([])
   const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'create'>('list')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
   const [category, setCategory] = useState('general')
+  const [subcategory, setSubcategory] = useState('other')
   const [priority, setPriority] = useState('normal')
   const [sending, setSending] = useState(false)
 
@@ -96,18 +83,23 @@ export default function SupportPage() {
 
   useEffect(() => { refresh() }, [refresh])
 
+  const resetForm = () => {
+    setSubject('')
+    setMessage('')
+    setCategory('general')
+    setSubcategory('other')
+    setPriority('normal')
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!subject.trim() || !message.trim()) return
     setSending(true)
     try {
-      const id = await createTicket(subject.trim(), message.trim(), category, priority)
+      const id = await createTicket(subject.trim(), message.trim(), category, priority, subcategory)
       toast.success('Ticket created')
-      setOpen(false)
-      setSubject('')
-      setMessage('')
-      setCategory('general')
-      setPriority('normal')
+      resetForm()
+      setView('list')
       router.push(`/dashboard/support/${id}`)
     } catch {
       toast.error('Failed to create ticket')
@@ -118,6 +110,150 @@ export default function SupportPage() {
 
   const openCount = tickets.filter((t) => t.status !== 'closed' && t.status !== 'resolved').length
 
+  if (view === 'create') {
+    return (
+      <div className="flex flex-col gap-6 max-w-2xl mx-auto">
+        <div className="flex items-center justify-between">
+          <div>
+            <button
+              onClick={() => { resetForm(); setView('list') }}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-2"
+            >
+              <ArrowLeft className="size-3.5" />
+              Back to tickets
+            </button>
+            <h1 className="text-xl font-semibold tracking-tight">New support ticket</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Describe your issue and we&apos;ll get back to you as soon as possible.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <Card>
+            <CardContent className="p-5 flex flex-col gap-5">
+              <div className="flex flex-col gap-2">
+                <Label className="text-sm font-medium">Category</Label>
+                <p className="text-xs text-muted-foreground">Select the area your issue relates to.</p>
+                <div className="grid grid-cols-3 gap-2 mt-1">
+                  {CATEGORIES.map((c) => {
+                    const Icon = CATEGORY_ICONS[c.value] ?? HelpCircle
+                    const isActive = category === c.value
+                    return (
+                      <button
+                        key={c.value}
+                        type="button"
+                        onClick={() => { setCategory(c.value); setSubcategory('other'); setPriority(getDefaultPriority(c.value, 'other')) }}
+                        className={`flex flex-col items-center gap-1.5 rounded-lg border px-3 py-3 text-sm transition-all ${
+                          isActive
+                            ? 'border-brand/50 bg-brand/5 ring-1 ring-brand/20'
+                            : 'border-border hover:border-muted-foreground/30 hover:bg-secondary/50'
+                        }`}
+                      >
+                        <Icon className={`size-5 ${isActive ? 'text-brand' : 'text-muted-foreground'}`} />
+                        <span className={`font-medium leading-none ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}>
+                          {c.label}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="subcategory">Subcategory</Label>
+                  <select
+                    id="subcategory"
+                    value={subcategory}
+                    onChange={(e) => { setSubcategory(e.target.value); setPriority(getDefaultPriority(category, e.target.value)) }}
+                    className="h-9 w-full rounded-md border border-input bg-card px-2.5 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {getSubcategories(category).map((s) => (
+                      <option key={s.value} value={s.value} className="bg-card text-foreground">{s.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>Priority</Label>
+                  <select
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value)}
+                    className="h-9 w-full rounded-md border border-input bg-card px-2.5 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {PRIORITIES.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {priority === 'critical' && (
+                <div className="flex items-center gap-2 text-xs text-red-500 bg-red-500/10 rounded-md px-3 py-2">
+                  <AlertTriangle className="size-3.5 shrink-0" />
+                  <span>Critical issues are for service outages or security incidents only.</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-5 flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="subject" className="text-sm font-medium">Subject</Label>
+                <p className="text-xs text-muted-foreground">A short, descriptive summary of your issue.</p>
+                <Input
+                  id="subject"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="e.g. Unable to upload files over 10MB"
+                  required
+                  className="mt-1"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="message" className="text-sm font-medium">Description</Label>
+                <p className="text-xs text-muted-foreground">Provide as much detail as possible so we can help you quickly.</p>
+                <textarea
+                  id="message"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder={`Describe your issue in detail...\n\n- What were you trying to do?\n- What happened instead?\n- Any error messages you saw?`}
+                  required
+                  rows={8}
+                  className="mt-1 flex min-h-[160px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="flex items-center justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => { resetForm(); setView('list') }}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={sending || !subject.trim() || !message.trim()}
+              className="gap-1.5"
+              style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+            >
+              {sending ? (
+                <>Submitting...</>
+              ) : (
+                <><Send className="size-3.5" /> Submit ticket</>
+              )}
+            </Button>
+          </div>
+        </form>
+
+        <Toaster />
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-6 max-w-3xl">
       <div className="flex items-center justify-between">
@@ -127,90 +263,15 @@ export default function SupportPage() {
             Get help with your account or files.
           </p>
         </div>
-        <AlertDialog open={open} onOpenChange={setOpen}>
-          <AlertDialogTrigger
-            render={
-              <Button size="sm" style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}>
-                <Plus className="size-4" />
-                New ticket
-              </Button>
-            }
-          />
-          <AlertDialogContent>
-            <form onSubmit={handleSubmit}>
-              <AlertDialogHeader>
-                <AlertDialogTitle>New support ticket</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Describe your issue and we&apos;ll get back to you.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <div className="flex flex-col gap-4 py-4">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="subject">Subject</Label>
-                  <Input
-                    id="subject"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder="e.g. Upload not working"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="category">Category</Label>
-                    <select
-                      id="category"
-                      value={category}
-                      onChange={(e) => setCategory(e.target.value)}
-                      className="h-9 rounded-md border border-input bg-card px-2.5 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {CATEGORIES.map((c) => (
-                        <option key={c.value} value={c.value} className="bg-card text-foreground">{c.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="priority">Priority</Label>
-                    <select
-                      id="priority"
-                      value={priority}
-                      onChange={(e) => setPriority(e.target.value)}
-                      className="h-9 rounded-md border border-input bg-card px-2.5 py-1 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {PRIORITIES.map((p) => (
-                        <option key={p.value} value={p.value} className="bg-card text-foreground">{p.label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                {priority === 'critical' && (
-                  <div className="flex items-center gap-2 text-xs text-red-500 bg-red-500/10 rounded-md px-3 py-2">
-                    <AlertTriangle className="size-3.5 shrink-0" />
-                    <span>Critical issues are for service outages or security incidents only.</span>
-                  </div>
-                )}
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="message">Message</Label>
-                  <textarea
-                    id="message"
-                    value={message}
-                    onChange={(e) => setMessage(e.target.value)}
-                    placeholder="Describe your issue in detail..."
-                    required
-                    rows={5}
-                    className="flex min-h-[100px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                  />
-                </div>
-              </div>
-              <AlertDialogFooter>
-                <AlertDialogCancel type="button">Cancel</AlertDialogCancel>
-                <AlertDialogAction type="submit" disabled={sending}>
-                  {sending ? 'Sending...' : 'Submit'}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </form>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button
+          size="sm"
+          className="gap-1.5"
+          style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+          onClick={() => setView('create')}
+        >
+          <Plus className="size-4" />
+          New ticket
+        </Button>
       </div>
 
       {openCount > 0 && (
@@ -248,7 +309,7 @@ export default function SupportPage() {
               size="sm"
               className="mt-4 gap-1.5"
               style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
-              onClick={() => setOpen(true)}
+              onClick={() => setView('create')}
             >
               <Plus className="size-3.5" />
               Create first ticket
@@ -283,6 +344,9 @@ export default function SupportPage() {
                       </p>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         <span className="text-[11px] text-muted-foreground">
+                          {getCategoryLabel(ticket.category)} / {getSubcategoryLabel(ticket.category, ticket.subcategory)}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
                           Created {formatRelative(ticket.createdAt)}
                         </span>
                         {ticket.updatedAt && new Date(ticket.updatedAt).getTime() > new Date(ticket.createdAt).getTime() + 60000 && (
@@ -313,4 +377,12 @@ export default function SupportPage() {
       <Toaster />
     </div>
   )
+}
+
+const priorityConfig: Record<string, { color: string; icon: React.ElementType }> = {
+  critical: { color: 'text-red-500 border-red-500/30 bg-red-500/10', icon: AlertTriangle },
+  urgent: { color: 'text-orange-500 border-orange-500/30 bg-orange-500/10', icon: AlertCircle },
+  high: { color: 'text-amber-500 border-amber-500/30 bg-amber-500/10', icon: AlertCircle },
+  normal: { color: 'text-blue-500 border-blue-500/30 bg-blue-500/10', icon: Info },
+  low: { color: 'text-muted-foreground', icon: Info },
 }

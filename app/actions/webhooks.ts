@@ -8,10 +8,13 @@ import { headers } from 'next/headers'
 import { v4 as uuidv4 } from 'uuid'
 import { generateWebhookSecret, validateWebhookUrl, parseEvents } from '@/lib/webhooks/validation'
 import { fireWebhook } from '@/lib/webhooks/fire'
+import { deliver } from '@/lib/webhooks/delivery'
+import { assertNotSuspended } from '@/lib/suspension'
 
 async function getUserId() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
+  await assertNotSuspended(session.user.id)
   return session.user.id
 }
 
@@ -119,7 +122,7 @@ export async function testMyWebhook(webhookId: string) {
 
   if (!webhook) throw new Error('Webhook not found')
 
-  await fireWebhook(userId, 'webhook.test', { webhookId })
+  await deliver(webhook, 'webhook.test', { webhookId })
 
   return { ok: true }
 }

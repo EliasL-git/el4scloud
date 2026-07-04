@@ -10,6 +10,7 @@ import { GetObjectCommand } from '@aws-sdk/client-s3'
 import { createHash } from 'crypto'
 import sharp from 'sharp'
 import { verify } from '@/lib/hash'
+import { isSuspended } from '@/lib/suspension'
 
 function hashKey(key: string) {
   return createHash('sha256').update(key).digest('hex')
@@ -56,6 +57,10 @@ export async function GET(
         userId = keyRecord.userId
       }
     }
+  }
+
+  if (userId && (await isSuspended(userId))) {
+    return new Response('Forbidden', { status: 403 })
   }
 
   let [file] = await db

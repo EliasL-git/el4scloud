@@ -1,16 +1,16 @@
-# el4scloud Terms of Service
+# Hobbycloud Terms of Service
 
 **Last Updated:** June 21, 2026
 
-These Terms of Service ("Terms") govern your use of el4scloud ("Service"), operated by Elias Lindholm ("Operator", "we", "us", or "our").
+These Terms of Service ("Terms") govern your use of Hobbycloud ("Service"), operated by Elias Lindholm ("Operator", "we", "us", or "our").
 
-By accessing, creating an account, or using el4scloud, you agree to these Terms. If you do not agree with these Terms, you must not use the Service.
+By accessing, creating an account, or using Hobbycloud, you agree to these Terms. If you do not agree with these Terms, you must not use the Service.
 
 ---
 
 # 1. Service Description
 
-el4scloud is a free cloud storage and file hosting service.
+Hobbycloud is a free cloud storage and file hosting service.
 
 The Service allows users to upload, store, manage, and access files.
 
@@ -22,7 +22,7 @@ The Service is provided free of charge unless otherwise stated.
 
 # 2. Account Authentication
 
-el4scloud uses Hack Club Auth for authentication.
+Hobbycloud uses Hack Club Auth for authentication.
 
 By logging in through Hack Club Auth, you acknowledge that information required for authentication may be processed by Hack Club.
 
@@ -43,9 +43,9 @@ By using the Service, you confirm that all uploaded content:
 
 You are solely responsible for the content stored under your account.
 
-el4scloud does not claim ownership of user content.
+Hobbycloud does not claim ownership of user content.
 
-You grant el4scloud permission to store, process, transmit, and manage your content only as necessary to provide and operate the Service.
+You grant Hobbycloud permission to store, process, transmit, and manage your content only as necessary to provide and operate the Service.
 
 ---
 
@@ -66,7 +66,7 @@ Repeated violations may result in account suspension or termination.
 
 # 5. Prohibited Content
 
-You may not use el4scloud to store, upload, distribute, or share:
+You may not use Hobbycloud to store, upload, distribute, or share:
 
 * Illegal content;
 * Stolen data;
@@ -97,17 +97,17 @@ You may not:
 
 # 7. Commercial Use and Resale
 
-el4scloud is provided free of charge for personal, educational, and authorized use.
+Hobbycloud is provided free of charge for personal, educational, and authorized use.
 
 Without written permission from the Operator, you may not:
 
-* Resell access to el4scloud;
+* Resell access to Hobbycloud;
 * Charge money for access to the Service;
-* Include el4scloud in a paid product or service;
+* Include Hobbycloud in a paid product or service;
 * Redistribute, sublicense, rent, or lease the Service;
-* Provide paid hosting services using el4scloud.
+* Provide paid hosting services using Hobbycloud.
 
-You may not claim el4scloud as your own service.
+You may not claim Hobbycloud as your own service.
 
 Violations may result in immediate suspension or termination.
 
@@ -135,7 +135,7 @@ Such information will only be shared when legally justified.
 
 # 9. User Responsibility and Legal Liability
 
-Users are solely responsible for the content they store on el4scloud.
+Users are solely responsible for the content they store on Hobbycloud.
 
 The Operator is not responsible for:
 
@@ -144,7 +144,7 @@ The Operator is not responsible for:
 * User-uploaded content;
 * Actions performed using user accounts.
 
-If your use of el4scloud causes legal claims, investigations, damages, fines, or other costs, you are responsible for those consequences.
+If your use of Hobbycloud causes legal claims, investigations, damages, fines, or other costs, you are responsible for those consequences.
 
 This includes:
 
@@ -196,7 +196,7 @@ You may not seek compensation from the Operator for data loss, downtime, or secu
 
 # 12. Third-Party Services
 
-el4scloud may use third-party services including:
+Hobbycloud may use third-party services including:
 
 * Authentication providers;
 * Hosting providers;
@@ -211,7 +211,7 @@ The Operator is not responsible for third-party services, availability, security
 
 # 13. Free Service and Availability
 
-el4scloud is a free service.
+Hobbycloud is a free service.
 
 No uptime guarantee, SLA, or availability commitment is provided.
 
@@ -223,7 +223,7 @@ Users acknowledge that:
 * Features may change;
 * The Service may be discontinued.
 
-el4scloud should not be used for mission-critical, business-critical, emergency, or irreplaceable data.
+Hobbycloud should not be used for mission-critical, business-critical, emergency, or irreplaceable data.
 
 ---
 
@@ -288,7 +288,7 @@ The Operator may:
 * Modify features;
 * Change functionality;
 * Suspend services;
-* Stop operating el4scloud.
+* Stop operating Hobbycloud.
 
 No compensation is provided for service changes or discontinuation.
 
@@ -298,7 +298,7 @@ No compensation is provided for service changes or discontinuation.
 
 These Terms may be updated at any time.
 
-Continued use of el4scloud after updates means you accept the updated Terms.
+Continued use of Hobbycloud after updates means you accept the updated Terms.
 
 ---
 
@@ -312,7 +312,7 @@ Any disputes shall be handled under Swedish jurisdiction.
 
 # 21. Support
 
-Support requests must be submitted through the el4scloud dashboard ticket system.
+Support requests must be submitted through the Hobbycloud dashboard ticket system.
 
 The Operator aims to respond within 48 hours, but response times are not guaranteed.
 
@@ -322,11 +322,11 @@ The Operator aims to respond within 48 hours, but response times are not guarant
 
 **Operator:** Elias Lindholm
 
-For support requests, abuse reports, legal notices, or questions, use the el4scloud dashboard ticket system.
+For support requests, abuse reports, legal notices, or questions, use the Hobbycloud dashboard ticket system.
 
 ---
 
-By using el4scloud, you confirm that you have read, understood, and agreed to these Terms of Service.
+By using Hobbycloud, you confirm that you have read, understood, and agreed to these Terms of Service.
 
 
 *edited on: 2026-06-21*

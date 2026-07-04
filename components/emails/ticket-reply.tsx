@@ -41,7 +41,7 @@ export function TicketReplyEmail({ name, subject, message }: Props) {
             Reply in the dashboard to continue the conversation.
           </Text>
           <Hr style={hr} />
-          <Text style={footer}>el4scloud team</Text>
+          <Text style={footer}>Hobbycloud team</Text>
         </Container>
       </Body>
     </Html>

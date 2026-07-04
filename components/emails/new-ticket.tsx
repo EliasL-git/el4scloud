@@ -45,7 +45,7 @@ export function NewTicketEmail({ userName, userEmail, subject, message }: Props)
             </Text>
           </Section>
           <Hr style={hr} />
-          <Text style={footer}>el4scloud team</Text>
+          <Text style={footer}>Hobbycloud team</Text>
         </Container>
       </Body>
     </Html>

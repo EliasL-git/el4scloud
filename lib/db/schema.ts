@@ -150,6 +150,7 @@ export const tickets = pgTable('tickets', {
   status: text('status').notNull().default('open'), // open | in_progress | waiting_on_customer | resolved | closed
   priority: text('priority').notNull().default('normal'), // low | normal | high | urgent | critical
   category: text('category').notNull().default('general'), // account | billing | technical | abuse | feature_request | general
+  subcategory: text('subcategory').notNull().default('other'),
   assignedTo: text('assignedTo'), // admin user id
   slaTarget: timestamp('slaTarget'), // expected response due time
   firstResponseAt: timestamp('firstResponseAt'), // when admin first replied
@@ -186,19 +187,6 @@ export const ticketReplies = pgTable('ticket_replies', {
   message: text('message').notNull(),
   isInternal: boolean('isInternal').notNull().default(false), // admin-only internal note
   createdAt: timestamp('createdAt').notNull().defaultNow(),
-})
-
-export const accessCodes = pgTable('access_codes', {
-  id: text('id').primaryKey(),
-  code: text('code').notNull().unique(),
-  maxUses: integer('maxUses').notNull().default(1),
-  usedCount: integer('usedCount').notNull().default(0),
-  createdBy: text('createdBy').notNull(),
-  expiresAt: timestamp('expiresAt'),
-  isActive: boolean('isActive').notNull().default(true),
-  note: text('note'),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
 
 export const shareLinks = pgTable('share_links', {

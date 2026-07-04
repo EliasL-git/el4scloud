@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 const services = [
   {
     id: 'storage',
-    title: 'Object Storage',
+    title: 'Storage',
     description: 'Store, manage, and serve your files with our simple API.',
     href: '/dashboard/storage',
     icon: HardDrive,
@@ -41,7 +41,7 @@ export default function DashboardOverview() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Welcome to el4scloud. Select a service below to get started.
+          Welcome to Hobbycloud. Select a service below to get started.
         </p>
       </div>
 

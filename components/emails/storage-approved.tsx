@@ -43,10 +43,10 @@ export function StorageApprovedEmail({ name, requestedAmount, approvedAmount, ad
             </Text>
           )}
           <Text style={paragraph}>
-            You can now upload more files to el4scloud.
+            You can now upload more files to Hobbycloud.
           </Text>
           <Hr style={hr} />
-          <Text style={footer}>el4scloud team</Text>
+          <Text style={footer}>Hobbycloud team</Text>
         </Container>
       </Body>
     </Html>

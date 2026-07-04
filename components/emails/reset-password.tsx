@@ -50,7 +50,7 @@ export function ResetPasswordEmail({ username, resetUrl }: Props) {
             If you didn't request this, you can safely ignore this email.
           </Text>
           <Hr style={hr} />
-          <Text style={footer}>el4scloud team</Text>
+          <Text style={footer}>Hobbycloud team</Text>
         </Container>
       </Body>
     </Html>

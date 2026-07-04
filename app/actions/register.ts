@@ -52,7 +52,7 @@ export async function register(data: {
     return { error: 'Registration failed. Please try again.' }
   }
 
-  await fireWebhook(userId, 'user.signed_up', { userId, name: data.name, email: data.email }).catch(() => undefined)
+  await fireWebhook(userId, 'user.signed_up', { userId }).catch(() => undefined)
 
   if (!noEmail) {
     try {

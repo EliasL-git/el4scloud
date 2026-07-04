@@ -2,7 +2,7 @@
 
 **Last Updated:** July 2, 2026
 
-el4scloud takes the security of your data seriously. This page outlines the security measures we have in place.
+Hobbycloud takes the security of your data seriously. This page outlines the security measures we have in place.
 
 ---
 
@@ -12,7 +12,7 @@ el4scloud takes the security of your data seriously. This page outlines the secu
 All data transmitted between your device and our servers is encrypted using **TLS 1.3** (or TLS 1.2 as fallback). We enforce HTTPS across the entire site and redirect all HTTP traffic to HTTPS.
 
 ## At Rest
-Files uploaded to el4scloud are stored on **S3-compatible object storage** in the European Union. The storage provider uses server-side encryption (SSE-S3 / AES-256) for data at rest.
+Files uploaded to Hobbycloud are stored on **S3-compatible object storage** in the European Union. The storage provider uses server-side encryption (SSE-S3 / AES-256) for data at rest.
 
 Database contents (user records, file metadata) are encrypted at rest by the managed PostgreSQL provider.
 
@@ -95,7 +95,7 @@ We will acknowledge receipt within 48 hours and work toward a fix.
 
 # 8. GDPR Compliance
 
-el4scloud is operated within the European Union:
+Hobbycloud is operated within the European Union:
 - All user data is stored within the EU
 - Users can request a copy of their data at any time
 - Users can request account deletion and data erasure
@@ -107,7 +107,7 @@ For GDPR requests, contact **elias.lindholm2010@outlook.com**.
 
 # 9. Third-Party Audits
 
-el4scloud currently relies on the security certifications of our infrastructure providers:
+Hobbycloud currently relies on the security certifications of our infrastructure providers:
 
 - **Render** (hosting): SOC 2 compliant
 - **S3-compatible storage**: AES-256 server-side encryption

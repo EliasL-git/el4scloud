@@ -3,12 +3,13 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, account, storageRequests, files, tickets, ticketReplies, ticketAttachments, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, accessCodes, takedownRequests, session as sessionTable, warnings } from '@/lib/db/schema'
+import { user, account, storageRequests, files, tickets, ticketReplies, ticketAttachments, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, takedownRequests, session as sessionTable, warnings } from '@/lib/db/schema'
 import { eq, desc, ilike, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
 import { recordWarning } from '@/lib/warnings'
 import { fireWebhook } from '@/lib/webhooks/fire'
+import { deliver } from '@/lib/webhooks/delivery'
 import { s3, S3_BUCKET } from '@/lib/s3'
 import { DeleteObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3'
 import { sendMail } from '@/lib/mail'
@@ -191,6 +192,7 @@ export async function adminGetTickets() {
     status: string
     priority: string
     category: string
+    subcategory: string
     assignedTo: string | null
     assignedName: string | null
     createdAt: Date
@@ -209,6 +211,7 @@ export async function adminGetTickets() {
       tickets.status,
       tickets.priority,
       tickets.category,
+      tickets."subcategory",
       tickets."assignedTo",
       assignee.name AS "assignedName",
       tickets."createdAt",
@@ -568,6 +571,23 @@ export async function suspendUser(userId: string, reason: string, appealable: bo
   return { ok: true }
 }
 
+export async function unsuspendUser(userId: string) {
+  const adminId = await assertAdmin()
+  await db
+    .update(user)
+    .set({
+      banned: false,
+      suspensionReason: null,
+      suspensionType: null,
+      terminatedAt: null,
+      appealable: true,
+    })
+    .where(eq(user.id, userId))
+  await logAuditEventWithHeaders(adminId, 'admin.user_unsuspended', JSON.stringify({ targetUserId: userId }))
+  await fireWebhook(userId, 'user.unsuspended', { userId }).catch(() => undefined)
+  return { ok: true }
+}
+
 export async function searchFiles(query: string) {
   const adminId = await assertAdmin()
   await logAuditEventWithHeaders(adminId, 'admin.files_searched', JSON.stringify({ query }))
@@ -802,54 +822,6 @@ export async function rejectAppeal(appealId: string, adminNote?: string) {
   return { ok: true }
 }
 
-// ─── Access Codes ───────────────────────────────────────────────
-
-export async function getAccessCodes() {
-  const adminId = await assertAdmin()
-  return db
-    .select({
-      code: accessCodes,
-      creatorName: user.name,
-    })
-    .from(accessCodes)
-    .leftJoin(user, eq(accessCodes.createdBy, user.id))
-    .orderBy(desc(accessCodes.createdAt))
-}
-
-export async function generateAccessCode(opts: {
-  maxUses: number
-  expiresAt?: string
-  note?: string
-}) {
-  const adminId = await assertAdmin()
-
-  const code = uuidv4().slice(0, 12).toUpperCase()
-
-  await db.insert(accessCodes).values({
-    id: uuidv4(),
-    code,
-    maxUses: opts.maxUses,
-    usedCount: 0,
-    createdBy: adminId,
-    expiresAt: opts.expiresAt ? new Date(opts.expiresAt) : null,
-    isActive: true,
-    note: opts.note ?? null,
-  })
-
-  await logAuditEventWithHeaders(adminId, 'admin.access_code_generated', JSON.stringify({ code, maxUses: opts.maxUses }))
-  return { code }
-}
-
-export async function revokeAccessCode(codeId: string) {
-  const adminId = await assertAdmin()
-  await db
-    .update(accessCodes)
-    .set({ isActive: false, updatedAt: new Date() })
-    .where(eq(accessCodes.id, codeId))
-  await logAuditEventWithHeaders(adminId, 'admin.access_code_revoked', JSON.stringify({ codeId }))
-  return { ok: true }
-}
-
 // ─── Scan Stats ─────────────────────────────────────────────────
 
 export async function getScanStats() {
@@ -1039,7 +1011,6 @@ export async function deleteUser(userId: string) {
   await db.delete(appeals).where(eq(appeals.userId, userId))
   await db.delete(deletionRequests).where(eq(deletionRequests.userId, userId))
   await db.delete(apiKeys).where(eq(apiKeys.userId, userId))
-  await db.delete(accessCodes).where(eq(accessCodes.createdBy, userId))
   await db.delete(warnings).where(eq(warnings.userId, userId))
 
   // account + session have cascade, but delete explicitly
@@ -1049,7 +1020,7 @@ export async function deleteUser(userId: string) {
   await db.delete(user).where(eq(user.id, userId))
 
   await logAuditEventWithHeaders(adminId, 'admin.user_deleted', JSON.stringify({ targetUserId: userId, email: u.email }))
-  await fireWebhook(userId, 'user.deleted', { userId, email: u.email }).catch(() => undefined)
+  await fireWebhook(userId, 'user.deleted', { userId }).catch(() => undefined)
   return { ok: true }
 }
 
@@ -1131,7 +1102,7 @@ export async function testWebhook(webhookId: string) {
 
   if (!webhook) throw new Error('Webhook not found')
 
-  await fireWebhook(webhook.userId, 'webhook.test', { webhookId, testedBy: adminId })
+  await deliver(webhook, 'webhook.test', { webhookId, testedBy: adminId })
 
   await logAuditEventWithHeaders(adminId, 'admin.webhook_tested', JSON.stringify({ webhookId, url: webhook.url }))
 

@@ -23,7 +23,7 @@ export async function deliver(webhook: typeof webhooks.$inferSelect, event: stri
     deliveryId = crypto.randomUUID() as `${string}-${string}-${string}-${string}-${string}`
   }
 
-  const content = buildContent(event, data)
+  const embed = buildEmbed(event, data)
 
   let responseCode: number | undefined
   let status: 'success' | 'failed' = 'failed'
@@ -39,7 +39,12 @@ export async function deliver(webhook: typeof webhooks.$inferSelect, event: stri
         'X-Webhook-Signature-256': signature,
         'X-Webhook-Delivery-ID': deliveryId,
       },
-      body: JSON.stringify({ ...payload, content }),
+      body: JSON.stringify({
+        username: 'Hobbycloud',
+        ...payload,
+        content: embed.description ?? '',
+        embeds: [embed],
+      }),
       signal: controller.signal,
     })
 
@@ -80,70 +85,92 @@ function computeNextRetry(attempt: number): Date {
   return new Date(Date.now() + ms)
 }
 
-function buildContent(event: string, data: Record<string, any>): string {
+function embedColor(event: string): number {
+  if (event.startsWith('file.')) return 0x3b82f6
+  if (event.startsWith('user.')) return 0xef4444
+  if (event.startsWith('ticket.')) return 0xf59e0b
+  if (event.startsWith('storage.')) return 0x22c55e
+  if (event.startsWith('deletion.')) return 0xef4444
+  if (event.startsWith('share_link.')) return 0x8b5cf6
+  if (event.startsWith('ai.')) return 0x06b6d4
+  if (event.startsWith('api.')) return 0x6366f1
+  if (event.startsWith('admin.')) return 0xf97316
+  if (event === 'webhook.test') return 0x10b981
+  return 0x6b7280
+}
+
+function buildEmbed(event: string, data: Record<string, any>): {
+  title: string
+  description: string
+  color: number
+  timestamp: string
+  fields?: { name: string; value: string; inline?: boolean }[]
+} {
+  const ts = new Date().toISOString()
+  const base = { timestamp: ts, color: embedColor(event) }
+
   switch (event) {
     case 'file.uploaded':
-      return `File uploaded: ${data.name ?? data.fileId ?? 'unknown'}`
+      return { ...base, title: 'File Uploaded', description: 'A file was uploaded', fields: [data.size ? { name: 'Size', value: `${(data.size / 1024).toFixed(1)} KB`, inline: true } : undefined].filter(Boolean) as any }
     case 'file.scanned':
-      return `File scan complete: ${data.scanResult ?? 'unknown'} for ${data.fileId ?? 'unknown'}`
+      return { ...base, title: 'File Scan Complete', description: `Result: ${data.scanResult ?? 'unknown'}` }
     case 'file.flagged':
-      return `File flagged: ${data.fileName ?? data.fileId ?? 'unknown'}`
+      return { ...base, title: 'File Flagged', description: 'A file was flagged' }
     case 'file.deleted':
-      return `File deleted: ${data.name ?? data.fileId ?? 'unknown'}`
+      return { ...base, title: 'File Deleted', description: 'A file was deleted' }
     case 'file.visibility_changed':
-      return `File visibility changed: ${data.isPublic ? 'public' : 'private'} (${data.fileId ?? 'unknown'})`
+      return { ...base, title: 'File Visibility Changed', description: `Set to ${data.isPublic ? 'public' : 'private'}` }
     case 'share_link.created':
-      return `Share link created for ${data.fileId ?? 'unknown'}`
+      return { ...base, title: 'Share Link Created', description: 'A share link was created' }
     case 'share_link.revoked':
-      return `Share link revoked for ${data.fileId ?? 'unknown'}`
+      return { ...base, title: 'Share Link Revoked', description: 'A share link was revoked' }
     case 'ticket.created':
-      return `Ticket created: ${data.subject ?? data.ticketId ?? 'unknown'}`
+      return { ...base, title: 'Ticket Created', description: 'A support ticket was created', fields: [data.priority ? { name: 'Priority', value: data.priority, inline: true } : undefined].filter(Boolean) as any }
     case 'ticket.replied':
-      return `Ticket replied: ${data.ticketId ?? 'unknown'}`
+      return { ...base, title: 'Ticket Replied', description: 'A ticket received a reply' }
     case 'ticket.closed':
-      return `Ticket closed: ${data.ticketId ?? 'unknown'}`
+      return { ...base, title: 'Ticket Closed', description: 'A ticket was closed' }
     case 'ticket.reopened':
-      return `Ticket reopened: ${data.ticketId ?? 'unknown'}`
+      return { ...base, title: 'Ticket Reopened', description: 'A ticket was reopened' }
     case 'user.signed_up':
-      return `New user signed up: ${data.name ?? data.userId ?? 'unknown'}`
+      return { ...base, title: 'New User Signed Up', description: 'A new user registered' }
     case 'user.suspended':
-      return `User suspended: ${data.userId ?? 'unknown'}`
+      return { ...base, title: 'User Suspended', description: data.reason ?? 'Account suspended' }
     case 'user.terminated':
-      return `User terminated: ${data.userId ?? 'unknown'}`
+      return { ...base, title: 'User Terminated', description: data.reason ?? 'Account terminated' }
+    case 'user.unsuspended':
+      return { ...base, title: 'User Unsuspended', description: 'Account unsuspended' }
     case 'user.deleted':
-      return `User deleted: ${data.userId ?? 'unknown'}`
+      return { ...base, title: 'User Deleted', description: 'Account deleted' }
     case 'user.warning_acknowledged':
-      return `Warning acknowledged by ${data.userId ?? 'unknown'}`
+      return { ...base, title: 'Warning Acknowledged', description: 'A user acknowledged a warning' }
     case 'user.appeal_approved':
-      return `Appeal approved for ${data.userId ?? data.appealId ?? 'unknown'}`
+      return { ...base, title: 'Appeal Approved', description: 'An appeal was approved' }
     case 'user.appeal_rejected':
-      return `Appeal rejected for ${data.userId ?? data.appealId ?? 'unknown'}`
+      return { ...base, title: 'Appeal Rejected', description: 'An appeal was rejected' }
     case 'storage.request_approved':
-      return `Storage request approved: ${data.requestId ?? 'unknown'}`
+      return { ...base, title: 'Storage Request Approved', description: 'A storage request was approved', fields: data.approvedAmount ? [{ name: 'Amount', value: data.approvedAmount, inline: true }] : undefined }
     case 'storage.request_rejected':
-      return `Storage request rejected: ${data.requestId ?? 'unknown'}`
+      return { ...base, title: 'Storage Request Rejected', description: 'A storage request was rejected' }
     case 'deletion.request_approved':
-      return `Deletion request approved: ${data.requestId ?? 'unknown'}`
+      return { ...base, title: 'Deletion Request Approved', description: 'A deletion request was approved' }
     case 'deletion.request_rejected':
-      return `Deletion request rejected: ${data.requestId ?? 'unknown'}`
+      return { ...base, title: 'Deletion Request Rejected', description: 'A deletion request was rejected' }
     case 'admin.hash_flagged':
-      return `Hash flagged: ${data.hash ?? 'unknown'}`
+      return { ...base, title: 'Hash Flagged', description: 'A file hash was flagged' }
     case 'admin.takedown_approved':
-      return `Takedown approved: ${data.requestId ?? 'unknown'}`
+      return { ...base, title: 'Takedown Approved', description: 'A takedown request was approved' }
     case 'ai.daily_limit_warning':
-      return `AI daily limit warning: $${data.usedToday?.toFixed?.(4) ?? data.usedToday} of $${data.limit?.toFixed?.() ?? data.limit}`
+      return { ...base, title: 'AI Daily Limit Warning', description: `$${(data.usedToday ?? 0).toFixed(4)} used today`, fields: data.limit ? [{ name: 'Limit', value: `$${Number(data.limit).toFixed(2)}`, inline: true }] : undefined }
     case 'ai.daily_limit_exceeded':
-      return `AI daily limit exceeded: $${data.usedToday?.toFixed?.(4) ?? data.usedToday} of $${data.limit?.toFixed?.() ?? data.limit}`
+      return { ...base, title: 'AI Daily Limit Exceeded', description: `$${(data.usedToday ?? 0).toFixed(4)} used today`, fields: data.limit ? [{ name: 'Limit', value: `$${Number(data.limit).toFixed(2)}`, inline: true }] : undefined }
     case 'api.key.created':
-      return `API key created: ${data.name ?? 'unknown'}`
+      return { ...base, title: 'API Key Created', description: 'An API key was created' }
     case 'api.key.deleted':
-      return `API key deleted: ${data.keyId ?? 'unknown'}`
+      return { ...base, title: 'API Key Deleted', description: 'An API key was deleted' }
     case 'webhook.test':
-      return `Webhook test event received`
+      return { ...base, title: 'Webhook Test', description: 'Webhook test event received' }
     default:
-      if (data.message) return String(data.message)
-      if (data.subject) return String(data.subject)
-      if (data.reason) return String(data.reason)
-      return `Event: ${event}`
+      return { ...base, title: `Event: ${event}`, description: '' }
   }
 }

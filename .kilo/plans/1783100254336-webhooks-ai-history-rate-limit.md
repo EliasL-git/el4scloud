@@ -1,4 +1,4 @@
-# el4scloud: Webhooks, AI Chat History, Rate-Limiting Dashboard & Moderation
+# Hobbycloud: Webhooks, AI Chat History, Rate-Limiting Dashboard & Moderation
 
 Render deployment with DB-backed webhook retry queue via Render Cron Job.
 

@@ -140,7 +140,7 @@ export default async function FilePreviewPage({
               <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 8.25h15m-16.5 7.5h15m-1.8-13.5l-3.9 19.5m-2.1-19.5l-3.9 19.5" />
             </svg>
           </div>
-          <span className="text-sm font-semibold tracking-tight">el4scloud</span>
+          <span className="text-sm font-semibold tracking-tight">Hobbycloud</span>
         </div>
       </header>
 
@@ -300,7 +300,7 @@ function PasswordGate({
               <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 8.25h15m-16.5 7.5h15m-1.8-13.5l-3.9 19.5m-2.1-19.5l-3.9 19.5" />
             </svg>
           </div>
-          <span className="text-sm font-semibold tracking-tight">el4scloud</span>
+          <span className="text-sm font-semibold tracking-tight">Hobbycloud</span>
         </div>
       </header>
       <main className="flex-1 flex items-center justify-center px-4">

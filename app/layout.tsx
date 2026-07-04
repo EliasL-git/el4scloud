@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'el4scloud — Fast, Simple Cloud Storage',
+  title: 'Hobbycloud — Fast, Simple Cloud Storage',
   description: 'Upload, manage, and deliver files at the edge. Fast cloud storage with a clean dashboard and developer API.',
   generator: 'v0.app',
   icons: {

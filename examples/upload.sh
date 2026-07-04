@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Upload a file to el4scloud using the REST API
+# Upload a file to Hobbycloud using the REST API
 # Usage: ./upload.sh <file> [isPublic]
 
 set -euo pipefail

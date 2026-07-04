@@ -5,6 +5,7 @@ import { user, aiUsage, aiConversations, aiMessages } from '@/lib/db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { AI_MODELS, FREE_DAILY_USD_LIMIT, calculateCost } from '@/lib/ai'
+import { isSuspended } from '@/lib/suspension'
 
 const RATE_LIMIT = 10
 const RATE_WINDOW_MS = 60_000
@@ -29,6 +30,7 @@ function oaiId() {
 async function checkAccess(req: NextRequest) {
   const session = await auth.api.getSession({ headers: req.headers })
   if (!session?.user) return { error: 'Unauthorized', status: 401 } as const
+  if (await isSuspended(session.user.id)) return { error: 'Your account has been suspended.', status: 403 } as const
   const [u] = await db
     .select({ verifiedViaHackclub: user.verifiedViaHackclub })
     .from(user)

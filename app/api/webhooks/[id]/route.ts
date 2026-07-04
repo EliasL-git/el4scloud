@@ -3,12 +3,14 @@ import { db } from '@/lib/db'
 import { webhooks, webhookDeliveries } from '@/lib/db/schema'
 import { eq, and, desc } from 'drizzle-orm'
 import { headers } from 'next/headers'
-import { fireWebhook } from '@/lib/webhooks/fire'
+import { deliver } from '@/lib/webhooks/delivery'
 import { NextResponse } from 'next/server'
+import { assertNotSuspended } from '@/lib/suspension'
 
 async function getUserId() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
+  await assertNotSuspended(session.user.id)
   return session.user.id
 }
 
@@ -53,7 +55,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const { id } = await params
   const webhook = await assertOwnership(id, userId)
 
-  await fireWebhook(userId, 'webhook.test', { webhookId: id })
+  await deliver(webhook, 'webhook.test', { webhookId: id })
 
   return NextResponse.json({ ok: true, message: 'Test event dispatched' })
 }

@@ -130,7 +130,7 @@ export default function SettingsPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `el4scloud-export-${new Date().toISOString().split('T')[0]}.json`
+      a.download = `Hobbycloud-export-${new Date().toISOString().split('T')[0]}.json`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
@@ -293,7 +293,7 @@ export default function SettingsPage() {
             Identity verification
           </CardTitle>
           <CardDescription>
-            Pick a verification method to unlock higher storage tiers.
+            Pick a verification method to unlock higher Storage tiers.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -318,233 +318,156 @@ export default function SettingsPage() {
               <Loader2 className="size-3.5 animate-spin" />
               Loading...
             </div>
-          ) : methodStarted ? (
-            /* Method already in progress — show status + ticket note */
-            <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-3">
-              <div className="flex items-start gap-2">
-                {methodStarted.type === 'manual' ? (
-                  <Mail className="size-4 text-amber-600 shrink-0 mt-0.5" />
-                ) : (
-                  <Terminal className="size-4 text-amber-600 shrink-0 mt-0.5" />
-                )}
-                <div>
-                  <p className="text-sm font-medium">
-                    {methodStarted.type === 'manual' ? 'Manual verification in progress' : 'Hack Club verification active'}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {methodStarted.type === 'manual'
-                      ? 'You have a pending storage request. An admin will review it.'
-                      : 'Your Hack Club account is linked.'
-                    }
-                  </p>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Changed your mind?{' '}
-                <a href="/dashboard/support" className="underline underline-offset-2 hover:text-foreground">
-                  Open a support ticket
-                </a>{' '}
-                to request a reset.
-              </p>
-            </div>
-          ) : storageLimit >= HC_STORAGE_LIMIT ? (
-            <div className="flex items-center gap-2 text-xs text-green-600">
-              <ShieldCheck className="size-3.5 shrink-0" />
-              Max tier unlocked — {formatStorage(HC_STORAGE_LIMIT)}
-            </div>
-          ) : pickedMethod === 'manual' ? (
-            /* Manual verification flow */
-            !requestSent ? (
-              <div className="flex flex-col gap-3">
+          ) : (() => {
+            if (methodStarted) {
+              return (
                 <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-3">
-                  <p className="text-sm font-medium">Verify your identity</p>
-                  <p className="text-xs text-muted-foreground">
-                    Provide your details and tell us how much storage you need.
-                  </p>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-muted-foreground">First name</label>
-                    <Input
-                      value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
-                      placeholder="John"
-                      className="w-full"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-muted-foreground">Last name</label>
-                    <Input
-                      value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
-                      placeholder="Doe"
-                      className="w-full"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-muted-foreground">Age</label>
-                    <Input
-                      type="number"
-                      min={1}
-                      value={age}
-                      onChange={(e) => setAge(e.target.value)}
-                      placeholder="18"
-                      className="w-24"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-muted-foreground">
-                      Requested storage: <span className="font-medium text-foreground">{requestSlider} GB</span>
-                    </label>
-                    <input
-                      type="range"
-                      min={2.5}
-                      max={25}
-                      step={0.5}
-                      value={requestSlider}
-                      onChange={(e) => setRequestSlider(parseFloat(e.target.value))}
-                      className="w-full h-2 rounded-full appearance-none cursor-pointer bg-secondary accent-[var(--brand)]"
-                    />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>2.5 GB</span>
-                      <span>25 GB</span>
+                  <div className="flex items-start gap-2">
+                    {methodStarted.type === 'manual' ? (
+                      <Mail className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <Terminal className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <p className="text-sm font-medium">
+                        {methodStarted.type === 'manual' ? 'Manual verification in progress' : 'Hack Club verification active'}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {methodStarted.type === 'manual'
+                          ? 'You have a pending Storage request. An admin will review it.'
+                          : 'Your Hack Club account is linked.'
+                        }
+                      </p>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs text-muted-foreground">What are you using the app for?</label>
-                    <textarea
-                      value={requestReason}
-                      onChange={(e) => setRequestReason(e.target.value)}
-                      placeholder="Describe your use case and why you need more storage..."
-                      rows={3}
-                      className="min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    />
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={handleSubmitUpgradeRequest}
-                    disabled={requestSending || !requestReason.trim() || !firstName.trim() || !lastName.trim() || !age.trim()}
-                    className="gap-1.5 w-fit"
-                    style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
-                  >
-                    {requestSending ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <IdCard className="size-3.5" />
-                    )}
-                    Submit request
-                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    Changed your mind?{' '}
+                    <a href="/dashboard/support" className="underline underline-offset-2 hover:text-foreground">
+                      Open a support ticket
+                    </a>{' '}
+                    to request a reset.
+                  </p>
                 </div>
-
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => { setPickedMethod(null); setRequestSent(false) }}
-                  className="gap-1.5 w-fit text-xs"
-                >
-                  &larr; Choose a different method
-                </Button>
-              </div>
-            ) : (
-              <>
-                <div className="flex items-center gap-2 text-xs text-amber-600">
+              )
+            }
+            if (storageLimit >= HC_STORAGE_LIMIT) {
+              return (
+                <div className="flex items-center gap-2 text-xs text-green-600">
                   <ShieldCheck className="size-3.5 shrink-0" />
-                  Request submitted — an admin will review it.
+                  Max tier unlocked — {formatStorage(HC_STORAGE_LIMIT)}
                 </div>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => { setPickedMethod(null); setRequestSent(false) }}
-                  className="gap-1.5 w-fit text-xs"
-                >
-                  &larr; Choose a different method
-                </Button>
+              )
+            }
+            if (pickedMethod === 'manual') {
+              return (
+                <>
+                  {!requestSent ? (
+                    <div className="flex flex-col gap-3">
+                      <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-3">
+                        <p className="text-sm font-medium">Verify your identity</p>
+                        <p className="text-xs text-muted-foreground">
+                          Provide your details and tell us how much Storage you need.
+                        </p>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs text-muted-foreground">First name</label>
+                          <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="John" className="w-full" />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs text-muted-foreground">Last name</label>
+                          <Input value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Doe" className="w-full" />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs text-muted-foreground">Age</label>
+                          <Input type="number" min={1} value={age} onChange={(e) => setAge(e.target.value)} placeholder="18" className="w-24" />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs text-muted-foreground">
+                            Requested Storage: <span className="font-medium text-foreground">{requestSlider} GB</span>
+                          </label>
+                          <input type="range" min={2.5} max={25} step={0.5} value={requestSlider} onChange={(e) => setRequestSlider(parseFloat(e.target.value))} className="w-full h-2 rounded-full appearance-none cursor-pointer bg-secondary accent-[var(--brand)]" />
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>2.5 GB</span>
+                            <span>25 GB</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-xs text-muted-foreground">What are you using the app for?</label>
+                          <textarea value={requestReason} onChange={(e) => setRequestReason(e.target.value)} placeholder="Describe your use case and why you need more Storage..." rows={3} className="min-h-[60px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+                        </div>
+                        <Button size="sm" onClick={handleSubmitUpgradeRequest} disabled={requestSending || !requestReason.trim() || !firstName.trim() || !lastName.trim() || !age.trim()} className="gap-1.5 w-fit" style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}>
+                          {requestSending ? <Loader2 className="size-3.5 animate-spin" /> : <IdCard className="size-3.5" />}
+                          Submit request
+                        </Button>
+                      </div>
+                      <Button size="sm" variant="ghost" onClick={() => { setPickedMethod(null); setRequestSent(false) }} className="gap-1.5 w-fit text-xs">&larr; Choose a different method</Button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-2 text-xs text-amber-600">
+                        <ShieldCheck className="size-3.5 shrink-0" />
+                        Request submitted — an admin will review it.
+                      </div>
+                      <Button size="sm" variant="ghost" onClick={() => { setPickedMethod(null); setRequestSent(false) }} className="gap-1.5 w-fit text-xs">&larr; Choose a different method</Button>
+                    </>
+                  )}
+                </>
+              )
+            }
+            if (pickedMethod === 'hackclub') {
+              return (
+                <div className="flex flex-col gap-3">
+                  <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-3">
+                    <div className="flex items-start gap-2">
+                      <Terminal className="size-4 text-muted-foreground shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium">Verify with Hack Club for {formatStorage(HC_STORAGE_LIMIT)}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Link your Hack Club account to instantly unlock {formatStorage(HC_STORAGE_LIMIT)}.</p>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={handleLinkHackClub} disabled={linkingHc} className="gap-1.5 w-fit">
+                      {linkingHc ? <Loader2 className="size-3.5 animate-spin" /> : <Terminal className="size-3.5" />}
+                      Link Hack Club account
+                    </Button>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={() => setPickedMethod(null)} className="gap-1.5 w-fit text-xs">&larr; Choose a different method</Button>
+                </div>
+              )
+            }
+            return (
+              <>
+                <p className="text-xs text-muted-foreground">Choose your verification method:</p>
+                <div className="grid gap-2">
+                  <button type="button" onClick={() => setPickedMethod('manual')} className="flex items-center gap-3 rounded-lg border border-border p-3 text-left hover:border-muted-foreground/30 transition-colors">
+                    <div className="size-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
+                      <Mail className="size-5 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">Manual verification</div>
+                      <div className="text-xs text-muted-foreground">Provide identity details + admin review</div>
+                    </div>
+                    <div className="text-xs font-semibold whitespace-nowrap">Up to 25 GB</div>
+                  </button>
+                  <button type="button" onClick={() => setPickedMethod('hackclub')} className="flex items-center gap-3 rounded-lg border border-border p-3 text-left hover:border-muted-foreground/30 transition-colors">
+                    <div className="size-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
+                      <Terminal className="size-5 text-muted-foreground" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">Hack Club</div>
+                      <div className="text-xs text-muted-foreground">Instant verification via Hack Club</div>
+                    </div>
+                    <div className="text-xs font-semibold whitespace-nowrap">50 GB</div>
+                  </button>
+                </div>
+                {storageLimit > 0 && storageLimit < HC_STORAGE_LIMIT && !pickedMethod && (
+                  <p className="text-xs text-muted-foreground">
+                    Changed your mind later?{' '}
+                    <a href="/dashboard/support" className="underline underline-offset-2 hover:text-foreground">Open a ticket</a>{' '}
+                    and an admin can reset your status.
+                  </p>
+                )}
               </>
             )
-          ) : pickedMethod === 'hackclub' ? (
-            /* Hack Club verification flow */
-            <div className="flex flex-col gap-3">
-              <div className="rounded-lg border border-border bg-secondary/30 p-3 flex flex-col gap-3">
-                <div className="flex items-start gap-2">
-                  <Terminal className="size-4 text-muted-foreground shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-sm font-medium">Verify with Hack Club for {formatStorage(HC_STORAGE_LIMIT)}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Link your Hack Club account to instantly unlock {formatStorage(HC_STORAGE_LIMIT)}.
-                    </p>
-                  </div>
-                </div>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleLinkHackClub}
-                  disabled={linkingHc}
-                  className="gap-1.5 w-fit"
-                >
-                  {linkingHc ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <Terminal className="size-3.5" />
-                  )}
-                  Link Hack Club account
-                </Button>
-              </div>
-
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setPickedMethod(null)}
-                className="gap-1.5 w-fit text-xs"
-              >
-                &larr; Choose a different method
-              </Button>
-            </div>
-          ) : (
-            /* Method picker */
-            <>
-              <p className="text-xs text-muted-foreground">Choose your verification method:</p>
-              <div className="grid gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPickedMethod('manual')}
-                  className="flex items-center gap-3 rounded-lg border border-border p-3 text-left hover:border-muted-foreground/30 transition-colors"
-                >
-                  <div className="size-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
-                    <Mail className="size-5 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">Manual verification</div>
-                    <div className="text-xs text-muted-foreground">Provide identity details + admin review</div>
-                  </div>
-                  <div className="text-xs font-semibold whitespace-nowrap">Up to 25 GB</div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setPickedMethod('hackclub')}
-                  className="flex items-center gap-3 rounded-lg border border-border p-3 text-left hover:border-muted-foreground/30 transition-colors"
-                >
-                  <div className="size-10 rounded-lg bg-secondary flex items-center justify-center shrink-0">
-                    <Terminal className="size-5 text-muted-foreground" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">Hack Club</div>
-                    <div className="text-xs text-muted-foreground">Instant verification via Hack Club</div>
-                  </div>
-                  <div className="text-xs font-semibold whitespace-nowrap">50 GB</div>
-                </button>
-              </div>
-
-              {storageLimit > 0 && storageLimit < HC_STORAGE_LIMIT && !pickedMethod && (
-                <p className="text-xs text-muted-foreground">
-                  Changed your mind later?{' '}
-                  <a href="/dashboard/support" className="underline underline-offset-2 hover:text-foreground">
-                    Open a ticket
-                  </a>{' '}
-                  and an admin can reset your status.
-                </p>
-              )}
-            </>
-          )}
+          })()}
         </CardContent>
       </Card>
 

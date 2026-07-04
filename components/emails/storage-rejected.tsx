@@ -33,7 +33,7 @@ export function StorageRejectedEmail({ name, requestedAmount, adminNote }: Props
             If you have questions, feel free to reach out.
           </Text>
           <Hr style={hr} />
-          <Text style={footer}>el4scloud team</Text>
+          <Text style={footer}>Hobbycloud team</Text>
         </Container>
       </Body>
     </Html>

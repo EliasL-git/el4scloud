@@ -18,7 +18,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Webhook, Plus, Trash2, Copy, Check, RefreshCw, Send } from 'lucide-react'
+import { Webhook, Plus, Trash2, Copy, Check, RefreshCw, Send, Info } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -159,6 +159,12 @@ export default function WebhooksPage() {
         <p className="text-sm text-muted-foreground mt-0.5">
           Receive HTTP notifications when events happen in your account
         </p>
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 text-xs text-muted-foreground">
+          <Info className="size-4 shrink-0 mt-0.5 text-blue-500" />
+          <span>
+            Webhooks use <strong className="text-foreground">Discord embed format</strong>. They work best with Discord webhook URLs and may not be compatible with all providers.
+          </span>
+        </div>
       </div>
 
       {newSecretPrefix && (

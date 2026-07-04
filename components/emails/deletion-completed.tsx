@@ -84,7 +84,7 @@ export function DeletionCompletedEmail({
             If you have any questions, please contact our support team.
           </Text>
           <Hr style={hr} />
-          <Text style={footer}>el4scloud team</Text>
+          <Text style={footer}>Hobbycloud team</Text>
         </Container>
       </Body>
     </Html>

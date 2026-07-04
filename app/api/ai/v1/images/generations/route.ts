@@ -5,6 +5,7 @@ import { user, aiUsage } from '@/lib/db/schema'
 import { eq, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { FREE_DAILY_USD_LIMIT } from '@/lib/ai'
+import { isSuspended } from '@/lib/suspension'
 
 const IMAGE_COST = 0.01
 
@@ -12,6 +13,10 @@ export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: req.headers })
   if (!session?.user) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  if (await isSuspended(session.user.id)) {
+    return Response.json({ error: 'Your account has been suspended.' }, { status: 403 })
   }
 
   const [u] = await db

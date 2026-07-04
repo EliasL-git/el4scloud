@@ -18,10 +18,12 @@ import { logAuditEvent, logAuditEventWithHeaders } from '@/lib/audit'
 import { recordWarning } from '@/lib/warnings'
 import { hash } from '@/lib/hash'
 import { fireWebhook } from '@/lib/webhooks/fire'
+import { assertNotSuspended } from '@/lib/suspension'
 
 async function getUserId() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
+  await assertNotSuspended(session.user.id)
   return session.user.id
 }
 
@@ -107,7 +109,7 @@ export async function deleteFile(fileId: string) {
   await db.delete(files).where(and(eq(files.id, fileId), eq(files.userId, userId)))
 
   await logAuditEventWithHeaders(userId, 'file.deleted', JSON.stringify({ fileId, fileName: file.originalName, size: file.size }))
-  await fireWebhook(userId, 'file.deleted', { fileId, name: file.originalName, size: file.size }).catch(() => undefined)
+  await fireWebhook(userId, 'file.deleted', { fileId, size: file.size }).catch(() => undefined)
 
   revalidatePath('/dashboard')
 }
@@ -235,7 +237,7 @@ export async function flagFile(fileId: string) {
     .where(eq(user.id, file.userId))
 
   await logAuditEventWithHeaders(userId, 'file.flagged', JSON.stringify({ fileId, fileName: file.originalName, fileHash: file.fileHash, targetUserId: file.userId }))
-  await fireWebhook(file.userId, 'file.flagged', { fileId, fileName: file.originalName, fileHash: file.fileHash }).catch(() => undefined)
+  await fireWebhook(file.userId, 'file.flagged', { fileId, fileHash: file.fileHash }).catch(() => undefined)
 
   revalidatePath('/dashboard')
 }
@@ -294,7 +296,7 @@ export async function createShareLink(
   })
 
   await logAuditEventWithHeaders(userId, 'share_link.created', JSON.stringify({ fileId, token, expiresAt: options?.expiresAt, maxDownloads: options?.maxDownloads, hasPassword: !!passwordHash }))
-  await fireWebhook(userId, 'share_link.created', { fileId, linkId: id, token, expiresAt: options?.expiresAt, maxDownloads: options?.maxDownloads }).catch(() => undefined)
+  await fireWebhook(userId, 'share_link.created', { fileId, linkId: id, expiresAt: options?.expiresAt, maxDownloads: options?.maxDownloads }).catch(() => undefined)
 
   revalidatePath('/dashboard')
   return { id, token }

@@ -57,7 +57,7 @@ export default function LandingPage() {
             >
               <HardDrive className="size-3.5" style={{ color: 'var(--brand-foreground)' }} />
             </div>
-            <span className="text-sm font-semibold tracking-tight">el4scloud</span>
+            <span className="text-sm font-semibold tracking-tight">Hobbycloud</span>
           </div>
           <div className="flex items-center gap-2">
             <Link href="/docs">
@@ -178,7 +178,7 @@ export default function LandingPage() {
             >
               <HardDrive className="size-3" style={{ color: 'var(--brand-foreground)' }} />
             </div>
-            <span className="text-xs text-muted-foreground font-medium">el4scloud</span>
+            <span className="text-xs text-muted-foreground font-medium">Hobbycloud</span>
           </div>
           <div className="flex items-center gap-4">
             <Link href="/docs" className="text-xs text-muted-foreground hover:text-foreground transition-colors">

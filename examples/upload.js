@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Upload a file to el4scloud using the REST API.
+ * Upload a file to Hobbycloud using the REST API.
  * Usage: EL4S_API_KEY=sk_... node upload.js photo.jpg [true]
  */
 

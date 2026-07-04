@@ -8,7 +8,6 @@ import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { StorageRequestDialog } from '@/components/dashboard/storage-request-dialog'
 import { SuspensionBanner } from '@/components/dashboard/suspension-banner'
 import {
   DropdownMenu,
@@ -45,7 +44,7 @@ const adminSidebarTabs = [
   { id: 'files', label: 'Files', icon: FileText },
   { id: 'deletions', label: 'Deletion Requests', icon: Trash2 },
   { id: 'audit', label: 'Audit Log', icon: ClipboardList },
-  { id: 'access-codes', label: 'Access Codes', icon: Key },
+
   { id: 'takedown', label: 'Takedown', icon: ShieldAlert },
 ]
 
@@ -76,20 +75,23 @@ export function DashboardShell({
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const isSupportRoute = pathname.startsWith('/dashboard/support')
+  const isAdminRoute = pathname.startsWith('/dashboard/admin')
   const [activeAdminTab, setActiveAdminTab] = useState('overview')
 
   // Track the active admin tab from URL hash
   useEffect(() => {
-    if (isAdminRoute) {
+    if (!isAdminRoute) return
+    const updateFromHash = () => {
       const hash = window.location.hash.replace('#', '')
       if (hash) setActiveAdminTab(hash)
     }
-  }, [pathname])
+    updateFromHash()
+    window.addEventListener('hashchange', updateFromHash)
+    return () => window.removeEventListener('hashchange', updateFromHash)
+  }, [pathname, isAdminRoute])
 
-  const isSupportRoute = pathname.startsWith('/dashboard/support')
-  const isAdminRoute = pathname.startsWith('/dashboard/admin')
-
-  const suspendedAllowedRoutes = ['/dashboard', '/dashboard/storage', '/dashboard/support', '/dashboard/settings', '/dashboard/webhooks']
+  const suspendedAllowedRoutes = ['/dashboard', '/dashboard/support', '/dashboard/settings']
   const visibleServiceItems = suspended
     ? serviceNavItems.filter((item) => suspendedAllowedRoutes.includes(item.href))
     : serviceNavItems
@@ -138,7 +140,7 @@ export function DashboardShell({
                 >
                   <HardDrive className="size-3.5" style={{ color: 'var(--brand-foreground)' }} />
                 </div>
-                <span className="text-sm font-semibold tracking-tight">el4scloud</span>
+                <span className="text-sm font-semibold tracking-tight">Hobbycloud</span>
               </Link>
               <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground hover:text-foreground lg:hidden">
                 <XIcon className="size-4" />
@@ -318,12 +320,7 @@ export function DashboardShell({
         </main>
       </div>
 
-      {/* Footer */}
-      <footer className="border-t border-border">
-        <div className="h-12 flex items-center justify-center gap-6 px-4 sm:px-6 lg:px-8">
-          {!suspended && <StorageRequestDialog />}
-        </div>
-      </footer>
+
     </div>
   )
 }

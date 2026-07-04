@@ -8,6 +8,7 @@ import { eq, and, sql, desc } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { chatCompletion, FREE_DAILY_USD_LIMIT, AI_MODELS, calculateCost, type ChatMessage } from '@/lib/ai'
 import { fireWebhook } from '@/lib/webhooks/fire'
+import { assertNotSuspended } from '@/lib/suspension'
 
 export async function sendChatMessage(
   messages: ChatMessage[],
@@ -16,6 +17,7 @@ export async function sendChatMessage(
 ) {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
+  await assertNotSuspended(session.user.id)
 
   const [u] = await db
     .select({ verifiedViaHackclub: user.verifiedViaHackclub })
@@ -143,6 +145,7 @@ export async function sendChatMessage(
 export async function getAiUsage() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
+  await assertNotSuspended(session.user.id)
 
   const [u] = await db
     .select({ verifiedViaHackclub: user.verifiedViaHackclub })
@@ -190,6 +193,7 @@ export async function getAiModels() {
 export async function createConversation(title?: string) {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
+  await assertNotSuspended(session.user.id)
 
   const id = uuidv4()
   await db.insert(aiConversations).values({
@@ -204,6 +208,7 @@ export async function createConversation(title?: string) {
 export async function getConversations() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
+  await assertNotSuspended(session.user.id)
 
   const conversations = await db
     .select({
@@ -238,6 +243,7 @@ export async function getConversations() {
 export async function getConversation(conversationId: string) {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
+  await assertNotSuspended(session.user.id)
 
   const [conversation] = await db
     .select()
@@ -258,6 +264,7 @@ export async function getConversation(conversationId: string) {
 export async function renameConversation(conversationId: string, title: string) {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
+  await assertNotSuspended(session.user.id)
 
   const [conversation] = await db
     .select()
@@ -277,6 +284,7 @@ export async function renameConversation(conversationId: string, title: string) 
 export async function deleteConversation(conversationId: string) {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
+  await assertNotSuspended(session.user.id)
 
   await db.delete(aiConversations).where(and(eq(aiConversations.id, conversationId), eq(aiConversations.userId, session.user.id)))
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Download a file from el4scloud via the proxy endpoint
+# Download a file from Hobbycloud via the proxy endpoint
 # Usage: ./download.sh <file-key> [output-filename]
 
 set -euo pipefail

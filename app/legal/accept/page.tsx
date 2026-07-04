@@ -34,7 +34,7 @@ export default function AcceptPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Terms of Service</h1>
           <p className="text-sm text-muted-foreground mt-2 max-w-md">
-            To continue using el4scloud, you need to accept our Terms of Service. You can read
+            To continue using Hobbycloud, you need to accept our Terms of Service. You can read
             the full terms at{' '}
             <a href="/legal" className="underline underline-offset-2 hover:text-foreground">
               /legal

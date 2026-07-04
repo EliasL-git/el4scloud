@@ -67,7 +67,7 @@ export default function SignInPage() {
           <div className="size-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: 'var(--brand)' }}>
             <HardDrive className="size-4" style={{ color: 'var(--brand-foreground)' }} />
           </div>
-          <span className="text-lg font-semibold tracking-tight text-foreground">el4scloud</span>
+          <span className="text-lg font-semibold tracking-tight text-foreground">Hobbycloud</span>
         </div>
 
         <Card>

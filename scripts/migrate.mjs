@@ -286,6 +286,7 @@ const statements = [
 
   `ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "priority" TEXT NOT NULL DEFAULT 'normal'`,
   `ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "category" TEXT NOT NULL DEFAULT 'general'`,
+  `ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "subcategory" TEXT NOT NULL DEFAULT 'other'`,
   `ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "assignedTo" TEXT`,
   `ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "slaTarget" TIMESTAMPTZ`,
   `ALTER TABLE "tickets" ADD COLUMN IF NOT EXISTS "firstResponseAt" TIMESTAMPTZ`,

@@ -8,6 +8,7 @@ import {
   rejectRequest,
   lockUser,
   unlockUser,
+  unsuspendUser,
   suspendUser,
   resetStorageLimit,
   setStorageLimit,
@@ -36,9 +37,6 @@ import {
   rejectDeletionRequest,
   getAuditLogs,
   getLastCronRun,
-  getAccessCodes,
-  generateAccessCode,
-  revokeAccessCode,
   getTakedownRequests,
   approveTakedown,
   rejectTakedown,
@@ -49,6 +47,7 @@ import {
   rejectIntroduction,
   resetIntroduction,
 } from '@/app/actions/admin'
+import { getCategoryLabel, getSubcategoryLabel, CATEGORIES } from '@/lib/ticket-categories'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -123,6 +122,7 @@ export default function AdminPage() {
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null)
   const [ticketFilter, setTicketFilter] = useState('')
   const [ticketStatusFilter, setTicketStatusFilter] = useState('all')
+  const [ticketCategoryFilter, setTicketCategoryFilter] = useState('all')
   const [ticketPriorityFilter, setTicketPriorityFilter] = useState('all')
   const [ticketAssignFilter, setTicketAssignFilter] = useState('all')
   const [ticketReplies, setTicketReplies] = useState<AdminReply[]>([])
@@ -133,20 +133,18 @@ export default function AdminPage() {
   const [appealNotes, setAppealNotes] = useState<Record<string, string>>({})
   const [deletionNotes, setDeletionNotes] = useState<Record<string, string>>({})
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([])
-  const [accessCodesList, setAccessCodesList] = useState<Awaited<ReturnType<typeof getAccessCodes>>>([])
+
   const [takedownList, setTakedownList] = useState<Awaited<ReturnType<typeof getTakedownRequests>>>([])
   const [pendingIntros, setPendingIntros] = useState<Awaited<ReturnType<typeof getPendingIntroductions>>>([])
-  const [newCodeMaxUses, setNewCodeMaxUses] = useState(1)
-  const [newCodeExpires, setNewCodeExpires] = useState('')
-  const [newCodeNote, setNewCodeNote] = useState('')
-  const [generateLoading, setGenerateLoading] = useState(false)
-  const [generatedCode, setGeneratedCode] = useState('')
   const [auditFilterUser, setAuditFilterUser] = useState('')
   const [auditFilterAction, setAuditFilterAction] = useState('')
   const [fileQuery, setFileQuery] = useState('')
   const [fileResults, setFileResults] = useState<FileResult>([])
   const [fileSearching, setFileSearching] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserRecord | null>(null)
+  const [resetModal, setResetModal] = useState<{ userId: string; userName: string } | null>(null)
+  const [resetOptions, setResetOptions] = useState({ storage: false, verification: false, introduction: false })
+  const [resetSending, setResetSending] = useState(false)
   const [suspendModal, setSuspendModal] = useState<{ userId: string; userName: string } | null>(null)
   const [suspendReason, setSuspendReason] = useState(SUSPENSION_REASONS[0])
   const [suspendCustomReason, setSuspendCustomReason] = useState('')
@@ -156,9 +154,9 @@ export default function AdminPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [u, r, t, ap, dr, al, cron, ac, td, ss, us, ts, ad, pi] = await Promise.all([
+    const [u, r, t, ap, dr, al, cron, td, ss, us, ts, ad, pi] = await Promise.all([
       getUsers(), getRequests(), adminGetTickets(), getAppeals(), getDeletionRequests(),
-      getAuditLogs({ limit: 200 }), getLastCronRun(), getAccessCodes(), getTakedownRequests(),
+      getAuditLogs({ limit: 200 }), getLastCronRun(), getTakedownRequests(),
       getScanStats(), getUserStats(), adminGetTicketStats(), adminGetAdmins(),
       getPendingIntroductions(),
     ])
@@ -169,7 +167,6 @@ export default function AdminPage() {
     setDeletionRequestsList(dr)
     setAuditLogs(al)
     setLastCronRun(cron)
-    setAccessCodesList(ac)
     setTakedownList(td)
     setScanStats(ss)
     setUserStats(us)
@@ -349,6 +346,7 @@ export default function AdminPage() {
 
   const filteredTickets = adminTickets.filter((t) => {
     if (ticketStatusFilter !== 'all' && t.status !== ticketStatusFilter) return false
+    if (ticketCategoryFilter !== 'all' && t.category !== ticketCategoryFilter) return false
     if (ticketPriorityFilter !== 'all' && t.priority !== ticketPriorityFilter) return false
     if (ticketAssignFilter === 'unassigned' && t.assignedTo) return false
     if (ticketAssignFilter !== 'all' && ticketAssignFilter !== 'unassigned' && ticketAssignFilter !== t.assignedTo) return false
@@ -362,8 +360,13 @@ export default function AdminPage() {
     )
   })
 
+  function sectionTitle(title: string) {
+    return <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+  }
+
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6 lg:p-8">
+      {section === 'overview' && (
         <section className="flex flex-col gap-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Card className="border-blue-500/20">
@@ -491,6 +494,7 @@ export default function AdminPage() {
             </div>
           )}
         </section>
+      )}
 
       {/* Requests section */}
       {section === 'requests' && (
@@ -627,6 +631,495 @@ export default function AdminPage() {
         </section>
       )}
 
+      {/* Users section */}
+      {section === 'users' && (
+        <section className="flex flex-col gap-4">
+          {sectionTitle('Users')}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wider">
+                  <th className="text-left py-2 px-3 font-medium">Name</th>
+                  <th className="text-left py-2 px-3 font-medium">Email</th>
+                  <th className="text-left py-2 px-3 font-medium">Role</th>
+                  <th className="text-left py-2 px-3 font-medium">Status</th>
+                  <th className="text-left py-2 px-3 font-medium">Storage</th>
+                  <th className="text-right py-2 px-3 font-medium">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                    <td className="py-2 px-3 font-medium">{u.name}</td>
+                    <td className="py-2 px-3 text-muted-foreground">{u.email}</td>
+                    <td className="py-2 px-3">
+                      <Badge variant={u.role === 'admin' ? 'default' : 'secondary'} className="text-xs">
+                        {u.role}
+                      </Badge>
+                    </td>
+                    <td className="py-2 px-3">
+                      {u.banned ? (
+                        <Badge variant="destructive" className="text-xs">{u.suspensionType ?? 'banned'}</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs text-green-500 border-green-500/40">active</Badge>
+                      )}
+                    </td>
+                    <td className="py-2 px-3 text-muted-foreground">
+                      {u.storageLimit != null ? formatBytes(u.storageLimit) : 'default'}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      <div className="flex items-center justify-end gap-1 flex-wrap">
+                        {u.banned ? (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" disabled={processing[`unlock-${u.id}`]} onClick={() => handleAction(u.id, 'unlock', () => unlockUser(u.id), 'User unlocked')}>
+                            <Unlock className="size-3" /> Unlock
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-destructive" disabled={processing[`lock-${u.id}`]} onClick={() => handleAction(u.id, 'lock', () => lockUser(u.id), 'User locked')}>
+                            <Lock className="size-3" /> Lock
+                          </Button>
+                        )}
+                        {u.banned ? (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-green-500" disabled={processing[`unsuspend-${u.id}`]} onClick={() => handleAction(u.id, 'unsuspend', () => unsuspendUser(u.id), 'User unsuspended')}>
+                            <Unlock className="size-3" /> Unsuspend
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-destructive" onClick={() => setSuspendModal({ userId: u.id, userName: u.name ?? u.email })}>
+                            <Ban className="size-3" /> Suspend
+                          </Button>
+                        )}
+                        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { setResetOptions({ storage: false, verification: false, introduction: false }); setResetModal({ userId: u.id, userName: u.name ?? u.email }) }}>
+                          <RotateCcw className="size-3" /> Reset
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" disabled={processing[`delete-${u.id}`]} onClick={() => { if (confirm(`Delete user ${u.name ?? u.email}?`)) handleAction(u.id, 'delete', () => deleteUser(u.id), 'User deleted') }}>
+                          <Trash2 className="size-3" /> Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Tickets section */}
+      {section === 'tickets' && (
+        <section className="flex flex-col gap-4">
+          {sectionTitle('Tickets')}
+          {selectedTicket ? (
+            <div className="flex flex-col gap-3">
+              <Button size="sm" variant="ghost" className="w-fit gap-1.5" onClick={() => setSelectedTicket(null)}>
+                <ArrowLeft className="size-3.5" /> Back
+              </Button>
+              {(() => {
+                const t = adminTickets.find((t) => t.id === selectedTicket)
+                if (!t) return null
+                return (
+                  <div className="flex flex-col gap-3">
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <CardTitle className="text-sm font-medium">{t.subject}</CardTitle>
+                            <p className="text-xs text-muted-foreground mt-0.5">{t.userName} &lt;{t.userEmail}&gt;</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {getCategoryLabel(t.category)} / {getSubcategoryLabel(t.category, t.subcategory)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={t.status === 'open' ? 'secondary' : t.status === 'in_progress' ? 'default' : 'outline'}>{t.status}</Badge>
+                            <Badge variant={t.priority === 'high' ? 'destructive' : t.priority === 'medium' ? 'default' : 'secondary'}>{t.priority}</Badge>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="text-sm whitespace-pre-wrap">{t.message}</CardContent>
+                    </Card>
+                    {ticketReplies.map((r) => (
+                      <Card key={r.id}>
+                        <CardContent className="p-4 flex flex-col gap-1.5">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span className={r.userRole === 'admin' ? 'font-medium text-foreground' : ''}>{r.userRole === 'admin' ? 'Staff' : t.userName}</span>
+                            <span>{formatDate(r.createdAt)}</span>
+                            {r.isInternal && <Badge variant="outline" className="text-xs">Internal</Badge>}
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap">{r.message}</p>
+                        </CardContent>
+                      </Card>
+                    ))}
+                    <div className="flex flex-col gap-2 pt-2">
+                      <textarea
+                        value={adminReplyText}
+                        onChange={(e) => setAdminReplyText(e.target.value)}
+                        placeholder="Type your reply..."
+                        rows={3}
+                        className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" className="gap-1.5" onClick={() => handleAdminReply(t.id, false)} disabled={adminReplySending || !adminReplyText.trim()}>
+                          <Send className="size-3.5" /> Reply
+                        </Button>
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => handleAdminReply(t.id, true)} disabled={adminReplySending || !adminReplyText.trim()}>
+                          <Pencil className="size-3.5" /> Internal note
+                        </Button>
+                        {t.status !== 'closed' && (
+                          <Button size="sm" variant="outline" className="gap-1.5 ml-auto" onClick={async () => { try { await adminCloseTicket(t.id); toast.success('Ticket closed'); await refresh(); setSelectedTicket(null) } catch { toast.error('Failed') } }}>
+                            <XCircle className="size-3.5" /> Close
+                          </Button>
+                        )}
+                        {t.status === 'closed' && (
+                          <Button size="sm" variant="outline" className="gap-1.5 ml-auto" onClick={async () => { try { await adminReopenTicket(t.id); toast.success('Ticket reopened'); await refresh() } catch { toast.error('Failed') } }}>
+                            <RotateCcw className="size-3.5" /> Reopen
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-2 flex-wrap">
+                <input
+                  type="text"
+                  placeholder="Search tickets..."
+                  value={ticketFilter}
+                  onChange={(e) => setTicketFilter(e.target.value)}
+                  className="h-8 w-64 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                <select value={ticketStatusFilter} onChange={(e) => setTicketStatusFilter(e.target.value)} className="h-8 rounded-md border border-input bg-card px-2 py-1 text-sm text-foreground">
+                  <option value="all">All statuses</option>
+                  <option value="open">Open</option>
+                  <option value="in_progress">In progress</option>
+                  <option value="closed">Closed</option>
+                </select>
+                <select value={ticketCategoryFilter} onChange={(e) => setTicketCategoryFilter(e.target.value)} className="h-8 rounded-md border border-input bg-card px-2 py-1 text-sm text-foreground">
+                  <option value="all">All categories</option>
+                  {CATEGORIES.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+                </select>
+                <select value={ticketPriorityFilter} onChange={(e) => setTicketPriorityFilter(e.target.value)} className="h-8 rounded-md border border-input bg-card px-2 py-1 text-sm text-foreground">
+                  <option value="all">All priorities</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+                <select value={ticketAssignFilter} onChange={(e) => setTicketAssignFilter(e.target.value)} className="h-8 rounded-md border border-input bg-card px-2 py-1 text-sm text-foreground">
+                  <option value="all">All assignments</option>
+                  <option value="unassigned">Unassigned</option>
+                  {adminsList.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name ?? a.email}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-2">
+                {filteredTickets.length === 0 ? (
+                  <Card>
+                    <CardContent className="p-6 text-center text-sm text-muted-foreground">No tickets found.</CardContent>
+                  </Card>
+                ) : (
+                  filteredTickets.map((t) => (
+                    <Card key={t.id} className="cursor-pointer hover:bg-secondary/30 transition-colors" onClick={() => openTicket(t.id)}>
+                      <CardContent className="p-4 flex items-center justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium truncate">{t.subject}</p>
+                            <Badge variant={t.status === 'open' ? 'secondary' : t.status === 'in_progress' ? 'default' : 'outline'} className="text-xs shrink-0">{t.status}</Badge>
+                            <Badge variant={t.priority === 'high' ? 'destructive' : t.priority === 'medium' ? 'default' : 'secondary'} className="text-xs shrink-0">{t.priority}</Badge>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5 truncate">{t.userName} &lt;{t.userEmail}&gt;</p>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {getCategoryLabel(t.category)} / {getSubcategoryLabel(t.category, t.subcategory)}
+                          </p>
+                        </div>
+                        <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
+      {/* Appeals section */}
+      {section === 'appeals' && (
+        <section className="flex flex-col gap-4">
+          {sectionTitle('Appeals')}
+          {appealsList.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">No appeals.</CardContent>
+            </Card>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {appealsList.map(({ appeal, userName, userEmail }) => (
+                <Card key={appeal.id}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <CardTitle className="text-sm font-medium">{userName}</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">{userEmail}</p>
+                      </div>
+                      <Badge variant={statusBadge[appeal.status]?.variant as any}>{statusBadge[appeal.status]?.label}</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
+                    <p className="text-sm whitespace-pre-wrap">{appeal.reason}</p>
+                    {appeal.status === 'pending' && (
+                      <div className="flex flex-col gap-2">
+                        <input
+                          type="text"
+                          placeholder="Note (optional)"
+                          value={appealNotes[appeal.id] ?? ''}
+                          onChange={(e) => setAppealNotes((n) => ({ ...n, [appeal.id]: e.target.value }))}
+                          className="h-8 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        />
+                        <div className="flex gap-2">
+                          <Button size="sm" className="gap-1.5" onClick={() => handleAppealApprove(appeal.id)} disabled={processing[appeal.id]}>
+                            <Check className="size-3.5" /> Approve
+                          </Button>
+                          <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/40" onClick={() => handleAppealReject(appeal.id)} disabled={processing[appeal.id]}>
+                            <X className="size-3.5" /> Reject
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {appeal.adminNote && (
+                      <p className="text-xs text-muted-foreground italic">Note: {appeal.adminNote}</p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Files section */}
+      {section === 'files' && (
+        <section className="flex flex-col gap-4">
+          {sectionTitle('Files')}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Search by filename..."
+              value={fileQuery}
+              onChange={(e) => setFileQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleFileSearch()}
+              className="h-8 flex-1 max-w-md rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <Button size="sm" className="gap-1.5" onClick={handleFileSearch} disabled={fileSearching}>
+              <Search className="size-3.5" /> Search
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Flag a hash..."
+              value={hashInput}
+              onChange={(e) => setHashInput(e.target.value)}
+              className="h-8 flex-1 max-w-md rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={handleFlagHash} disabled={hashSubmitting}>
+              <Ban className="size-3.5" /> Flag hash
+            </Button>
+          </div>
+          {fileSearching ? (
+            <p className="text-sm text-muted-foreground">Searching...</p>
+          ) : fileResults.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">No files found.</CardContent>
+            </Card>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wider">
+                    <th className="text-left py-2 px-3 font-medium">Name</th>
+                    <th className="text-left py-2 px-3 font-medium">User</th>
+                    <th className="text-left py-2 px-3 font-medium">Size</th>
+                    <th className="text-left py-2 px-3 font-medium">Scan</th>
+                    <th className="text-left py-2 px-3 font-medium">Date</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fileResults.map((f) => (
+                    <tr key={f.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+                      <td className="py-2 px-3 font-medium max-w-[200px] truncate">{f.name}</td>
+                      <td className="py-2 px-3 text-muted-foreground">{f.userId}</td>
+                      <td className="py-2 px-3 text-muted-foreground">{formatBytes(f.size)}</td>
+                      <td className="py-2 px-3">
+                        {f.scanStatus === 'clean' ? (
+                          <Badge variant="outline" className="text-xs text-green-500 border-green-500/40">clean</Badge>
+                        ) : f.scanStatus === 'infected' ? (
+                          <Badge variant="destructive" className="text-xs">infected</Badge>
+                        ) : f.scanStatus === 'scanning' ? (
+                          <Badge variant="secondary" className="text-xs">scanning</Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-3 text-muted-foreground text-xs">{formatDate(f.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Deletions section */}
+      {section === 'deletions' && (
+        <section className="flex flex-col gap-4">
+          {sectionTitle('Deletion Requests')}
+          {deletionRequestsList.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">No deletion requests.</CardContent>
+            </Card>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {deletionRequestsList.map(({ request: dr, userName, userEmail }) => (
+                <Card key={dr.id}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <CardTitle className="text-sm font-medium">{userName}</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">{userEmail}</p>
+                      </div>
+                      <Badge variant={statusBadge[dr.status]?.variant as any}>{statusBadge[dr.status]?.label}</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3">
+                    <p className="text-sm text-muted-foreground">Requested {formatDate(dr.createdAt)}</p>
+                    {dr.reason && <p className="text-sm whitespace-pre-wrap">{dr.reason}</p>}
+                    {dr.status === 'pending' && (
+                      <div className="flex flex-col gap-2">
+                        <input
+                          type="text"
+                          placeholder="Note (optional)"
+                          value={deletionNotes[dr.id] ?? ''}
+                          onChange={(e) => setDeletionNotes((n) => ({ ...n, [dr.id]: e.target.value }))}
+                          className="h-8 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        />
+                        <div className="flex gap-2">
+                          <Button size="sm" className="gap-1.5" disabled={processing[dr.id]} onClick={async () => { setProcessing((p) => ({ ...p, [dr.id]: true })); try { await approveDeletionRequest(dr.id, deletionNotes[dr.id] || undefined); toast.success('Deletion approved'); await refresh() } catch { toast.error('Failed') } finally { setProcessing((p) => ({ ...p, [dr.id]: false })) } }}>
+                            <Check className="size-3.5" /> Approve
+                          </Button>
+                          <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/40" disabled={processing[dr.id]} onClick={async () => { setProcessing((p) => ({ ...p, [dr.id]: true })); try { await rejectDeletionRequest(dr.id, deletionNotes[dr.id] || undefined); toast.success('Deletion rejected'); await refresh() } catch { toast.error('Failed') } finally { setProcessing((p) => ({ ...p, [dr.id]: false })) } }}>
+                            <X className="size-3.5" /> Reject
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {dr.adminNote && <p className="text-xs text-muted-foreground italic">Note: {dr.adminNote}</p>}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Audit Log section */}
+      {section === 'audit' && (
+        <section className="flex flex-col gap-4">
+          {sectionTitle('Audit Log')}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              placeholder="Filter by user ID..."
+              value={auditFilterUser}
+              onChange={(e) => setAuditFilterUser(e.target.value)}
+              className="h-8 w-64 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            <input
+              type="text"
+              placeholder="Filter by action..."
+              value={auditFilterAction}
+              onChange={(e) => setAuditFilterAction(e.target.value)}
+              className="h-8 w-64 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wider">
+                  <th className="text-left py-2 px-3 font-medium">Date</th>
+                  <th className="text-left py-2 px-3 font-medium">User</th>
+                  <th className="text-left py-2 px-3 font-medium">Action</th>
+                  <th className="text-left py-2 px-3 font-medium">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditLogs
+                  .filter((e) => !auditFilterUser || e.userId?.toLowerCase().includes(auditFilterUser.toLowerCase()))
+                  .filter((e) => !auditFilterAction || e.action?.toLowerCase().includes(auditFilterAction.toLowerCase()))
+                  .map((e) => (
+                    <tr key={e.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors text-xs">
+                      <td className="py-2 px-3 text-muted-foreground whitespace-nowrap">{formatDate(e.createdAt)}</td>
+                      <td className="py-2 px-3 font-medium">{e.userId ? `${e.userId.slice(0, 8)}...` : '—'}</td>
+                      <td className="py-2 px-3"><code className="text-xs bg-secondary/50 px-1.5 py-0.5 rounded">{e.action}</code></td>
+                      <td className="py-2 px-3 text-muted-foreground max-w-[300px] truncate">{e.details ?? '—'}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* Takedown section */}
+      {section === 'takedown' && (
+        <section className="flex flex-col gap-4">
+          {sectionTitle('Takedown Requests')}
+          {takedownList.length === 0 ? (
+            <Card>
+              <CardContent className="p-6 text-center text-sm text-muted-foreground">No takedown requests.</CardContent>
+            </Card>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {takedownList.map((td) => (
+                <Card key={td.id}>
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <CardTitle className="text-sm font-medium truncate max-w-[300px]">{td.fileUrl || td.fileId || 'Unknown file'}</CardTitle>
+                        <p className="text-xs text-muted-foreground mt-0.5">Reported by {td.reporterName || td.reporterEmail}</p>
+                      </div>
+                      <Badge variant={statusBadge[td.status]?.variant as any}>{statusBadge[td.status]?.label}</Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-3 text-sm">
+                    <div>
+                      <span className="text-xs text-muted-foreground">Reason</span>
+                      <p className="mt-0.5">{td.reason}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-muted-foreground">Claimant</span>
+                      <p className="mt-0.5">{td.reporterName || 'Unknown'} &lt;{td.reporterEmail}&gt;</p>
+                    </div>
+                    {td.status === 'pending' && (
+                      <div className="flex gap-2 pt-1">
+                        <Button size="sm" className="gap-1.5" disabled={processing[td.id]} onClick={async () => { setProcessing((p) => ({ ...p, [td.id]: true })); try { await approveTakedown(td.id); toast.success('Takedown approved'); await refresh() } catch { toast.error('Failed') } finally { setProcessing((p) => ({ ...p, [td.id]: false })) } }}>
+                          <Check className="size-3.5" /> Approve
+                        </Button>
+                        <Button size="sm" variant="outline" className="gap-1.5 text-destructive border-destructive/40" disabled={processing[td.id]} onClick={async () => { setProcessing((p) => ({ ...p, [td.id]: true })); try { await rejectTakedown(td.id); toast.success('Takedown rejected'); await refresh() } catch { toast.error('Failed') } finally { setProcessing((p) => ({ ...p, [td.id]: false })) } }}>
+                          <X className="size-3.5" /> Reject
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Introductions */}
       {section === 'introductions' && (
         <section className="flex flex-col gap-3">
@@ -698,6 +1191,61 @@ export default function AdminPage() {
             ))
           )}
         </section>
+      )}
+
+      {/* Reset modal */}
+      {resetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setResetModal(null)}>
+          <div className="bg-background rounded-xl shadow-lg max-w-md w-full mx-4 p-6 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold">Reset {resetModal.userName}</h3>
+            <p className="text-xs text-muted-foreground">Select what to reset:</p>
+            <div className="flex flex-col gap-3">
+              <label className="flex items-center gap-3 text-sm cursor-pointer p-2 rounded-md hover:bg-secondary/30">
+                <input type="checkbox" checked={resetOptions.storage} onChange={(e) => setResetOptions((o) => ({ ...o, storage: e.target.checked }))} className="size-4 rounded border-input accent-[var(--brand)]" />
+                <div>
+                  <span className="font-medium">Storage limit</span>
+                  <p className="text-xs text-muted-foreground">Reset to default allocation</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 text-sm cursor-pointer p-2 rounded-md hover:bg-secondary/30">
+                <input type="checkbox" checked={resetOptions.verification} onChange={(e) => setResetOptions((o) => ({ ...o, verification: e.target.checked }))} className="size-4 rounded border-input accent-[var(--brand)]" />
+                <div>
+                  <span className="font-medium">Verification status</span>
+                  <p className="text-xs text-muted-foreground">Clear Hack Club verification & pending requests</p>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 text-sm cursor-pointer p-2 rounded-md hover:bg-secondary/30">
+                <input type="checkbox" checked={resetOptions.introduction} onChange={(e) => setResetOptions((o) => ({ ...o, introduction: e.target.checked }))} className="size-4 rounded border-input accent-[var(--brand)]" />
+                <div>
+                  <span className="font-medium">Introduction status</span>
+                  <p className="text-xs text-muted-foreground">Clear emailVerified, ban, suspension, intro text</p>
+                </div>
+              </label>
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button size="sm" variant="outline" onClick={() => setResetModal(null)} disabled={resetSending}>
+                Cancel
+              </Button>
+              <Button size="sm" className="gap-1.5" disabled={resetSending || (!resetOptions.storage && !resetOptions.verification && !resetOptions.introduction)} onClick={async () => {
+                setResetSending(true)
+                try {
+                  const promises: Promise<any>[] = []
+                  if (resetOptions.storage) promises.push(resetStorageLimit(resetModal.userId))
+                  if (resetOptions.verification) promises.push(resetVerificationStatus(resetModal.userId))
+                  if (resetOptions.introduction) promises.push(resetIntroduction(resetModal.userId))
+                  await Promise.all(promises)
+                  toast.success('User reset')
+                  setResetModal(null)
+                  await refresh()
+                } catch { toast.error('Failed to reset user') }
+                finally { setResetSending(false) }
+              }}>
+                <RotateCcw className="size-3.5" />
+                {resetSending ? 'Resetting...' : 'Reset selected'}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Suspend modal */}

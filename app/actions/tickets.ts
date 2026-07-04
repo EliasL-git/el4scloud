@@ -9,6 +9,7 @@ import crypto from 'crypto'
 import { logAuditEventWithHeaders } from '@/lib/audit'
 import { sendMail } from '@/lib/mail'
 import { fireWebhook } from '@/lib/webhooks/fire'
+import { CATEGORY_SUBCATEGORIES } from '@/lib/ticket-categories'
 
 const SLA_HOURS: Record<string, number> = {
   critical: 1,
@@ -57,15 +58,19 @@ async function notifyAdmins(opts: { userName: string; userEmail: string; subject
   }
 }
 
-export async function createTicket(subject: string, message: string, category = 'general', priority = 'normal') {
+export async function createTicket(subject: string, message: string, category = 'general', priority = 'normal', subcategory?: string) {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
 
-  const validCategories = ['account', 'billing', 'technical', 'abuse', 'feature_request', 'general']
+  const validCategories = Object.keys(CATEGORY_SUBCATEGORIES)
   const validPriorities = ['low', 'normal', 'high', 'urgent', 'critical']
 
   if (!validCategories.includes(category)) category = 'general'
   if (!validPriorities.includes(priority)) priority = 'normal'
+
+  const subs = CATEGORY_SUBCATEGORIES[category]?.subcategories ?? []
+  const validSubValues = subs.map((s) => s.value)
+  if (!subcategory || !validSubValues.includes(subcategory)) subcategory = 'other'
 
   const id = crypto.randomUUID()
 
@@ -75,14 +80,15 @@ export async function createTicket(subject: string, message: string, category = 
     subject,
     message,
     category,
+    subcategory,
     priority,
   })
 
   await logAuditEventWithHeaders(session.user.id, 'ticket.created', JSON.stringify({
-    ticketId: id, subject, category, priority,
+    ticketId: id, subject, category, subcategory, priority,
   }))
 
-  await fireWebhook(session.user.id, 'ticket.created', { ticketId: id, subject, category, priority }).catch(() => undefined)
+  await fireWebhook(session.user.id, 'ticket.created', { ticketId: id, category, priority }).catch(() => undefined)
 
   notifyAdmins({
     userName: session.user.name ?? session.user.email ?? 'Unknown',
@@ -109,6 +115,7 @@ export async function getMyTickets() {
     status: string
     priority: string
     category: string
+    subcategory: string
     assignedTo: string | null
     createdAt: Date
     updatedAt: Date
@@ -117,7 +124,7 @@ export async function getMyTickets() {
     replyCount: number
   }>(sql`
     SELECT
-      id, "userId", subject, message, status, priority, category,
+      id, "userId", subject, message, status, priority, category, subcategory,
       "assignedTo", "createdAt", "updatedAt", "slaTarget", "firstResponseAt",
       (SELECT COUNT(*)::int FROM ticket_replies WHERE "ticketId" = tickets.id AND "isInternal" = false) AS "replyCount"
     FROM tickets

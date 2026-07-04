@@ -1,4 +1,4 @@
-# el4scloud API
+# Hobbycloud API
 
 Base URL: `https://cloud.el4s.dev`
 

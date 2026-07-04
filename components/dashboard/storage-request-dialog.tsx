@@ -54,16 +54,16 @@ export function StorageRequestDialog() {
       <AlertDialogTrigger
         render={
           <Button variant="link" className="text-xs text-muted-foreground hover:text-foreground px-0 h-auto font-normal">
-            Need more storage? Apply.
+            Need more Storage? Apply.
           </Button>
         }
       />
       <AlertDialogContent>
         <form onSubmit={handleSubmit}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Request more storage</AlertDialogTitle>
+            <AlertDialogTitle>Request more Storage</AlertDialogTitle>
             <AlertDialogDescription>
-              Provide your identity details and tell us how much storage you need.
+              Provide your identity details and tell us how much Storage you need.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-4 py-4">

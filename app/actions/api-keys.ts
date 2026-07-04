@@ -11,10 +11,12 @@ import { createHash, randomBytes } from 'crypto'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
 import { fireWebhook } from '@/lib/webhooks/fire'
+import { assertNotSuspended } from '@/lib/suspension'
 
 async function getUserId() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) throw new Error('Unauthorized')
+  await assertNotSuspended(session.user.id)
   return session.user.id
 }
 
@@ -57,7 +59,7 @@ export async function createApiKey(name: string) {
 
   await logAuditEventWithHeaders(userId, 'apikey.created', JSON.stringify({ name, keyId: id, keyPrefix }))
 
-  await fireWebhook(userId, 'api.key.created', { keyId: id, name, keyPrefix }).catch(() => undefined)
+  await fireWebhook(userId, 'api.key.created', { keyId: id, name }).catch(() => undefined)
 
   return rawKey
 }

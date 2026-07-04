@@ -94,7 +94,7 @@ export default function TakedownPage() {
             </div>
             <div>
               <CardTitle>Takedown Request</CardTitle>
-              <CardDescription>Report a file hosted on el4scloud</CardDescription>
+              <CardDescription>Report a file hosted on Hobbycloud</CardDescription>
             </div>
           </div>
         </CardHeader>

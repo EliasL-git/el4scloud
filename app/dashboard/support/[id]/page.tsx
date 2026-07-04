@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { getTicket, getTicketReplies, replyToTicket, closeTicket } from '@/app/actions/tickets'
+import { getCategoryLabel, getSubcategoryLabel } from '@/lib/ticket-categories'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -29,10 +30,7 @@ const statusConfig: Record<string, { label: string; color: string; variant: 'sec
   closed: { label: 'Closed', color: '', variant: 'outline' },
 }
 
-const categoryLabels: Record<string, string> = {
-  account: 'Account', billing: 'Billing', technical: 'Technical',
-  abuse: 'Abuse', feature_request: 'Feature Request', general: 'General',
-}
+
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat('en-US', {
@@ -187,7 +185,7 @@ export default function TicketPage() {
               </Badge>
               <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5">
                 <Tag className="size-2.5" />
-                {categoryLabels[ticket.category] ?? ticket.category}
+                {getCategoryLabel(ticket.category)} / {getSubcategoryLabel(ticket.category, ticket.subcategory)}
               </Badge>
             </div>
           </div>

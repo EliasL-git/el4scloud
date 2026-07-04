@@ -161,9 +161,9 @@ export default function StoragePage() {
               <CardContent className="p-6 flex flex-col items-center gap-3 text-center">
                 <HardDrive className="size-8 text-muted-foreground" />
                 <div>
-                  <h3 className="text-sm font-semibold">No storage allocated yet</h3>
+                  <h3 className="text-sm font-semibold">No Storage allocated yet</h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    You need to apply for storage before you can upload files.{' '}
+                    You need to apply for Storage before you can upload files.{' '}
                     Use the <strong>Need more storage? Apply.</strong> link in the footer to request storage from an admin.
                   </p>
                 </div>
@@ -193,9 +193,9 @@ export default function StoragePage() {
               <CardContent className="p-6 flex flex-col items-center gap-3 text-center">
                 <HardDrive className="size-8 text-muted-foreground" />
                 <div>
-                  <h3 className="text-sm font-semibold">No storage allocated</h3>
+                  <h3 className="text-sm font-semibold">No Storage allocated</h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    You need to apply for storage before you can upload files.
+                    You need to apply for Storage before you can upload files.
                   </p>
                 </div>
               </CardContent>
@@ -220,6 +220,10 @@ export default function StoragePage() {
           <FileManager onRefresh={refresh} />
         </section>
       )}
+
+      <div className="text-[11px] text-muted-foreground text-center border-t border-border pt-4 mt-2">
+        Built with ❤️ on our API
+      </div>
 
       <Toaster />
 

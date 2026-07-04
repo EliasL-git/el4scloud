@@ -150,7 +150,7 @@ export async function POST(req: Request) {
   })
 
   ;(async () => {
-    await fireWebhook(userId, 'file.uploaded', { fileId, key, name: fileName, size, mimeType, isPublic }).catch(() => undefined)
+    await fireWebhook(userId, 'file.uploaded', { fileId, size, mimeType, isPublic }).catch(() => undefined)
   })()
 
   const response = Response.json({
@@ -207,7 +207,7 @@ async function scanAndHandle(
         .set({ scanStatus: 'scanned', scanResult, scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
 
-      await fireWebhook(userId, 'file.flagged', { fileId, scanResult, fileName }).catch(() => undefined)
+      await fireWebhook(userId, 'file.flagged', { fileId, scanResult }).catch(() => undefined)
 
       if (newCount >= 2) {
         await recordWarning(userId, 'suspension', `Account suspended: repeated Terms of Service violations (${checkResult.reason || 'Blocked file'} - ${fileName})`, fileName)
@@ -223,7 +223,7 @@ async function scanAndHandle(
 
         console.log(`[upload] Suspended user ${userId} (violation #${newCount}): ${checkResult.reason} for ${fileName}`)
 
-        await fireWebhook(userId, 'user.suspended', { userId, reason: `Repeated upload violations: ${fileName}` }).catch(() => undefined)
+        await fireWebhook(userId, 'user.suspended', { userId, reason: 'Account suspended for repeated violations' }).catch(() => undefined)
       } else {
         await recordWarning(userId, 'warning', `Upload violation: ${checkResult.reason || 'Blocked file'} (${fileName})`, fileName)
         await db
@@ -238,7 +238,7 @@ async function scanAndHandle(
 
         console.log(`[upload] Warned user ${userId} (violation #${newCount}): ${checkResult.reason} for ${fileName}`)
 
-        await fireWebhook(userId, 'user.suspended', { userId, reason: `Upload violation: ${fileName}`, warning: true }).catch(() => undefined)
+        await fireWebhook(userId, 'user.suspended', { userId, reason: 'Upload violation detected', warning: true }).catch(() => undefined)
       }
     } else if (checkResult.scanError) {
       await db

@@ -78,7 +78,7 @@ async function scanPendingFile(fileId: string, key: string, fileName: string, us
         .set({ scanStatus: 'scanned', scanResult, scanDuration: checkResult.scanDurationMs })
         .where(eq(files.id, fileId))
 
-      await fireWebhook(userId, 'file.flagged', { fileId, scanResult, fileName }).catch(() => undefined)
+      await fireWebhook(userId, 'file.flagged', { fileId, scanResult }).catch(() => undefined)
 
       if (newCount >= 2) {
         await recordWarning(userId, 'suspension', `Account suspended: repeated Terms of Service violations (${checkResult.reason || 'Blocked file'} - ${fileName})`, fileName)
@@ -92,7 +92,7 @@ async function scanPendingFile(fileId: string, key: string, fileName: string, us
           })
           .where(eq(user.id, userId))
 
-        await fireWebhook(userId, 'user.suspended', { userId, reason: `Repeated upload violations: ${fileName}` }).catch(() => undefined)
+        await fireWebhook(userId, 'user.suspended', { userId, reason: 'Account suspended for repeated violations' }).catch(() => undefined)
       } else {
         await recordWarning(userId, 'warning', `Upload violation: ${checkResult.reason || 'Blocked file'} (${fileName})`, fileName)
         await db
@@ -105,7 +105,7 @@ async function scanPendingFile(fileId: string, key: string, fileName: string, us
           })
           .where(eq(user.id, userId))
 
-        await fireWebhook(userId, 'user.suspended', { userId, reason: `Upload violation: ${fileName}`, warning: true }).catch(() => undefined)
+        await fireWebhook(userId, 'user.suspended', { userId, reason: 'Upload violation detected', warning: true }).catch(() => undefined)
       }
 
       console.log(`[scan-recovery] Flagged + deleted file ${fileId} (${fileName}) — user ${newCount >= 2 ? 'suspended' : 'warned'}`)
