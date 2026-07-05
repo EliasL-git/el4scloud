@@ -51,6 +51,7 @@ export default function AIPage() {
   const [selectedModel, setSelectedModel] = useState('deepseek-4-flash')
   const [error, setError] = useState('')
   const [fallbackNotice, setFallbackNotice] = useState('')
+  const [expectedCompletionTokens, setExpectedCompletionTokens] = useState(500)
   const [conversations, setConversations] = useState<Array<{ id: string; title: string; messageCount: number }>>([])
   const [conversationId, setConversationId] = useState<string | null>(null)
   const requestCount = usage?.requestCount ?? 0
@@ -67,6 +68,18 @@ export default function AIPage() {
   const loadConversations = async () => {
     const convs = await getConversations()
     setConversations(convs)
+  }
+
+  function estimateTokensFromText(text: string) {
+    // rough heuristic: ~4 characters per token
+    return Math.max(1, Math.ceil(text.length / 4))
+  }
+
+  function estimateCostForModel(modelId: string, promptTokens: number, completionTokens: number) {
+    const m: any = models.find((x) => x.id === modelId)
+    if (!m) return 0
+    const raw = ((promptTokens / 1_000_000) * (m.inputPricePer1M ?? 0)) + ((completionTokens / 1_000_000) * (m.outputPricePer1M ?? 0))
+    return Math.max(raw, 0.0001)
   }
 
   useEffect(() => {
@@ -473,6 +486,20 @@ export default function AIPage() {
                       style={{ width: `${Math.min(budgetPercent, 100)}%`, backgroundColor: budgetPercent > 80 ? 'var(--destructive)' : 'var(--brand)' }} />
                   </div>
                   <span className="shrink-0 tabular-nums">{formatUsd(usage.usedToday)} / {formatUsd(usage.limit)}</span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <div>Estimated completion tokens</div>
+                    <input
+                      type="number"
+                      min={0}
+                      value={expectedCompletionTokens}
+                      onChange={(e) => setExpectedCompletionTokens(Math.max(0, Number(e.target.value || 0)))}
+                      className="w-20 text-xs rounded border border-input bg-background px-2 py-1"
+                    />
+                  </div>
+                  <div className="font-medium">Estimate: {formatUsd(estimateCostForModel(selectedModel, estimateTokensFromText(input), expectedCompletionTokens))}</div>
                 </div>
 
                 <div className="flex gap-2">
