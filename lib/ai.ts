@@ -119,6 +119,27 @@ export const AI_MODELS = [
     inputPricePer1M: 0.25,
     outputPricePer1M: 0.55,
   },
+  {
+    id: 'mimo-v2.5-pro',
+    name: 'MiMo v2.5 Pro',
+    provider: 'MiMo',
+    inputPricePer1M: 0.06,
+    outputPricePer1M: 0.12,
+  },
+  {
+    id: 'kimi-k2.6',
+    name: 'Kimi K2.6',
+    provider: 'Kimi',
+    inputPricePer1M: 0.04,
+    outputPricePer1M: 0.08,
+  },
+  {
+    id: 'glm-5.2',
+    name: 'GLM-5.2',
+    provider: 'GLM',
+    inputPricePer1M: 0.20,
+    outputPricePer1M: 0.40,
+  },
 ] as const
 
 export function calculateCost(
