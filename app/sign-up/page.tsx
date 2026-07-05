@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { register } from '@/app/actions/register'
+import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -52,12 +53,14 @@ export default function SignUpPage() {
       return
     }
 
-    if ('needsIntro' in result && result.needsIntro) {
-      router.push('/introduction')
-      return
-    }
     setRegisteredEmail(email)
     setSuccess(true)
+
+    // Auto sign-in so the user stays logged in through verification
+    const signInResult = await authClient.signIn.email({ email, password })
+    if (signInResult.error) {
+      console.error('[signup] Auto sign-in failed:', signInResult.error)
+    }
   }
 
   if (success) {

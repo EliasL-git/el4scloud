@@ -9,6 +9,48 @@ import { auth } from '@/lib/auth'
 import { NO_VERIFICATION_LIMIT, MANUAL_VERIFICATION_LIMIT } from '@/lib/storage'
 import { sendMail } from '@/lib/mail'
 
+function generateCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString()
+}
+
+function isNoEmail(): boolean {
+  const val = process.env.NO_EMAIL?.trim().toLowerCase()
+  return val === 'true' || val === '1' || val === 'yes'
+}
+
+export async function getEmailVerificationCode(email: string) {
+  console.log('[verify:getCode] Generating code for:', email)
+
+  const code = generateCode()
+  const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
+
+  await db.delete(verification).where(eq(verification.identifier, email))
+  await db.insert(verification).values({
+    id: uuidv4(),
+    identifier: email,
+    value: code,
+    expiresAt,
+  })
+
+  const noEmail = isNoEmail()
+  if (!noEmail) {
+    try {
+      const [u] = await db.select({ name: user.name }).from(user).where(eq(user.email, email))
+      const { renderToString } = await import('react-dom/server')
+      const { VerifyEmailEmail } = await import('@/components/emails/verify-email')
+      const html = renderToString(VerifyEmailEmail({ username: u?.name ?? 'there', code }))
+      await sendMail({ to: email, subject: 'Your Hobbycloud verification code', html })
+      console.log('[verify:getCode] Email sent to:', email)
+    } catch (err: any) {
+      console.error('[verify:getCode] Failed to send email:', err?.message ?? err)
+    }
+    return { ok: true }
+  }
+
+  console.log('[verify:getCode] NO_EMAIL mode — returning code:', code)
+  return { ok: true, code }
+}
+
 export async function resendVerificationEmail(email: string) {
   console.log('[verify:resend] Request for:', email)
 
@@ -103,10 +145,6 @@ export async function verifyEmailCode(email: string, code: string) {
 
   console.log('[verify:verifyCode] Email verified successfully:', email)
   return { ok: true }
-}
-
-function generateCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString()
 }
 
 export async function sendUpgradeCode(email: string) {

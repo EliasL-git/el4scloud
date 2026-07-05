@@ -5,9 +5,7 @@ import { user, account } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import bcrypt from 'bcryptjs'
-import { headers } from 'next/headers'
 import { NO_VERIFICATION_LIMIT } from '@/lib/storage'
-import { auth } from '@/lib/auth'
 import { fireWebhook } from '@/lib/webhooks/fire'
 
 export async function register(data: {
@@ -23,8 +21,6 @@ export async function register(data: {
     return { error: 'An account with this email already exists.' }
   }
 
-  const _noEmailVal = process.env.NO_EMAIL?.trim().toLowerCase()
-  const noEmail = _noEmailVal === 'true' || _noEmailVal === '1' || _noEmailVal === 'yes'
   const userId = uuidv4()
   const hashedPassword = await bcrypt.hash(data.password, 10)
 
@@ -54,21 +50,5 @@ export async function register(data: {
 
   await fireWebhook(userId, 'user.signed_up', { userId }).catch(() => undefined)
 
-  if (!noEmail) {
-    try {
-      const hdrs = await headers()
-      const cleanHeaders = new Headers(hdrs)
-      cleanHeaders.delete('cookie')
-      await auth.api.sendVerificationEmail({
-        headers: cleanHeaders,
-        body: { email: data.email, callbackURL: '/dashboard' },
-      })
-    } catch (err: any) {
-      console.error('[register] Failed to send verification email:', err?.message ?? err)
-    }
-  }
-
-  return noEmail
-    ? { ok: true, needsIntro: true }
-    : { ok: true, needsVerification: true, email: data.email }
+  return { ok: true, needsVerification: true, email: data.email }
 }

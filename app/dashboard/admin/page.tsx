@@ -46,13 +46,15 @@ import {
   approveIntroduction,
   rejectIntroduction,
   resetIntroduction,
+  getUnverifiedUsers,
+  getVerificationData,
 } from '@/app/actions/admin'
 import { getCategoryLabel, getSubcategoryLabel, CATEGORIES } from '@/lib/ticket-categories'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Search, Ban, Download, CheckCircle2, RefreshCw, HardDrive, Users, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Key, LayoutDashboard, Mail, ChevronRight, AlertTriangle, AlertCircle, Info, Tag, Clock, UserCircle, UserPlus, Eye, EyeOff } from 'lucide-react'
+import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Search, Ban, Download, CheckCircle2, RefreshCw, HardDrive, Users, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Key, LayoutDashboard, Mail, ChevronRight, AlertTriangle, AlertCircle, Info, Tag, Clock, UserCircle, UserPlus, Eye, EyeOff, ShieldCheck, Shield, Terminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -134,8 +136,9 @@ export default function AdminPage() {
   const [deletionNotes, setDeletionNotes] = useState<Record<string, string>>({})
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([])
 
-  const [takedownList, setTakedownList] = useState<Awaited<ReturnType<typeof getTakedownRequests>>>([])
-  const [pendingIntros, setPendingIntros] = useState<Awaited<ReturnType<typeof getPendingIntroductions>>>([])
+  const [takedownList, setTakedownList] = useState<Awaited<ReturnType<typeof getTakedownRequests>>[]>([])
+  const [pendingIntros, setPendingIntros] = useState<Awaited<ReturnType<typeof getPendingIntroductions>>[]>([])
+  const [verificationData, setVerificationData] = useState<Awaited<ReturnType<typeof getVerificationData>> | null>(null)
   const [auditFilterUser, setAuditFilterUser] = useState('')
   const [auditFilterAction, setAuditFilterAction] = useState('')
   const [fileQuery, setFileQuery] = useState('')
@@ -152,14 +155,17 @@ export default function AdminPage() {
   const [suspendAppealable, setSuspendAppealable] = useState(true)
   const [suspendType, setSuspendType] = useState<'suspended' | 'terminated'>('suspended')
   const [suspendSending, setSuspendSending] = useState(false)
+  const [reachOutData, setReachOutData] = useState<{ name: string | null; email: string }[] | null>(null)
+  const [reachOutLoading, setReachOutLoading] = useState(false)
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [u, r, t, ap, dr, al, cron, td, ss, us, ts, ad, pi] = await Promise.all([
+    const [u, r, t, ap, dr, al, cron, td, ss, us, ts, ad, pi, vd] = await Promise.all([
       getUsers(), getRequests(), adminGetTickets(), getAppeals(), getDeletionRequests(),
       getAuditLogs({ limit: 200 }), getLastCronRun(), getTakedownRequests(),
       getScanStats(), getUserStats(), adminGetTicketStats(), adminGetAdmins(),
       getPendingIntroductions(),
+      getVerificationData(),
     ])
     setUsers(u)
     setRequests(r)
@@ -174,6 +180,7 @@ export default function AdminPage() {
     setTicketStats(ts)
     setAdminsList(ad)
     setPendingIntros(pi)
+    setVerificationData(vd)
     setLoading(false)
   }, [])
 
@@ -305,6 +312,18 @@ export default function AdminPage() {
       toast.error('Failed to suspend user')
     } finally {
       setSuspendSending(false)
+    }
+  }
+
+  const handleReachOut = async () => {
+    setReachOutLoading(true)
+    try {
+      const data = await getUnverifiedUsers()
+      setReachOutData(data)
+    } catch {
+      toast.error('Failed to fetch unverified users')
+    } finally {
+      setReachOutLoading(false)
     }
   }
 
@@ -635,7 +654,13 @@ export default function AdminPage() {
       {/* Users section */}
       {section === 'users' && (
         <section className="flex flex-col gap-4">
-          {sectionTitle('Users')}
+          <div className="flex items-center justify-between">
+            {sectionTitle('Users')}
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleReachOut}>
+              <Mail className="size-3.5" />
+              Reach out to unverified
+            </Button>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -644,6 +669,7 @@ export default function AdminPage() {
                   <th className="text-left py-2 px-3 font-medium">Email</th>
                   <th className="text-left py-2 px-3 font-medium">Role</th>
                   <th className="text-left py-2 px-3 font-medium">Status</th>
+                  <th className="text-left py-2 px-3 font-medium">Verified</th>
                   <th className="text-left py-2 px-3 font-medium">Storage</th>
                   <th className="text-right py-2 px-3 font-medium">Actions</th>
                 </tr>
@@ -663,6 +689,29 @@ export default function AdminPage() {
                         <Badge variant="destructive" className="text-xs">{u.suspensionType ?? 'banned'}</Badge>
                       ) : (
                         <Badge variant="outline" className="text-xs text-green-500 border-green-500/40">active</Badge>
+                      )}
+                    </td>
+                    <td className="py-2 px-3">
+                      {u.verifiedViaHackclub ? (
+                        <Badge variant="outline" className="text-xs gap-1 border-blue-500/40 text-blue-500">
+                          <Terminal className="size-3" />
+                          V Verified (hackclub)
+                        </Badge>
+                      ) : u.verifiedManually ? (
+                        <Badge variant="outline" className="text-xs gap-1 border-amber-500/40 text-amber-500">
+                          <ShieldCheck className="size-3" />
+                          V Verified (manual)
+                        </Badge>
+                      ) : u.emailVerified ? (
+                        <Badge variant="outline" className="text-xs gap-1 border-green-500/40 text-green-500">
+                          <CheckCircle2 className="size-3" />
+                          Email
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs gap-1">
+                          <Shield className="size-3" />
+                          None
+                        </Badge>
                       )}
                     </td>
                     <td className="py-2 px-3 text-muted-foreground">
@@ -1361,6 +1410,40 @@ export default function AdminPage() {
             </div>
             <div className="flex justify-end">
               <Button size="sm" variant="outline" onClick={() => setMetaModal(null)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reach out modal */}
+      {reachOutData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setReachOutData(null)}>
+          <div className="bg-background rounded-xl shadow-lg max-w-2xl w-full mx-4 p-6 flex flex-col gap-4 max-h-[80vh]" onClick={(e) => e.stopPropagation()}>
+<div className="flex items-center justify-between shrink-0">
+              <h3 className="text-sm font-semibold">Unverified users ({reachOutData.length})</h3>
+              <button onClick={() => setReachOutData(null)} className="text-muted-foreground hover:text-foreground transition-colors">
+                <X className="size-4" />
+              </button>
+            </div>
+            <div className="text-xs text-muted-foreground bg-amber-500/5 border border-amber-500/20 rounded-lg p-3">
+              Hi! we noticed you haven&apos;t verified ur iodentiyy, need help? contact me on slack (<a href="https://hackclub.enterprise.slack.com/team/U08J9R1TUT1" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground font-medium">slack link</a>) or email me at <a href="mailto:elias.lindholm2010@outlook.com" className="underline underline-offset-2 hover:text-foreground font-medium">elias.lindholm2010@outlook.com</a>
+            </div>
+            <div className="flex flex-col gap-1 overflow-y-auto min-h-0">
+              {reachOutData.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-4 text-center">All users are verified!</p>
+              ) : (
+                <div className="text-xs space-y-1">
+                  {reachOutData.map((u) => (
+                    <div key={u.email} className="flex items-center gap-3 p-2 rounded-md hover:bg-secondary/30">
+                      <span className="font-medium w-32 truncate shrink-0">{u.name ?? '—'}</span>
+                      <a href={`mailto:${u.email}`} className="text-muted-foreground hover:text-foreground underline underline-offset-2 truncate">{u.email}</a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end shrink-0">
+              <Button size="sm" variant="outline" onClick={() => setReachOutData(null)}>Close</Button>
             </div>
           </div>
         </div>

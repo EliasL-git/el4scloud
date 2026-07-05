@@ -33,10 +33,9 @@ export default async function DashboardLayout({
 
   if (!u) redirect('/sign-in')
 
-  const _isNoEmail = process.env.NO_EMAIL?.trim().toLowerCase()
-  const _noEmailCheck = _isNoEmail === 'true' || _isNoEmail === '1' || _isNoEmail === 'yes'
-  if (_noEmailCheck && !u.emailVerified && !u.banned) {
-    redirect('/introduction')
+  if (!u.emailVerified && !u.banned) {
+    const sessionEmail = session.user.email
+    redirect(`/verify-email?email=${encodeURIComponent(sessionEmail ?? '')}`)
   }
 
   if (!u?.agreedToTerms) {

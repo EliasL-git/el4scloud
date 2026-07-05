@@ -949,6 +949,39 @@ export async function getPendingIntroductions() {
     .orderBy(user.createdAt)
 }
 
+export async function getVerificationData() {
+  const adminId = await assertAdmin()
+  const [hackclubUsers, manualUsers, emailUsers, pendingRequests, pendingIntros] = await Promise.all([
+    db
+      .select({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt, verificationMeta: user.verificationMeta })
+      .from(user)
+      .where(eq(user.verifiedViaHackclub, true))
+      .orderBy(user.createdAt),
+    db
+      .select({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt })
+      .from(user)
+      .where(and(eq(user.verifiedManually, true), eq(user.verifiedViaHackclub, false)))
+      .orderBy(user.createdAt),
+    db
+      .select({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt })
+      .from(user)
+      .where(and(eq(user.emailVerified, true), eq(user.verifiedViaHackclub, false), eq(user.verifiedManually, false)))
+      .orderBy(user.createdAt),
+    db
+      .select({ id: user.id, name: user.name, email: user.email, createdAt: user.createdAt })
+      .from(storageRequests)
+      .innerJoin(user, eq(storageRequests.userId, user.id))
+      .where(eq(storageRequests.status, 'pending'))
+      .orderBy(storageRequests.createdAt),
+    db
+      .select({ id: user.id, name: user.name, email: user.email, introductionText: user.introductionText, createdAt: user.createdAt })
+      .from(user)
+      .where(eq(user.suspensionType, 'pending_intro'))
+      .orderBy(user.createdAt),
+  ])
+  return { hackclubUsers, manualUsers, emailUsers, pendingRequests, pendingIntros }
+}
+
 export async function approveIntroduction(userId: string) {
   const adminId = await assertAdmin()
   const [u] = await db
@@ -1090,6 +1123,27 @@ export async function getWebhookDeliveries(limit = 50, offset = 0) {
   `)
 
   return rows.rows ?? []
+}
+
+export async function getUnverifiedUsers() {
+  const adminId = await assertAdmin()
+  return db
+    .select({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      emailVerified: user.emailVerified,
+      verifiedViaHackclub: user.verifiedViaHackclub,
+      verifiedManually: user.verifiedManually,
+      createdAt: user.createdAt,
+    })
+    .from(user)
+    .where(
+      sql`NOT (
+        ${user.emailVerified} OR ${user.verifiedViaHackclub} OR ${user.verifiedManually}
+      )`
+    )
+    .orderBy(user.createdAt)
 }
 
 export async function testWebhook(webhookId: string) {

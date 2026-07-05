@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users, Sparkles, Webhook } from 'lucide-react'
+import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users, Sparkles, Webhook, ShieldCheck } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -44,7 +44,7 @@ const adminSidebarTabs = [
   { id: 'files', label: 'Files', icon: FileText },
   { id: 'deletions', label: 'Deletion Requests', icon: Trash2 },
   { id: 'audit', label: 'Audit Log', icon: ClipboardList },
-
+  { id: 'verifications', label: 'Verifications', icon: ShieldCheck },
   { id: 'takedown', label: 'Takedown', icon: ShieldAlert },
 ]
 

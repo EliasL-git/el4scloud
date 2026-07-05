@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { resendVerificationEmail, verifyEmailCode } from '@/app/actions/verify'
+import { verifyEmailCode, getEmailVerificationCode } from '@/app/actions/verify'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { HardDrive, Mail, MailCheck, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { HardDrive, Mail, Loader2, ShieldAlert, CheckCircle2 } from 'lucide-react'
 
 function VerifyEmailForm() {
   const searchParams = useSearchParams()
@@ -16,34 +16,44 @@ function VerifyEmailForm() {
 
   const [email, setEmail] = useState(urlEmail)
   const [code, setCode] = useState('')
-  const [step, setStep] = useState<'request' | 'verify' | 'success' | 'error'>(urlEmail ? 'verify' : 'request')
+  const [step, setStep] = useState<'loading' | 'verify' | 'success'>(urlEmail ? 'verify' : 'loading')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [rateLimitError, setRateLimitError] = useState('')
+  const [devCode, setDevCode] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    if (!urlEmail) {
+      setStep(prev => prev === 'loading' ? 'verify' : prev)
+      return
+    }
+    setSending(true)
+    getEmailVerificationCode(urlEmail).then((res) => {
+      if (res.ok && 'code' in res) {
+        setDevCode(res.code as string)
+      }
+      setStep('verify')
+    }).catch(() => {
+      setStep('verify')
+    }).finally(() => setSending(false))
+  }, [urlEmail])
 
   async function handleSendCode(e: React.FormEvent) {
     e.preventDefault()
-    setLoading(true)
+    setSending(true)
     setError('')
-    setRateLimitError('')
 
     if (!email) {
       setError('Please enter your email.')
-      setLoading(false)
+      setSending(false)
       return
     }
 
-    const result = await resendVerificationEmail(email)
-    if (result.ok) {
-      setStep('verify')
-    } else {
-      if (result.error?.startsWith('Please wait')) {
-        setRateLimitError(result.error)
-      } else {
-        setError(result.error || 'Failed to send verification code.')
-      }
+    const result = await getEmailVerificationCode(email)
+    if (result.ok && 'code' in result) {
+      setDevCode(result.code as string)
     }
-    setLoading(false)
+    setSending(false)
   }
 
   async function handleVerifyCode(e: React.FormEvent) {
@@ -88,12 +98,15 @@ function VerifyEmailForm() {
               <p className="text-sm text-muted-foreground">
                 Your email <strong>{email}</strong> has been verified.
               </p>
+              <p className="text-xs text-muted-foreground">
+                Your storage has been upgraded to 2.5 GB.
+              </p>
               <Button
-                onClick={() => router.push('/sign-in')}
+                onClick={() => router.push('/dashboard')}
                 className="w-full"
                 style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
               >
-                Sign in to your account
+                Go to dashboard
               </Button>
             </CardContent>
           </Card>
@@ -112,78 +125,34 @@ function VerifyEmailForm() {
           <span className="text-lg font-semibold tracking-tight text-foreground">Hobbycloud</span>
         </div>
 
-        {rateLimitError && (
+        {step === 'loading' ? (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <AlertCircle className="size-4 text-amber-600" />
-                Rate limited
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">{rateLimitError}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {step === 'request' ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl">Verify your email</CardTitle>
-              <CardDescription>
-                Enter your email and we&apos;ll send you a 6-digit verification code.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <form onSubmit={handleSendCode} className="flex flex-col gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    placeholder="you@example.com"
-                  />
-                </div>
-
-                {error && (
-                  <p className="text-sm text-destructive" role="alert">
-                    {error}
-                  </p>
-                )}
-
-                <Button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full"
-                  style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
-                >
-                  {loading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Mail className="size-4" />
-                  )}
-                  Send verification code
-                </Button>
-              </form>
+            <CardContent className="flex flex-col items-center gap-3 py-8">
+              <Loader2 className="size-5 animate-spin" />
+              <p className="text-sm text-muted-foreground">Sending verification code...</p>
             </CardContent>
           </Card>
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl">Enter verification code</CardTitle>
-              <CardDescription>
-                We sent a 6-digit code to <strong>{email}</strong>. Check your inbox.
-              </CardDescription>
+              <div className="flex items-start gap-3">
+                <div className="size-10 rounded-lg bg-amber-500/10 flex items-center justify-center shrink-0">
+                  <ShieldAlert className="size-5 text-amber-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">Verify your email</CardTitle>
+                  <CardDescription className="mt-1">
+                    Your account is locked until you verify your email. Check your inbox (and spam) for the verification code.
+                  </CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              {urlEmail && (
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Mail className="size-3" />
-                  Lost the page? No worries — enter the code from your email below.
-                </p>
+              {devCode && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-center">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Dev mode — your code</p>
+                  <p className="text-2xl tracking-[10px] font-mono font-bold">{devCode}</p>
+                </div>
               )}
 
               <form onSubmit={handleVerifyCode} className="flex flex-col gap-4">
@@ -219,35 +188,67 @@ function VerifyEmailForm() {
                   {loading ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
-                    <MailCheck className="size-4" />
+                    <Mail className="size-4" />
                   )}
                   Verify email
                 </Button>
               </form>
 
-              <div className="border-t border-border pt-3 mt-1">
+              <div className="border-t border-border pt-3 flex flex-col gap-2">
                 <p className="text-xs text-muted-foreground text-center">
                   Didn&apos;t receive the code?{' '}
                   <button
                     type="button"
                     onClick={handleSendCode}
-                    disabled={loading}
+                    disabled={sending}
                     className="underline underline-offset-2 hover:text-foreground"
                   >
-                    Send a new code
+                    {sending ? 'Sending...' : 'Send a new code'}
                   </button>
                 </p>
-                <p className="text-xs text-muted-foreground text-center mt-1">
+                <p className="text-xs text-muted-foreground text-center">
                   Wrong email?{' '}
                   <button
                     type="button"
-                    onClick={() => setStep('request')}
+                    onClick={() => setStep('verify')}
                     className="underline underline-offset-2 hover:text-foreground"
                   >
                     Change it
                   </button>
                 </p>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {!urlEmail && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Enter your email</CardTitle>
+              <CardDescription>We&apos;ll send a verification code.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSendCode} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="you@example.com"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={sending}
+                  className="w-full"
+                  style={{ backgroundColor: 'var(--brand)', color: 'var(--brand-foreground)' }}
+                >
+                  {sending ? <Loader2 className="size-4 animate-spin" /> : 'Send code'}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         )}
