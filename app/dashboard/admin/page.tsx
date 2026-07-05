@@ -47,14 +47,16 @@ import {
   rejectIntroduction,
   resetIntroduction,
   getUnverifiedUsers,
+  reachOutToUnverifiedUsers,
   getVerificationData,
 } from '@/app/actions/admin'
 import { getCategoryLabel, getSubcategoryLabel, CATEGORIES } from '@/lib/ticket-categories'
+import { getAdminAiUsage } from '@/app/actions/ai'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Search, Ban, Download, CheckCircle2, RefreshCw, HardDrive, Users, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Key, LayoutDashboard, Mail, ChevronRight, AlertTriangle, AlertCircle, Info, Tag, Clock, UserCircle, UserPlus, Eye, EyeOff, ShieldCheck, Shield, Terminal } from 'lucide-react'
+import { Check, X, Lock, Unlock, RotateCcw, GlobeOff, Pencil, MessageSquare, Send, ArrowLeft, XCircle, Search, Ban, Download, CheckCircle2, RefreshCw, HardDrive, Users, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Key, LayoutDashboard, Mail, ChevronRight, AlertTriangle, AlertCircle, Info, Tag, Clock, UserCircle, UserPlus, Eye, EyeOff, ShieldCheck, Shield, Terminal, Sparkles, Cpu } from 'lucide-react'
 import { toast } from 'sonner'
 import { Toaster } from '@/components/ui/sonner'
 
@@ -103,6 +105,7 @@ type AuditEntry = Awaited<ReturnType<typeof getAuditLogs>>[number]
 
 type AdminTicket = Awaited<ReturnType<typeof adminGetTickets>>[number]
 type AdminReply = Awaited<ReturnType<typeof adminGetTicketReplies>>[number]
+type AdminAiUsageRow = Awaited<ReturnType<typeof getAdminAiUsage>>[number]
 
 export default function AdminPage() {
   const [section, setSection] = useState<string>('overview')
@@ -132,6 +135,7 @@ export default function AdminPage() {
   const [adminReplySending, setAdminReplySending] = useState(false)
   const [ticketStats, setTicketStats] = useState<Awaited<ReturnType<typeof adminGetTicketStats>> | null>(null)
   const [adminsList, setAdminsList] = useState<Awaited<ReturnType<typeof adminGetAdmins>>>([])
+  const [adminAiUsage, setAdminAiUsage] = useState<AdminAiUsageRow[]>([])
   const [appealNotes, setAppealNotes] = useState<Record<string, string>>({})
   const [deletionNotes, setDeletionNotes] = useState<Record<string, string>>({})
   const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([])
@@ -160,12 +164,13 @@ export default function AdminPage() {
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [u, r, t, ap, dr, al, cron, td, ss, us, ts, ad, pi, vd] = await Promise.all([
+    const [u, r, t, ap, dr, al, cron, td, ss, us, ts, ad, pi, vd, ai] = await Promise.all([
       getUsers(), getRequests(), adminGetTickets(), getAppeals(), getDeletionRequests(),
       getAuditLogs({ limit: 200 }), getLastCronRun(), getTakedownRequests(),
       getScanStats(), getUserStats(), adminGetTicketStats(), adminGetAdmins(),
       getPendingIntroductions(),
       getVerificationData(),
+      getAdminAiUsage(),
     ])
     setUsers(u)
     setRequests(r)
@@ -181,6 +186,7 @@ export default function AdminPage() {
     setAdminsList(ad)
     setPendingIntros(pi)
     setVerificationData(vd)
+    setAdminAiUsage(ai)
     setLoading(false)
   }, [])
 
@@ -316,12 +322,19 @@ export default function AdminPage() {
   }
 
   const handleReachOut = async () => {
+    if (!confirm('Email all currently unverified users with identity verification help?')) return
     setReachOutLoading(true)
     try {
+      const result = await reachOutToUnverifiedUsers()
       const data = await getUnverifiedUsers()
       setReachOutData(data)
+      if (result.failed > 0) {
+        toast.warning(`Sent ${result.sent}/${result.total} emails; ${result.failed} failed`)
+      } else {
+        toast.success(`Reached out to ${result.sent} unverified users`)
+      }
     } catch {
-      toast.error('Failed to fetch unverified users')
+      toast.error('Failed to reach out to unverified users')
     } finally {
       setReachOutLoading(false)
     }
@@ -363,6 +376,10 @@ export default function AdminPage() {
   }
 
   const pendingRequests = requests.filter((r) => r.request.status === 'pending')
+  const aiTokensToday = adminAiUsage.reduce((acc, row) => acc + row.tokens, 0)
+  const aiMostUsedModel = adminAiUsage[0]?.globalMostUsedModel
+    ? [adminAiUsage[0].globalMostUsedModel, adminAiUsage[0].globalMostUsedModelRequests] as const
+    : undefined
 
   const filteredTickets = adminTickets.filter((t) => {
     if (ticketStatusFilter !== 'all' && t.status !== ticketStatusFilter) return false
@@ -382,6 +399,15 @@ export default function AdminPage() {
 
   function sectionTitle(title: string) {
     return <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+  }
+
+  function formatVerificationMeta(meta?: string | null) {
+    if (!meta) return null
+    try {
+      return JSON.stringify(JSON.parse(meta), null, 2)
+    } catch {
+      return meta
+    }
   }
 
   return (
@@ -467,6 +493,29 @@ export default function AdminPage() {
             )}
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Card className="border-purple-500/20">
+              <CardContent className="p-3 flex items-center gap-3 text-sm">
+                <Sparkles className="size-4 shrink-0 text-purple-500" />
+                <span className="text-muted-foreground">
+                  AI tokens today:{' '}
+                  <span className="text-foreground font-medium">{aiTokensToday.toLocaleString()}</span>
+                </span>
+              </CardContent>
+            </Card>
+            <Card className="border-purple-500/20">
+              <CardContent className="p-3 flex items-center gap-3 text-sm">
+                <Cpu className="size-4 shrink-0 text-purple-500" />
+                <span className="text-muted-foreground">
+                  Most used model:{' '}
+                  <span className="text-foreground font-medium">
+                    {aiMostUsedModel ? `${aiMostUsedModel[0]} (${aiMostUsedModel[1]})` : '—'}
+                  </span>
+                </span>
+              </CardContent>
+            </Card>
+          </div>
+
           {userStats && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <Card>
@@ -513,6 +562,58 @@ export default function AdminPage() {
               </Card>
             </div>
           )}
+        </section>
+      )}
+
+      {section === 'ai' && (
+        <section className="flex flex-col gap-4">
+          <div>
+            {sectionTitle('AI usage')}
+            <p className="text-xs text-muted-foreground mt-1">Tokens used today and each user's most-used model.</p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground">Tokens Used Today</p>
+                <p className="text-2xl font-semibold tracking-tight mt-1">{aiTokensToday.toLocaleString()}</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <p className="text-xs text-muted-foreground">Most Used Model</p>
+                <p className="text-2xl font-semibold tracking-tight mt-1">{aiMostUsedModel?.[0] ?? '—'}</p>
+                {aiMostUsedModel && <p className="text-xs text-muted-foreground">{aiMostUsedModel[1]} request{aiMostUsedModel[1] === 1 ? '' : 's'} today</p>}
+              </CardContent>
+            </Card>
+          </div>
+          <Card>
+            <CardContent className="p-0 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="p-3 font-medium">User</th>
+                    <th className="p-3 font-medium">Email</th>
+                    <th className="p-3 font-medium text-right">Requests</th>
+                    <th className="p-3 font-medium text-right">Tokens</th>
+                    <th className="p-3 font-medium">Most Used Model</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminAiUsage.length === 0 ? (
+                    <tr><td className="p-6 text-center text-muted-foreground" colSpan={5}>No AI usage today.</td></tr>
+                  ) : adminAiUsage.map((row) => (
+                    <tr key={row.userId} className="border-b border-border last:border-0">
+                      <td className="p-3 font-medium">{row.name || 'Unknown'}</td>
+                      <td className="p-3 text-muted-foreground">{row.email}</td>
+                      <td className="p-3 text-right tabular-nums">{row.requests}</td>
+                      <td className="p-3 text-right tabular-nums">{row.tokens.toLocaleString()}</td>
+                      <td className="p-3 text-muted-foreground">{row.mostUsedModel ? `${row.mostUsedModel} (${row.mostUsedModelRequests})` : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
         </section>
       )}
 
@@ -656,9 +757,9 @@ export default function AdminPage() {
         <section className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             {sectionTitle('Users')}
-            <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleReachOut}>
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleReachOut} disabled={reachOutLoading}>
               <Mail className="size-3.5" />
-              Reach out to unverified
+              {reachOutLoading ? 'Sending...' : 'Reach out to unverified'}
             </Button>
           </div>
           <div className="overflow-x-auto">
@@ -1170,6 +1271,75 @@ export default function AdminPage() {
               ))}
             </div>
           )}
+        </section>
+      )}
+
+
+      {/* Verifications */}
+      {section === 'verifications' && (
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              {sectionTitle('Identity verifications')}
+              <p className="text-xs text-muted-foreground mt-1">
+                Review Hack Club, manual, email-only, and pending identity verification approvals.
+              </p>
+            </div>
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleReachOut} disabled={reachOutLoading}>
+              <Mail className="size-3.5" />
+              {reachOutLoading ? 'Sending...' : 'Reach out to all unverified'}
+            </Button>
+          </div>
+
+          {verificationData && (
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Hack Club</span><p className="text-lg font-semibold">{verificationData.hackclubUsers.length}</p></CardContent></Card>
+              <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Manual</span><p className="text-lg font-semibold">{verificationData.manualUsers.length}</p></CardContent></Card>
+              <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Email only</span><p className="text-lg font-semibold">{verificationData.emailUsers.length}</p></CardContent></Card>
+              <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Pending storage</span><p className="text-lg font-semibold">{verificationData.pendingRequests.length}</p></CardContent></Card>
+              <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Pending intros</span><p className="text-lg font-semibold">{verificationData.pendingIntros.length}</p></CardContent></Card>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {[
+              { title: 'Hack Club verified', rows: verificationData?.hackclubUsers ?? [], badge: 'V Verified (hackclub)' },
+              { title: 'Manual verified', rows: verificationData?.manualUsers ?? [], badge: 'V Verified (manual)' },
+              { title: 'Email verified only', rows: verificationData?.emailUsers ?? [], badge: 'Email' },
+              { title: 'Pending storage approvals', rows: verificationData?.pendingRequests ?? [], badge: 'Pending approval' },
+              { title: 'Pending introduction approvals', rows: verificationData?.pendingIntros ?? [], badge: 'Pending intro' },
+            ].map((group) => (
+              <Card key={group.title}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">{group.title}</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-2">
+                  {group.rows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No users.</p>
+                  ) : (
+                    group.rows.map((u: any) => (
+                      <div key={`${group.title}-${u.id}`} className="rounded-lg border border-border/60 p-3 text-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{u.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                          </div>
+                          <Badge variant="outline" className="text-xs shrink-0">{group.badge}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">{formatDate(u.createdAt)}</p>
+                        {u.introductionText && (
+                          <p className="mt-2 rounded-md bg-secondary/50 p-2 text-xs whitespace-pre-wrap">{u.introductionText}</p>
+                        )}
+                        {u.verificationMeta && (
+                          <pre className="mt-2 max-h-24 overflow-auto rounded-md bg-secondary/50 p-2 text-[10px] text-muted-foreground">{formatVerificationMeta(u.verificationMeta)}</pre>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </section>
       )}
 

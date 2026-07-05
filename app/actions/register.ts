@@ -4,7 +4,7 @@ import { db } from '@/lib/db'
 import { user, account } from '@/lib/db/schema'
 import { eq } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
-import bcrypt from 'bcryptjs'
+import { hashPassword } from 'better-auth/crypto'
 import { NO_VERIFICATION_LIMIT } from '@/lib/storage'
 import { fireWebhook } from '@/lib/webhooks/fire'
 
@@ -22,7 +22,7 @@ export async function register(data: {
   }
 
   const userId = uuidv4()
-  const hashedPassword = await bcrypt.hash(data.password, 10)
+  const hashedPassword = await hashPassword(data.password)
 
   try {
     await db.transaction(async (tx) => {
@@ -39,8 +39,8 @@ export async function register(data: {
       await tx.insert(account).values({
         id: uuidv4(),
         userId,
-        accountId: data.email,
-        providerId: 'email',
+        accountId: userId,
+        providerId: 'credential',
         password: hashedPassword,
       })
     })

@@ -3,7 +3,7 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, account, storageRequests, files, tickets, ticketReplies, ticketAttachments, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, takedownRequests, session as sessionTable, warnings } from '@/lib/db/schema'
+import { user, account, storageRequests, files, tickets, ticketReplies, ticketAttachments, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, takedownRequests, session as sessionTable, warnings, webhooks } from '@/lib/db/schema'
 import { eq, desc, ilike, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
@@ -1144,6 +1144,37 @@ export async function getUnverifiedUsers() {
       )`
     )
     .orderBy(user.createdAt)
+}
+
+export async function reachOutToUnverifiedUsers() {
+  const adminId = await assertAdmin()
+  const unverifiedUsers = await getUnverifiedUsers()
+  const slackUrl = process.env.IDENTITY_HELP_SLACK_URL ?? 'https://hackclub.enterprise.slack.com/team/U08J9R1TUT1'
+  const contactEmail = process.env.IDENTITY_HELP_EMAIL ?? 'elias.lindholm2010@outlook.com'
+
+  const html = (name: string | null) => `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #111827;">
+      <p>Hi${name ? ` ${name}` : ''}!</p>
+      <p>We noticed you haven't verified your identity yet. Need help?</p>
+      <p>Contact me on Slack: <a href="${slackUrl}">${slackUrl}</a></p>
+      <p>Or email me at <a href="mailto:${contactEmail}">${contactEmail}</a>.</p>
+    </div>
+  `
+
+  const results = await Promise.allSettled(
+    unverifiedUsers.map((u) =>
+      sendMail({
+        to: u.email,
+        subject: 'Need help verifying your identity?',
+        html: html(u.name),
+      })
+    )
+  )
+
+  const sent = results.filter((r) => r.status === 'fulfilled').length
+  const failed = results.length - sent
+  await logAuditEventWithHeaders(adminId, 'admin.unverified_users_reached_out', JSON.stringify({ sent, failed }))
+  return { ok: failed === 0, sent, failed, total: unverifiedUsers.length }
 }
 
 export async function testWebhook(webhookId: string) {
