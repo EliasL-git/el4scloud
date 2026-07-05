@@ -135,8 +135,8 @@ export async function POST(req: NextRequest) {
       }
 
       const userContent = messages[messages.length - 1]?.content ?? ''
-      await db.insert(aiMessages).values({ id: uuidv4(), conversationId: conversationId!, role: 'user', content: userContent, model: selectedModel })
-      await db.insert(aiMessages).values({ id: uuidv4(), conversationId: conversationId!, role: 'assistant', content: data.choices?.[0]?.message?.content ?? '', model: doModel })
+      await db.insert(aiMessages).values({ id: uuidv4(), conversationId: conversationId!, role: 'user', content: userContent, model: selectedModel, tokensIn: promptTokens })
+      await db.insert(aiMessages).values({ id: uuidv4(), conversationId: conversationId!, role: 'assistant', content: data.choices?.[0]?.message?.content ?? '', model: doModel, tokensOut: completionTokens })
       await db.update(aiConversations).set({ updatedAt: new Date() }).where(eq(aiConversations.id, conversationId!))
 
       return Response.json({
@@ -202,8 +202,8 @@ export async function POST(req: NextRequest) {
         }
 
         const userContent = messages[messages.length - 1]?.content ?? ''
-        await db.insert(aiMessages).values({ id: uuidv4(), conversationId: conversationId!, role: 'user', content: userContent, model: selectedModel })
-        await db.insert(aiMessages).values({ id: uuidv4(), conversationId: conversationId!, role: 'assistant', content: fullContent, model: doModel })
+        await db.insert(aiMessages).values({ id: uuidv4(), conversationId: conversationId!, role: 'user', content: userContent, model: selectedModel, tokensIn: promptTokens })
+        await db.insert(aiMessages).values({ id: uuidv4(), conversationId: conversationId!, role: 'assistant', content: fullContent, model: doModel, tokensOut: completionTokens })
         await db.update(aiConversations).set({ updatedAt: new Date() }).where(eq(aiConversations.id, conversationId!))
 
         const meta = JSON.stringify({

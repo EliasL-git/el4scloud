@@ -37,6 +37,7 @@ const adminNavItems = [
 
 const adminSidebarTabs = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'ai', label: 'AI Usage', icon: Sparkles },
   { id: 'requests', label: 'Storage Requests', icon: HardDrive },
   { id: 'users', label: 'Users', icon: Users },
   { id: 'tickets', label: 'Tickets', icon: MessageSquare },

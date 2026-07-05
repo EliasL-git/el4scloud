@@ -333,17 +333,62 @@ export async function getAdminAiUsage() {
     email: string
     requests: number
     spent: number
+    tokens: number
+    mostUsedModel: string | null
+    mostUsedModelRequests: number
+    globalMostUsedModel: string | null
+    globalMostUsedModelRequests: number
   }>(sql`
+    WITH today_usage AS (
+      SELECT *
+      FROM "ai_usage"
+      WHERE "createdAt" >= ${todayStart.toISOString()}
+    ),
+    model_counts AS (
+      SELECT
+        "userId",
+        model,
+        COUNT(*)::int AS requests,
+        ROW_NUMBER() OVER (PARTITION BY "userId" ORDER BY COUNT(*) DESC, model ASC) AS rank
+      FROM today_usage
+      GROUP BY "userId", model
+    ),
+    today_tokens AS (
+      SELECT
+        c."userId",
+        COALESCE(SUM(COALESCE(m."tokensIn", 0) + COALESCE(m."tokensOut", 0)), 0)::int AS tokens
+      FROM "ai_messages" m
+      INNER JOIN "ai_conversations" c ON c.id = m."conversationId"
+      WHERE m."createdAt" >= ${todayStart.toISOString()}
+      GROUP BY c."userId"
+    ),
+    global_model AS (
+      SELECT
+        model,
+        COUNT(*)::int AS requests
+      FROM today_usage
+      GROUP BY model
+      ORDER BY COUNT(*) DESC, model ASC
+      LIMIT 1
+    )
     SELECT
       u.id AS "userId",
       u.name,
       u.email,
       COUNT(a.id)::int AS "requests",
-      COALESCE(SUM(a.cost), 0)::real AS "spent"
+      COALESCE(SUM(a.cost), 0)::real AS "spent",
+      COALESCE(t.tokens, 0)::int AS "tokens",
+      mc.model AS "mostUsedModel",
+      COALESCE(mc.requests, 0)::int AS "mostUsedModelRequests",
+      gm.model AS "globalMostUsedModel",
+      COALESCE(gm.requests, 0)::int AS "globalMostUsedModelRequests"
     FROM "user" u
-    LEFT JOIN "ai_usage" a ON a."userId" = u.id AND a."createdAt" >= ${todayStart.toISOString()}
+    LEFT JOIN today_usage a ON a."userId" = u.id
+    LEFT JOIN today_tokens t ON t."userId" = u.id
+    LEFT JOIN model_counts mc ON mc."userId" = u.id AND mc.rank = 1
+    LEFT JOIN global_model gm ON TRUE
     WHERE u."verifiedViaHackclub" = TRUE
-    GROUP BY u.id, u.name, u.email
+    GROUP BY u.id, u.name, u.email, t.tokens, mc.model, mc.requests, gm.model, gm.requests
     ORDER BY "spent" DESC
   `)
 
