@@ -37,8 +37,15 @@ export const auth = betterAuth({
   baseURL,
   trustedOrigins,
   session: {
-    expiresIn: 60 * 60 * 24 * 7,
+    // Keep users signed in with a persistent session cookie.
+    // Better Auth uses this value for both the DB session expiry and the
+    // session_token cookie max-age unless the client explicitly opts out.
+    expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,
+    cookieCache: {
+      enabled: true,
+      maxAge: 60 * 5,
+    },
   },
   account: {
     accountLinking: {

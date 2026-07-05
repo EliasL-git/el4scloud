@@ -47,6 +47,7 @@ import {
   rejectIntroduction,
   resetIntroduction,
   getUnverifiedUsers,
+  reachOutToUnverifiedUsers,
   getVerificationData,
 } from '@/app/actions/admin'
 import { getCategoryLabel, getSubcategoryLabel, CATEGORIES } from '@/lib/ticket-categories'
@@ -316,12 +317,19 @@ export default function AdminPage() {
   }
 
   const handleReachOut = async () => {
+    if (!confirm('Email all currently unverified users with identity verification help?')) return
     setReachOutLoading(true)
     try {
+      const result = await reachOutToUnverifiedUsers()
       const data = await getUnverifiedUsers()
       setReachOutData(data)
+      if (result.failed > 0) {
+        toast.warning(`Sent ${result.sent}/${result.total} emails; ${result.failed} failed`)
+      } else {
+        toast.success(`Reached out to ${result.sent} unverified users`)
+      }
     } catch {
-      toast.error('Failed to fetch unverified users')
+      toast.error('Failed to reach out to unverified users')
     } finally {
       setReachOutLoading(false)
     }
@@ -382,6 +390,15 @@ export default function AdminPage() {
 
   function sectionTitle(title: string) {
     return <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+  }
+
+  function formatVerificationMeta(meta?: string | null) {
+    if (!meta) return null
+    try {
+      return JSON.stringify(JSON.parse(meta), null, 2)
+    } catch {
+      return meta
+    }
   }
 
   return (
@@ -656,9 +673,9 @@ export default function AdminPage() {
         <section className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             {sectionTitle('Users')}
-            <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleReachOut}>
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleReachOut} disabled={reachOutLoading}>
               <Mail className="size-3.5" />
-              Reach out to unverified
+              {reachOutLoading ? 'Sending...' : 'Reach out to unverified'}
             </Button>
           </div>
           <div className="overflow-x-auto">
@@ -1170,6 +1187,75 @@ export default function AdminPage() {
               ))}
             </div>
           )}
+        </section>
+      )}
+
+
+      {/* Verifications */}
+      {section === 'verifications' && (
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              {sectionTitle('Identity verifications')}
+              <p className="text-xs text-muted-foreground mt-1">
+                Review Hack Club, manual, email-only, and pending identity verification approvals.
+              </p>
+            </div>
+            <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleReachOut} disabled={reachOutLoading}>
+              <Mail className="size-3.5" />
+              {reachOutLoading ? 'Sending...' : 'Reach out to all unverified'}
+            </Button>
+          </div>
+
+          {verificationData && (
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Hack Club</span><p className="text-lg font-semibold">{verificationData.hackclubUsers.length}</p></CardContent></Card>
+              <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Manual</span><p className="text-lg font-semibold">{verificationData.manualUsers.length}</p></CardContent></Card>
+              <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Email only</span><p className="text-lg font-semibold">{verificationData.emailUsers.length}</p></CardContent></Card>
+              <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Pending storage</span><p className="text-lg font-semibold">{verificationData.pendingRequests.length}</p></CardContent></Card>
+              <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Pending intros</span><p className="text-lg font-semibold">{verificationData.pendingIntros.length}</p></CardContent></Card>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {[
+              { title: 'Hack Club verified', rows: verificationData?.hackclubUsers ?? [], badge: 'V Verified (hackclub)' },
+              { title: 'Manual verified', rows: verificationData?.manualUsers ?? [], badge: 'V Verified (manual)' },
+              { title: 'Email verified only', rows: verificationData?.emailUsers ?? [], badge: 'Email' },
+              { title: 'Pending storage approvals', rows: verificationData?.pendingRequests ?? [], badge: 'Pending approval' },
+              { title: 'Pending introduction approvals', rows: verificationData?.pendingIntros ?? [], badge: 'Pending intro' },
+            ].map((group) => (
+              <Card key={group.title}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">{group.title}</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-2">
+                  {group.rows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No users.</p>
+                  ) : (
+                    group.rows.map((u: any) => (
+                      <div key={`${group.title}-${u.id}`} className="rounded-lg border border-border/60 p-3 text-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-medium truncate">{u.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                          </div>
+                          <Badge variant="outline" className="text-xs shrink-0">{group.badge}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">{formatDate(u.createdAt)}</p>
+                        {u.introductionText && (
+                          <p className="mt-2 rounded-md bg-secondary/50 p-2 text-xs whitespace-pre-wrap">{u.introductionText}</p>
+                        )}
+                        {u.verificationMeta && (
+                          <pre className="mt-2 max-h-24 overflow-auto rounded-md bg-secondary/50 p-2 text-[10px] text-muted-foreground">{formatVerificationMeta(u.verificationMeta)}</pre>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </section>
       )}
 
