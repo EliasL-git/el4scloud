@@ -89,29 +89,11 @@ async function insertFlag(userId: string, signal: string, score: number, details
   return score
 }
 
-async function autoSuspendIfNeeded(userId: string) {
-  const [row] = await db
-    .select({ total: sql<number>`COALESCE(SUM(score), 0)` })
-    .from(fraudFlags)
-    .where(eq(fraudFlags.userId, userId))
-  if ((row?.total ?? 0) >= 80) {
-    await db
-      .update(user)
-      .set({
-        banned: true,
-        suspensionReason: `Fraud detection: score ${row.total} exceeded auto-suspend threshold`,
-        suspensionType: 'suspended',
-        updatedAt: new Date(),
-      })
-      .where(and(eq(user.id, userId), eq(user.banned, false)))
-  }
-}
-
 export async function recalculateFraudScores() {
   await assertAdmin()
 
   const allUsers = await db
-    .select({ id: user.id, name: user.name, email: user.email })
+    .select({ id: user.id, name: user.name, email: user.email, banned: user.banned })
     .from(user)
 
   const results: Record<string, { skipped: number; added: number }> = {}
@@ -178,7 +160,12 @@ export async function recalculateFraudScores() {
     }
 
     // 4. suspicious file types (high ratio of exe/zip/scr)
-    if (fileCount > 3) {
+    const [fileCountRow] = await db
+      .select({ count: sql<number>`COUNT(*)::int` })
+      .from(files)
+      .where(eq(files.userId, u.id))
+    const totalFiles = fileCountRow?.count ?? 0
+    if (totalFiles > 3) {
       const [suspicious] = await db
         .select({ count: sql<number>`COUNT(*)::int` })
         .from(files)
@@ -187,15 +174,84 @@ export async function recalculateFraudScores() {
           sql`LOWER("name") ~ '\\.(exe|scr|bat|cmd|vbs|ps1|msi|jar|dll)$'`,
         ))
       const susCount = suspicious?.count ?? 0
-      if (susCount > 0 && susCount / fileCount > 0.3) {
-        const f4 = await insertFlag(u.id, 'suspicious_file_types', 20, { suspiciousCount: susCount, totalFiles: fileCount })
+      if (susCount > 0 && susCount / totalFiles > 0.3) {
+        const f4 = await insertFlag(u.id, 'suspicious_file_types', 20, { suspiciousCount: susCount, totalFiles })
         if (f4) added += 1; else skipped += 1
       }
     }
 
     results[u.email] = { added, skipped }
-    await autoSuspendIfNeeded(u.id)
   }
 
-  return results
+  // find users who crossed the threshold and aren't already banned
+  const flaggedUsers = await db.execute<{
+    userId: string
+    name: string
+    email: string
+    totalScore: number
+  }>(sql`
+    SELECT
+      u.id AS "userId",
+      u.name,
+      u.email,
+      COALESCE(SUM(ff.score), 0)::int AS "totalScore"
+    FROM "user" u
+    INNER JOIN "fraud_flags" ff ON ff."userId" = u.id
+    WHERE u.banned = FALSE
+    GROUP BY u.id
+    HAVING COALESCE(SUM(ff.score), 0) >= 50
+    ORDER BY "totalScore" DESC
+  `)
+
+  return {
+    results,
+    flaggedUsers: flaggedUsers.rows ?? [],
+  }
+}
+
+export async function suspendFraudUsers(userIds: string[]) {
+  await assertAdmin()
+  if (userIds.length === 0) return { suspended: 0 }
+
+  const usersToSuspend = await db
+    .select({ id: user.id, name: user.name, email: user.email })
+    .from(user)
+    .where(and(
+      eq(user.banned, false),
+      sql`${user.id} = ANY(${sql.raw(`ARRAY[${userIds.map((id) => `'${id}'`).join(',')}]::text[]`)})`,
+    ))
+
+  const now = new Date()
+  let suspended = 0
+  for (const u of usersToSuspend) {
+    const [scoreRow] = await db
+      .select({ total: sql<number>`COALESCE(SUM(score), 0)` })
+      .from(fraudFlags)
+      .where(eq(fraudFlags.userId, u.id))
+    const totalScore = scoreRow?.total ?? 0
+
+    await db
+      .update(user)
+      .set({
+        banned: true,
+        suspensionReason: `Fraud detection: flagged by historical scan (score ${totalScore})`,
+        suspensionType: 'suspended',
+        updatedAt: now,
+      })
+      .where(eq(user.id, u.id))
+
+    try {
+      const { renderToString } = await import('react-dom/server')
+      const { FraudSuspensionEmail } = await import('@/components/emails/fraud-suspension')
+      const html = renderToString(FraudSuspensionEmail({ name: u.name ?? u.email, score: totalScore }))
+      const { sendMail } = await import('@/lib/mail')
+      await sendMail({ to: u.email, subject: 'Account temporarily suspended', html })
+    } catch (err: any) {
+      console.error(`[fraud] Failed to send suspension email to ${u.email}:`, err?.message ?? err)
+    }
+
+    suspended++
+  }
+
+  return { suspended }
 }

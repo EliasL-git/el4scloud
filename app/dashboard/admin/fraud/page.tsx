@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getAllFraudScores, getUserFraudFlags, clearFraudFlags, recalculateFraudScores } from '@/app/actions/fraud'
+import { getAllFraudScores, getUserFraudFlags, clearFraudFlags, recalculateFraudScores, suspendFraudUsers } from '@/app/actions/fraud'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Eye, X, Trash2, ShieldAlert } from 'lucide-react'
+import { Eye, X, Trash2, ShieldAlert, ShieldBan } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDate, sectionTitle } from '../_lib/utils'
 import { fraudRiskLabel } from '@/lib/fraud-labels'
@@ -16,24 +16,56 @@ type FlagDetail = Awaited<ReturnType<typeof getUserFraudFlags>>[0]
 export default function AdminFraudPage() {
   const [rows, setRows] = useState<FraudRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [scanning, setScanning] = useState(false)
   const [selectedUser, setSelectedUser] = useState<{ id: string; name: string; email: string } | null>(null)
   const [flags, setFlags] = useState<FlagDetail[]>([])
   const [flagsLoading, setFlagsLoading] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [confirmModal, setConfirmModal] = useState<{
+    flaggedUsers: { userId: string; name: string; email: string; totalScore: number }[]
+  } | null>(null)
+  const [suspending, setSuspending] = useState(false)
 
-  const refresh = async () => {
+  const fetchScores = async () => {
+    const data = await getAllFraudScores()
+    setRows(data)
+  }
+
+  useEffect(() => {
     setLoading(true)
+    fetchScores().finally(() => setLoading(false))
+  }, [])
+
+  const handleScan = async () => {
+    setScanning(true)
     try {
-      await recalculateFraudScores()
-      const data = await getAllFraudScores()
-      setRows(data)
+      const result = await recalculateFraudScores()
+      await fetchScores()
+      if (result.flaggedUsers.length > 0) {
+        setConfirmModal({ flaggedUsers: result.flaggedUsers })
+      } else {
+        toast.success('Scan complete — no users flagged for action')
+      }
     } catch (e: any) {
       toast.error(e?.message ?? 'Scan failed')
     }
-    setLoading(false)
+    setScanning(false)
   }
 
-  useEffect(() => { refresh() }, [])
+  const handleConfirmSuspend = async () => {
+    if (!confirmModal) return
+    setSuspending(true)
+    try {
+      const ids = confirmModal.flaggedUsers.map((u) => u.userId)
+      const result = await suspendFraudUsers(ids)
+      toast.success(`Suspended ${result.suspended} user(s) and sent notification emails`)
+      setConfirmModal(null)
+      await fetchScores()
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Suspension failed')
+    }
+    setSuspending(false)
+  }
 
   const openFlags = async (userId: string, name: string, email: string) => {
     setSelectedUser({ id: userId, name, email })
@@ -50,7 +82,7 @@ export default function AdminFraudPage() {
       await clearFraudFlags(userId)
       toast.success('Fraud flags cleared')
       setSelectedUser(null)
-      await refresh()
+      await fetchScores()
     } catch { toast.error('Failed to clear flags') }
     finally { setClearing(false) }
   }
@@ -59,8 +91,8 @@ export default function AdminFraudPage() {
     <section className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         {sectionTitle('Fraud Detection')}
-        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={refresh} disabled={loading}>
-          <ShieldAlert className="size-3.5" /> Refresh
+        <Button size="sm" variant="outline" className="gap-1.5 text-xs" onClick={handleScan} disabled={scanning}>
+          <ShieldAlert className="size-3.5" /> {scanning ? 'Scanning...' : 'Scan all users'}
         </Button>
       </div>
 
@@ -108,6 +140,41 @@ export default function AdminFraudPage() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Confirmation dialog */}
+      {confirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setConfirmModal(null)}>
+          <div className="bg-background rounded-xl shadow-lg max-w-lg w-full mx-4 p-6 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <ShieldBan className="size-4 text-destructive" />
+              Flagged users detected
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              Scan found <strong>{confirmModal.flaggedUsers.length}</strong> user(s) with a fraud score of 50 or higher.
+              Do you want to temporarily suspend them and send a notification email?
+            </p>
+            <div className="max-h-48 overflow-y-auto flex flex-col gap-1.5">
+              {confirmModal.flaggedUsers.map((u) => (
+                <div key={u.userId} className="flex items-center justify-between rounded-md border border-border px-3 py-1.5 text-sm">
+                  <div>
+                    <span className="font-medium">{u.name}</span>
+                    <span className="text-muted-foreground ml-2">{u.email}</span>
+                  </div>
+                  <Badge variant="destructive" className="text-xs">{u.totalScore}</Badge>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <Button size="sm" variant="outline" onClick={() => setConfirmModal(null)} disabled={suspending}>
+                No, keep as-is
+              </Button>
+              <Button size="sm" variant="destructive" className="gap-1.5" onClick={handleConfirmSuspend} disabled={suspending}>
+                <ShieldBan className="size-3.5" /> {suspending ? 'Suspending...' : `Suspend & email ${confirmModal.flaggedUsers.length} user(s)`}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 
