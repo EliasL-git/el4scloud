@@ -9,9 +9,11 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { RotateCcw, Ban, Unlock, Lock, Trash2, Eye, Mail, CheckCircle2, Terminal, ShieldCheck, Shield, X, Download } from 'lucide-react'
+import { RotateCcw, Ban, Unlock, Lock, Trash2, Eye, Mail, CheckCircle2, Terminal, ShieldCheck, Shield, X, Download, Fingerprint } from 'lucide-react'
+import { getFraudScoreMap, addManualFraudFlag } from '@/app/actions/fraud'
 import { toast } from 'sonner'
 import { formatBytes, SUSPENSION_REASONS, formatVerificationMeta } from '../_lib/utils'
+import { fraudRiskLabel } from '@/lib/fraud-labels'
 
 type UserRecord = Awaited<ReturnType<typeof getUsers>>[number]
 
@@ -28,14 +30,20 @@ export default function AdminUsersPage() {
   const [suspendAppealable, setSuspendAppealable] = useState(true)
   const [suspendType, setSuspendType] = useState<'suspended' | 'terminated'>('suspended')
   const [suspendSending, setSuspendSending] = useState(false)
+  const [fraudScores, setFraudScores] = useState<Record<string, number>>({})
+  const [fraudModal, setFraudModal] = useState<{ userId: string; userName: string; email: string } | null>(null)
+  const [fraudSignal, setFraudSignal] = useState('manual_flag')
+  const [fraudReason, setFraudReason] = useState('')
+  const [fraudSending, setFraudSending] = useState(false)
   const [metaModal, setMetaModal] = useState<{ userId: string; userName: string; meta: Record<string, unknown> } | null>(null)
   const [reachOutData, setReachOutData] = useState<{ name: string | null; email: string }[] | null>(null)
   const [reachOutLoading, setReachOutLoading] = useState(false)
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const u = await getUsers()
+    const [u, scores] = await Promise.all([getUsers(), getFraudScoreMap()])
     setUsers(u)
+    setFraudScores(scores)
     setLoading(false)
   }, [])
 
@@ -96,6 +104,7 @@ export default function AdminUsersPage() {
               <th className="text-left py-2 px-3 font-medium">Role</th>
               <th className="text-left py-2 px-3 font-medium">Status</th>
               <th className="text-left py-2 px-3 font-medium">Verified</th>
+              <th className="text-left py-2 px-3 font-medium">Fraud</th>
               <th className="text-left py-2 px-3 font-medium">Storage</th>
               <th className="text-right py-2 px-3 font-medium">Actions</th>
             </tr>
@@ -126,6 +135,13 @@ export default function AdminUsersPage() {
                     <Badge variant="secondary" className="text-xs gap-1"><Shield className="size-3" /> None</Badge>
                   )}
                 </td>
+                <td className="py-2 px-3">
+                  {(() => {
+                    const score = fraudScores[u.id] ?? 0
+                    const risk = fraudRiskLabel(score)
+                    return score > 0 ? <Badge variant={risk.variant} className="text-xs">{score}</Badge> : <span className="text-xs text-muted-foreground">—</span>
+                  })()}
+                </td>
                 <td className="py-2 px-3 text-muted-foreground">{u.storageLimit != null ? formatBytes(u.storageLimit) : 'default'}</td>
                 <td className="py-2 px-3 text-right">
                   <div className="flex items-center justify-end gap-1 flex-wrap">
@@ -142,6 +158,9 @@ export default function AdminUsersPage() {
                     <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { setResetOptions({ storage: false, verification: false, introduction: false }); setResetModal({ userId: u.id, userName: u.name ?? u.email }) }}><RotateCcw className="size-3" /> Reset</Button>
                     <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { try { setMetaModal({ userId: u.id, userName: u.name ?? u.email, meta: JSON.parse(u.verificationMeta ?? '{}') }) } catch { setMetaModal({ userId: u.id, userName: u.name ?? u.email, meta: { raw: u.verificationMeta ?? '(empty)' } }) }}}><Eye className="size-3" /> Meta</Button>
                     <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" asChild><a href={`/api/admin/users/${u.id}/export`}><Download className="size-3" /> Export</a></Button>
+                    {!u.banned && (
+                      <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-destructive" onClick={() => { setFraudSignal('manual_flag'); setFraudReason(''); setFraudModal({ userId: u.id, userName: u.name ?? u.email, email: u.email }) }}><Fingerprint className="size-3" /> Fraud</Button>
+                    )}
                     <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" disabled={processing[`delete-${u.id}`]} onClick={() => { if (confirm(`Delete user ${u.name ?? u.email}?`)) handleAction(u.id, 'delete', () => deleteUser(u.id), 'User deleted') }}><Trash2 className="size-3" /> Delete</Button>
                   </div>
                 </td>
@@ -232,6 +251,51 @@ export default function AdminUsersPage() {
               <Button size="sm" variant="outline" onClick={() => setSuspendModal(null)} disabled={suspendSending}>Cancel</Button>
               <Button size="sm" className="gap-1.5" variant="outline" style={{ color: 'var(--destructive)', borderColor: 'color-mix(in srgb, var(--destructive) 40%, transparent)' }} onClick={handleSuspend} disabled={suspendSending}>
                 <Ban className="size-3.5" />{suspendSending ? (suspendType === 'terminated' ? 'Terminating...' : 'Suspending...') : (suspendType === 'terminated' ? 'Terminate' : 'Suspend')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fraud flag modal */}
+      {fraudModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setFraudModal(null)}>
+          <div className="bg-background rounded-xl shadow-lg max-w-md w-full mx-4 p-6 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Fingerprint className="size-4 text-destructive" />
+              Flag {fraudModal.userName} for fraud
+            </h3>
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-muted-foreground">Fraud signal</label>
+                <select value={fraudSignal} onChange={(e) => setFraudSignal(e.target.value)} className="h-8 w-full rounded-md border border-input bg-card px-2.5 py-1 text-sm text-foreground">
+                  <option value="manual_flag" className="bg-card text-foreground">Manual flag</option>
+                  <option value="abuse_report" className="bg-card text-foreground">Abuse report</option>
+                  <option value="tos_violation" className="bg-card text-foreground">ToS violation</option>
+                  <option value="storage_abuse" className="bg-card text-foreground">Storage abuse</option>
+                  <option value="suspicious_activity" className="bg-card text-foreground">Suspicious activity</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs text-muted-foreground">Reason</label>
+                <input type="text" value={fraudReason} onChange={(e) => setFraudReason(e.target.value)} placeholder="Why is this user being flagged?" className="h-8 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="outline" onClick={() => setFraudModal(null)} disabled={fraudSending}>Cancel</Button>
+              <Button size="sm" variant="destructive" className="gap-1.5" disabled={fraudSending || !fraudReason.trim()} onClick={async () => {
+                if (!fraudReason.trim()) return
+                setFraudSending(true)
+                try {
+                  await addManualFraudFlag(fraudModal.userId, fraudSignal, 50, fraudReason.trim())
+                  toast.success(`User flagged for fraud and suspended`)
+                  setFraudModal(null)
+                  await refresh()
+                } catch (e: any) {
+                  toast.error(e?.message ?? 'Failed to flag user')
+                } finally { setFraudSending(false) }
+              }}>
+                <Fingerprint className="size-3.5" /> {fraudSending ? 'Flagging...' : 'Flag & suspend'}
               </Button>
             </div>
           </div>

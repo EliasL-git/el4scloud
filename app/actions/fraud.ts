@@ -89,6 +89,64 @@ async function insertFlag(userId: string, signal: string, score: number, details
   return score
 }
 
+export async function getFraudScoreMap() {
+  await assertAdmin()
+  const rows = await db.execute<{ userId: string; totalScore: number }>(sql`
+    SELECT ff."userId", COALESCE(SUM(ff.score), 0)::int AS "totalScore"
+    FROM "fraud_flags" ff
+    GROUP BY ff."userId"
+  `)
+  const map: Record<string, number> = {}
+  for (const r of rows.rows ?? []) {
+    map[r.userId] = r.totalScore
+  }
+  return map
+}
+
+export async function addManualFraudFlag(userId: string, signal: string, score: number, reason: string) {
+  await assertAdmin()
+
+  const [u] = await db.select().from(user).where(eq(user.id, userId))
+  if (!u) throw new Error('User not found')
+
+  const flagId = uuidv4()
+  await db.insert(fraudFlags).values({
+    id: flagId,
+    userId,
+    signal,
+    score,
+    details: JSON.stringify({ reason, flaggedBy: 'admin' }),
+  })
+
+  const [row] = await db
+    .select({ total: sql<number>`COALESCE(SUM(score), 0)` })
+    .from(fraudFlags)
+    .where(eq(fraudFlags.userId, userId))
+  const totalScore = row?.total ?? 0
+
+  await db
+    .update(user)
+    .set({
+      banned: true,
+      suspensionReason: `Fraud: ${reason} (score ${totalScore})`,
+      suspensionType: 'suspended',
+      updatedAt: new Date(),
+    })
+    .where(eq(user.id, userId))
+
+  try {
+    const { renderToString } = await import('react-dom/server')
+    const { FraudSuspensionEmail } = await import('@/components/emails/fraud-suspension')
+    const html = renderToString(FraudSuspensionEmail({ name: u.name ?? u.email, score: totalScore }))
+    const { sendMail: send } = await import('@/lib/mail')
+    await send({ to: u.email, subject: 'Account temporarily suspended', html })
+  } catch (err: any) {
+    console.error(`[fraud] Failed to send suspension email to ${u.email}:`, err?.message ?? err)
+  }
+
+  return { totalScore }
+}
+
 export async function recalculateFraudScores() {
   await assertAdmin()
 
