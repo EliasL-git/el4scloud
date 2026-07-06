@@ -7,6 +7,7 @@ import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { v4 as uuidv4 } from 'uuid'
 import { disposableEmailDomains } from '@/lib/disposable-emails'
+import { logAuditEventWithHeaders } from '@/lib/audit'
 
 async function assertAdmin() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -105,6 +106,8 @@ export async function getFraudScoreMap() {
 
 export async function addManualFraudFlag(userId: string, signal: string, score: number, reason: string) {
   await assertAdmin()
+  const session = await auth.api.getSession({ headers: await headers() })
+  const adminId = session?.user?.id!
 
   const [u] = await db.select().from(user).where(eq(user.id, userId))
   if (!u) throw new Error('User not found')
@@ -133,6 +136,8 @@ export async function addManualFraudFlag(userId: string, signal: string, score: 
       updatedAt: new Date(),
     })
     .where(eq(user.id, userId))
+
+  await logAuditEventWithHeaders(adminId, 'admin.fraud_flagged', JSON.stringify({ targetUserId: userId, signal, score, reason, totalScore }))
 
   try {
     const { renderToString } = await import('react-dom/server')
@@ -202,12 +207,12 @@ export async function recalculateFraudScores() {
       HAVING COUNT(DISTINCT s."userId") < 2
     `)
     for (const ipRow of (ipRows.rows ?? [])) {
-      const [others] = await db.execute<{ count: number }>(sql`
+      const othersRes = await db.execute<{ count: number }>(sql`
         SELECT COUNT(DISTINCT "userId")::int AS count
         FROM session
         WHERE "ipAddress" = ${ipRow.ipAddress} AND "userId" != ${u.id}
       `)
-      const dupCount = others?.count ?? 0
+      const dupCount = othersRes.rows?.[0]?.count ?? 0
       if (dupCount >= 2) {
         const f3 = await insertFlag(u.id, 'duplicate_ip', 30, { ip: ipRow.ipAddress, duplicateAccounts: dupCount })
         if (f3) added += 1; else skipped += 1
