@@ -339,6 +339,13 @@ const statements = [
     "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
   `CREATE INDEX IF NOT EXISTS "ai_messages_conversationId_idx" ON "ai_messages"("conversationId")`,
+
+  `CREATE TABLE IF NOT EXISTS "banned_domains" (
+    "id"            TEXT PRIMARY KEY,
+    "domain"        TEXT NOT NULL UNIQUE,
+    "bannedBy"      TEXT NOT NULL,
+    "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
 ]
 
 async function migrate() {

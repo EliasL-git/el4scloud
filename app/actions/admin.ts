@@ -3,7 +3,7 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, account, storageRequests, files, tickets, ticketReplies, ticketAttachments, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, takedownRequests, session as sessionTable, warnings, webhooks } from '@/lib/db/schema'
+import { user, account, storageRequests, files, tickets, ticketReplies, ticketAttachments, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, takedownRequests, session as sessionTable, warnings, webhooks, bannedDomains } from '@/lib/db/schema'
 import { eq, desc, ilike, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
@@ -1191,5 +1191,88 @@ export async function testWebhook(webhookId: string) {
 
   await logAuditEventWithHeaders(adminId, 'admin.webhook_tested', JSON.stringify({ webhookId, url: webhook.url }))
 
+  return { ok: true }
+}
+
+// ─── Banned Domains ──────────────────────────────────────────
+
+export async function getBannedDomains() {
+  const adminId = await assertAdmin()
+  return db.select().from(bannedDomains).orderBy(bannedDomains.createdAt)
+}
+
+export async function banDomain(domain: string) {
+  const adminId = await assertAdmin()
+
+  const cleanDomain = domain.trim().toLowerCase().replace(/^@/, '')
+  if (!cleanDomain) throw new Error('Invalid domain')
+
+  const existing = await db
+    .select({ id: bannedDomains.id })
+    .from(bannedDomains)
+    .where(eq(bannedDomains.domain, cleanDomain))
+    .limit(1)
+  if (existing.length > 0) throw new Error('Domain is already banned')
+
+  await db.insert(bannedDomains).values({
+    id: uuidv4(),
+    domain: cleanDomain,
+    bannedBy: adminId,
+  })
+
+  const affectedUsers = await db
+    .select({ id: user.id, name: user.name, email: user.email })
+    .from(user)
+    .where(and(
+      ilike(user.email, `%@${cleanDomain}`),
+      eq(user.banned, false),
+    ))
+
+  const now = new Date()
+  for (const u of affectedUsers) {
+    await db
+      .update(user)
+      .set({
+        banned: true,
+        suspensionReason: `Account flagged for fraud — domain ${cleanDomain} banned`,
+        suspensionType: 'terminated',
+        terminatedAt: now,
+        appealable: true,
+      })
+      .where(eq(user.id, u.id))
+
+    await recordWarning(u.id, 'termination', `Domain ${cleanDomain} banned`)
+
+    try {
+      const { renderToString } = await import('react-dom/server')
+      const { BannedDomainTerminationEmail } = await import('@/components/emails/banned-domain-termination')
+      const html = renderToString(BannedDomainTerminationEmail({
+        name: u.name ?? u.email,
+        domain: cleanDomain,
+      }))
+      await sendMail({ to: u.email, subject: 'Account terminated', html })
+    } catch (err: any) {
+      console.error(`[admin] Failed to send domain-ban email to ${u.email}:`, err?.message ?? err)
+    }
+
+    await logAuditEventWithHeaders(adminId, 'admin.domain_ban_termination', JSON.stringify({
+      domain: cleanDomain,
+      targetUserId: u.id,
+      email: u.email,
+    }))
+  }
+
+  await logAuditEventWithHeaders(adminId, 'admin.domain_banned', JSON.stringify({
+    domain: cleanDomain,
+    affectedUsers: affectedUsers.length,
+  }))
+
+  return { ok: true, affectedUsers: affectedUsers.length }
+}
+
+export async function unbanDomain(domainId: string) {
+  const adminId = await assertAdmin()
+  await db.delete(bannedDomains).where(eq(bannedDomains.id, domainId))
+  await logAuditEventWithHeaders(adminId, 'admin.domain_unbanned', JSON.stringify({ domainId }))
   return { ok: true }
 }

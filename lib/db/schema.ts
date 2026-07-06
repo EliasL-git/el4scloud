@@ -277,6 +277,13 @@ export const aiConversations = pgTable('ai_conversations', {
   updatedAt: timestamp('updatedAt').notNull().defaultNow(),
 })
 
+export const bannedDomains = pgTable('banned_domains', {
+  id: text('id').primaryKey(),
+  domain: text('domain').notNull().unique(),
+  bannedBy: text('bannedBy').notNull(),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
 export const aiMessages = pgTable('ai_messages', {
   id: text('id').primaryKey(),
   conversationId: text('conversationId').notNull().references(() => aiConversations.id, { onDelete: 'cascade' }),
