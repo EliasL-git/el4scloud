@@ -373,7 +373,7 @@ async function migrate() {
       FROM "user" u
       WHERE NOT EXISTS (
         SELECT 1 FROM account a
-        WHERE a."userId" = u.id AND a."providerId" = 'email'
+        WHERE a."userId" = u.id AND a."providerId" IN ('email', 'credential')
       )
     `)
     if (orphaned.rows.length > 0) {
@@ -383,7 +383,7 @@ async function migrate() {
         const randomPass = randomBytes(16).toString('hex')
         const hashed = await bcrypt.hash(randomPass, 10)
         await client.query({
-          text: `INSERT INTO account (id, "accountId", "providerId", "userId", password) VALUES ($1, $2, 'email', $3, $4)`,
+          text: `INSERT INTO account (id, "accountId", "providerId", "userId", password) VALUES ($1, $2, 'credential', $3, $4)`,
           values: [randomBytes(16).toString('hex'), u.email, u.id, hashed],
         })
         if (u.hasHackclub) {

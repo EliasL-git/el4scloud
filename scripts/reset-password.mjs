@@ -61,7 +61,7 @@ async function main() {
     const hashedPassword = await bcrypt.hash(password, 10)
 
     const { rowCount } = await client.query(
-      `UPDATE "account" SET password = $1, "updatedAt" = NOW() WHERE "userId" = $2 AND "providerId" = 'email'`,
+      `UPDATE "account" SET password = $1, "updatedAt" = NOW() WHERE "userId" = $2 AND "providerId" IN ('email', 'credential')`,
       [hashedPassword, userId],
     )
 

@@ -39,7 +39,7 @@ async function main() {
         [u.id]
       )
 
-      const emailAcct = accounts.find(a => a.providerId === 'email')
+      const emailAcct = accounts.find(a => a.providerId === 'email' || a.providerId === 'credential')
       const hackclubAcct = accounts.find(a => a.providerId === 'hackclub')
 
       // No account rows at all
@@ -60,8 +60,8 @@ async function main() {
           info.push('✅ Email credential OK')
         }
 
-        // Check accountId matches email
-        if (emailAcct.accountId !== u.email) {
+        // Check accountId — 'email' rows store the email, 'credential' rows store the userId
+        if (emailAcct.providerId === 'email' && emailAcct.accountId !== u.email) {
           issues.push(`⚠️  Email credential accountId mismatch: "${emailAcct.accountId}" vs user email "${u.email}"`)
         }
       }
