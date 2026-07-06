@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users, Sparkles, Webhook, ShieldCheck } from 'lucide-react'
@@ -36,17 +36,17 @@ const adminNavItems = [
 ]
 
 const adminSidebarTabs = [
-  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'ai', label: 'AI Usage', icon: Sparkles },
-  { id: 'requests', label: 'Storage Requests', icon: HardDrive },
-  { id: 'users', label: 'Users', icon: Users },
-  { id: 'tickets', label: 'Tickets', icon: MessageSquare },
-  { id: 'appeals', label: 'Appeals', icon: Scale },
-  { id: 'files', label: 'Files', icon: FileText },
-  { id: 'deletions', label: 'Deletion Requests', icon: Trash2 },
-  { id: 'audit', label: 'Audit Log', icon: ClipboardList },
-  { id: 'verifications', label: 'Verifications', icon: ShieldCheck },
-  { id: 'takedown', label: 'Takedown', icon: ShieldAlert },
+  { id: 'overview', label: 'Overview', href: '/dashboard/admin/overview', icon: LayoutDashboard },
+  { id: 'ai', label: 'AI Usage', href: '/dashboard/admin/ai', icon: Sparkles },
+  { id: 'requests', label: 'Storage Requests', href: '/dashboard/admin/requests', icon: HardDrive },
+  { id: 'users', label: 'Users', href: '/dashboard/admin/users', icon: Users },
+  { id: 'tickets', label: 'Tickets', href: '/dashboard/admin/tickets', icon: MessageSquare },
+  { id: 'appeals', label: 'Appeals', href: '/dashboard/admin/appeals', icon: Scale },
+  { id: 'files', label: 'Files', href: '/dashboard/admin/files', icon: FileText },
+  { id: 'deletions', label: 'Deletion Requests', href: '/dashboard/admin/deletions', icon: Trash2 },
+  { id: 'audit', label: 'Audit Log', href: '/dashboard/admin/audit', icon: ClipboardList },
+  { id: 'verifications', label: 'Verifications', href: '/dashboard/admin/verifications', icon: ShieldCheck },
+  { id: 'takedown', label: 'Takedown', href: '/dashboard/admin/takedown', icon: ShieldAlert },
 ]
 
 interface User {
@@ -78,19 +78,6 @@ export function DashboardShell({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const isSupportRoute = pathname.startsWith('/dashboard/support')
   const isAdminRoute = pathname.startsWith('/dashboard/admin')
-  const [activeAdminTab, setActiveAdminTab] = useState('overview')
-
-  // Track the active admin tab from URL hash
-  useEffect(() => {
-    if (!isAdminRoute) return
-    const updateFromHash = () => {
-      const hash = window.location.hash.replace('#', '')
-      if (hash) setActiveAdminTab(hash)
-    }
-    updateFromHash()
-    window.addEventListener('hashchange', updateFromHash)
-    return () => window.removeEventListener('hashchange', updateFromHash)
-  }, [pathname, isAdminRoute])
 
   const suspendedAllowedRoutes = ['/dashboard', '/dashboard/support', '/dashboard/settings']
   const visibleServiceItems = suspended
@@ -168,12 +155,12 @@ export function DashboardShell({
                 <div className="text-xs font-medium text-muted-foreground px-3 py-1.5 uppercase tracking-wider">
                   Admin
                 </div>
-                {adminSidebarTabs.map(({ id, label, icon: Icon }) => {
-                  const active = activeAdminTab === id
+                {adminSidebarTabs.map(({ id, label, href, icon: Icon }) => {
+                  const active = pathname === href
                   return (
-                    <a
+                    <Link
                       key={id}
-                      href={`/dashboard/admin#${id}`}
+                      href={href}
                       onClick={() => setSidebarOpen(false)}
                       className={cn(
                         'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
@@ -184,7 +171,7 @@ export function DashboardShell({
                     >
                       <Icon className="size-4 shrink-0" />
                       <span>{label}</span>
-                    </a>
+                    </Link>
                   )
                 })}
               </>

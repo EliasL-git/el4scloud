@@ -20,17 +20,31 @@ function hashKey(key: string) {
 
 const MAX_FILE_SIZE = 500 * 1024 * 1024 // 500 MB
 
+const UPLOAD_RATE_LIMIT = 10
+const UPLOAD_RATE_WINDOW_MS = 60_000
+const uploadRateMap = new Map<string, number[]>()
+
+function checkUploadRateLimit(userId: string): number | null {
+  const now = Date.now()
+  const timestamps = uploadRateMap.get(userId) ?? []
+  const recent = timestamps.filter((t) => now - t < UPLOAD_RATE_WINDOW_MS)
+  if (recent.length >= UPLOAD_RATE_LIMIT) {
+    return Math.max(0, UPLOAD_RATE_WINDOW_MS - (now - recent[0]))
+  }
+  recent.push(now)
+  uploadRateMap.set(userId, recent)
+  return null
+}
+
 export async function POST(req: Request) {
   const hdrs = await headers()
 
-  // Try session auth first
   let userId: string | null = null
   const session = await auth.api.getSession({ headers: hdrs })
   if (session?.user) {
     userId = session.user.id
   }
 
-  // Fall back to API key auth
   if (!userId) {
     const authHeader = hdrs.get('authorization')
     if (authHeader?.startsWith('Bearer ')) {
@@ -55,7 +69,6 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Check if user is currently warned or suspended and check storage limit
   const [currentUser] = await db
     .select({ banned: user.banned, suspensionType: user.suspensionType, storageLimit: user.storageLimit })
     .from(user)
@@ -76,13 +89,20 @@ export async function POST(req: Request) {
     }
   }
 
+  const retryAfter = checkUploadRateLimit(userId)
+  if (retryAfter !== null) {
+    return Response.json({
+      error: 'Too many uploads. Please wait before uploading again.',
+      retryAfter,
+    }, { status: 429 })
+  }
+
   if (!currentUser || currentUser.storageLimit === 0) {
     return Response.json({
       error: 'You need to apply for storage before uploading files. Visit your dashboard to submit a storage request.',
     }, { status: 403 })
   }
 
-  // Parse multipart form data
   let formData: FormData
   try {
     formData = await req.formData()
@@ -90,83 +110,84 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Invalid form data' }, { status: 400 })
   }
 
-  const fileField = formData.get('file')
-  if (!fileField || !(fileField instanceof File)) {
-    return Response.json({ error: 'File is required' }, { status: 400 })
+  const fileFields = formData.getAll('file')
+  if (fileFields.length === 0 || fileFields.every((f) => !(f instanceof File))) {
+    return Response.json({ error: 'At least one file is required' }, { status: 400 })
   }
 
-  const file = fileField as File
-  const fileName = formData.get('fileName')?.toString() || file.name
   const isPublic = formData.get('isPublic') === 'true'
-  const size = file.size
+  const results: Array<Record<string, unknown>> = []
+  let hasError = false
 
-  if (size === 0) {
-    return Response.json({ error: 'File is empty' }, { status: 400 })
-  }
+  for (const field of fileFields) {
+    if (!(field instanceof File)) continue
 
-  if (size > MAX_FILE_SIZE) {
-    return Response.json({
-      error: `File exceeds maximum size of ${MAX_FILE_SIZE / 1024 / 1024} MB`,
-    }, { status: 400 })
-  }
+    const file = field as File
+    const name = file.name
+    const size = file.size
 
-  // Write file to temporary location for async scanning
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'el4s-upload-'))
-  const tmpPath = path.join(tmpDir, fileName)
-  const buffer = Buffer.from(await file.arrayBuffer())
-  fs.writeFileSync(tmpPath, buffer)
+    if (size === 0) {
+      results.push({ error: `"${name}" is empty` })
+      hasError = true
+      continue
+    }
 
-  // Upload to S3 immediately
-  const fileId = uuidv4()
-  const ext = fileName.split('.').pop()
-  const key = `${userId}/${fileId}${ext ? `.${ext}` : ''}`
-  const mimeType = file.type || 'application/octet-stream'
+    if (size > MAX_FILE_SIZE) {
+      results.push({ error: `"${name}" exceeds maximum size of ${MAX_FILE_SIZE / 1024 / 1024} MB` })
+      hasError = true
+      continue
+    }
 
-  const command = new PutObjectCommand({
-    Bucket: S3_BUCKET,
-    Key: key,
-    Body: buffer,
-    ContentType: mimeType,
-    ContentLength: size,
-    Metadata: {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'el4s-upload-'))
+    const tmpPath = path.join(tmpDir, name)
+    const buffer = Buffer.from(await file.arrayBuffer())
+    fs.writeFileSync(tmpPath, buffer)
+
+    const fileId = uuidv4()
+    const ext = name.split('.').pop()
+    const key = `${userId}/${fileId}${ext ? `.${ext}` : ''}`
+    const mimeType = file.type || 'application/octet-stream'
+
+    const command = new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: key,
+      Body: buffer,
+      ContentType: mimeType,
+      ContentLength: size,
+      Metadata: { userId, originalName: name },
+    })
+
+    await s3.send(command)
+
+    await db.insert(files).values({
+      id: fileId,
       userId,
-      originalName: fileName,
-    },
-  })
+      name,
+      originalName: name,
+      key,
+      size,
+      mimeType,
+      isPublic,
+      scanStatus: 'pending',
+    })
 
-  await s3.send(command)
+    fireWebhook(userId, 'file.uploaded', { fileId, size, mimeType, isPublic }).catch(() => undefined)
 
-  // Insert file record (pending scan)
-  await db.insert(files).values({
-    id: fileId,
-    userId,
-    name: fileName,
-    originalName: fileName,
-    key,
-    size,
-    mimeType,
-    isPublic,
-    scanStatus: 'pending',
-  })
+    scanAndHandle(tmpPath, tmpDir, userId, fileId, key, name, mimeType, size, isPublic)
 
-  ;(async () => {
-    await fireWebhook(userId, 'file.uploaded', { fileId, size, mimeType, isPublic }).catch(() => undefined)
-  })()
+    results.push({ fileId, key, name, size, mimeType, isPublic, scanStatus: 'pending' })
+  }
 
-  const response = Response.json({
-    fileId,
-    key,
-    name: fileName,
-    size,
-    mimeType,
-    isPublic,
-    scanStatus: 'pending',
-  })
+  if (fileFields.length === 1) {
+    const single = results[0]
+    if (single.error) {
+      return Response.json(single, { status: 400 })
+    }
+    return Response.json(single)
+  }
 
-  // Asynchronously scan and handle flagged files (after response)
-  scanAndHandle(tmpPath, tmpDir, userId, fileId, key, fileName, file.type || 'application/octet-stream', size, isPublic)
-
-  return response
+  const status = hasError ? 207 : 200
+  return Response.json({ files: results }, { status })
 }
 
 async function scanAndHandle(
