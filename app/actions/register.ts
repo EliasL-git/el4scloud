@@ -7,12 +7,18 @@ import { v4 as uuidv4 } from 'uuid'
 import { hashPassword } from 'better-auth/crypto'
 import { NO_VERIFICATION_LIMIT } from '@/lib/storage'
 import { fireWebhook } from '@/lib/webhooks/fire'
+import { disposableEmailDomains } from '@/lib/disposable-emails'
 
 export async function register(data: {
   name: string
   email: string
   password: string
 }) {
+  const domain = data.email.split('@').pop()?.toLowerCase()
+  if (domain && disposableEmailDomains.has(domain)) {
+    return { error: 'Temporary email addresses are not allowed. Please use a permanent email address.' }
+  }
+
   const [existingUser] = await db
     .select()
     .from(user)
