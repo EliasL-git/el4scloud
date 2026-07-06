@@ -1,3 +1,8 @@
+## 2026-07-06 (later)
+
+- Fraud detection Refresh now scans all users' historical data retroactively: checks for disposable emails, duplicate IPs from session table, storage abuse (80%+ usage with mostly tiny files), and suspicious file types (.exe/.scr/.bat etc)
+- Fraud auto-suspend at 80+ score; flags are deduplicated so re-scans don't create duplicates
+
 ## 2026-07-06
 
 - Added `banned_domains` table + admin page to ban email domains — bans a domain, terminates all users with that domain, sends a termination email explaining they used a blacklisted domain
