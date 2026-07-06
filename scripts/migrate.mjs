@@ -355,6 +355,16 @@ const statements = [
     "recipientCount"   INTEGER NOT NULL DEFAULT 0,
     "createdAt"        TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
+
+  `CREATE TABLE IF NOT EXISTS "fraud_flags" (
+    "id"          TEXT PRIMARY KEY,
+    "userId"      TEXT NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
+    "signal"      TEXT NOT NULL,
+    "score"       INTEGER NOT NULL,
+    "details"     TEXT,
+    "createdAt"   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS "fraud_flags_userId_idx" ON "fraud_flags"("userId")`,
 ]
 
 async function migrate() {

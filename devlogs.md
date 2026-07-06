@@ -1,3 +1,18 @@
+## 2026-07-06
+
+- Added `banned_domains` table + admin page to ban email domains — bans a domain, terminates all users with that domain, sends a termination email explaining they used a blacklisted domain
+- Created `components/emails/banned-domain-termination.tsx` email template
+- Added admin Broadcasts feature — form to send an email to all users, logged in `broadcasts` table
+- Added `lib/zip.ts` — lightweight ZIP creation using raw DEFLATE (no npm deps needed)
+- Added `/api/admin/users/[userId]/export` — admin can download a user's account.json + all files as a zip
+- Built fraud detection engine (`lib/fraud-detection.ts`, `app/actions/fraud.ts`):
+  - Duplicate IP detection on registration (+15/+30 score)
+  - Upload velocity spikes (+10/+20 score)
+  - Storage abuse (80%+ full, mostly tiny files, +25 score)
+  - Auto-suspends at 80+ score
+- Admin Fraud Detection page with score leaderboard, drill-down flag viewer, clear flags + unsuspend button
+- Fixed scripts (migrate.mjs, check-health.mjs, reset-password.mjs) to handle both `'email'` and `'credential'` providerId values after registration was updated to use `'credential'`
+
 ## 2026-07-04
 
 - Fixed admin sidebar navigation — clicking tabs actually switches views now, not just overview

@@ -293,6 +293,15 @@ export const broadcasts = pgTable('broadcasts', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 
+export const fraudFlags = pgTable('fraud_flags', {
+  id: text('id').primaryKey(),
+  userId: text('userId').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  signal: text('signal').notNull(),
+  score: integer('score').notNull(),
+  details: text('details'),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
 export const aiMessages = pgTable('ai_messages', {
   id: text('id').primaryKey(),
   conversationId: text('conversationId').notNull().references(() => aiConversations.id, { onDelete: 'cascade' }),

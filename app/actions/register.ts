@@ -8,6 +8,8 @@ import { hashPassword } from 'better-auth/crypto'
 import { NO_VERIFICATION_LIMIT } from '@/lib/storage'
 import { fireWebhook } from '@/lib/webhooks/fire'
 import { disposableEmailDomains } from '@/lib/disposable-emails'
+import { checkDuplicateIp } from '@/lib/fraud-detection'
+import { headers } from 'next/headers'
 
 export async function register(data: {
   name: string
@@ -55,6 +57,12 @@ export async function register(data: {
   }
 
   await fireWebhook(userId, 'user.signed_up', { userId }).catch(() => undefined)
+
+  const hdrs = await headers()
+  const ip = hdrs.get('x-forwarded-for') ?? hdrs.get('x-real-ip') ?? 'unknown'
+  if (ip !== 'unknown') {
+    checkDuplicateIp(ip.split(',')[0].trim(), userId).catch(() => {})
+  }
 
   return { ok: true, needsVerification: true, email: data.email }
 }

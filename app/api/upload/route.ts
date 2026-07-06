@@ -13,6 +13,7 @@ import * as os from 'os'
 import { checkFile } from '@/lib/file-scan'
 import { recordWarning } from '@/lib/warnings'
 import { fireWebhook } from '@/lib/webhooks/fire'
+import { checkUploadVelocity, checkStorageAbuse } from '@/lib/fraud-detection'
 
 function hashKey(key: string) {
   return createHash('sha256').update(key).digest('hex')
@@ -177,6 +178,9 @@ export async function POST(req: Request) {
 
     results.push({ fileId, key, name, size, mimeType, isPublic, scanStatus: 'pending' })
   }
+
+  checkUploadVelocity(userId, fileFields.filter((f) => f instanceof File).length).catch(() => {})
+  checkStorageAbuse(userId).catch(() => {})
 
   if (fileFields.length === 1) {
     const single = results[0]
