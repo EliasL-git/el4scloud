@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getAllFraudScores, getUserFraudFlags, clearFraudFlags } from '@/app/actions/fraud'
+import { getAllFraudScores, getUserFraudFlags, clearFraudFlags, recalculateFraudScores } from '@/app/actions/fraud'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -23,8 +23,13 @@ export default function AdminFraudPage() {
 
   const refresh = async () => {
     setLoading(true)
-    const data = await getAllFraudScores()
-    setRows(data)
+    try {
+      await recalculateFraudScores()
+      const data = await getAllFraudScores()
+      setRows(data)
+    } catch (e: any) {
+      toast.error(e?.message ?? 'Scan failed')
+    }
     setLoading(false)
   }
 
