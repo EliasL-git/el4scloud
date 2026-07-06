@@ -284,6 +284,15 @@ export const bannedDomains = pgTable('banned_domains', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 
+export const broadcasts = pgTable('broadcasts', {
+  id: text('id').primaryKey(),
+  subject: text('subject').notNull(),
+  body: text('body').notNull(),
+  sentBy: text('sentBy').notNull(),
+  recipientCount: integer('recipientCount').notNull().default(0),
+  createdAt: timestamp('createdAt').notNull().defaultNow(),
+})
+
 export const aiMessages = pgTable('ai_messages', {
   id: text('id').primaryKey(),
   conversationId: text('conversationId').notNull().references(() => aiConversations.id, { onDelete: 'cascade' }),

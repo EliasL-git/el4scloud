@@ -3,7 +3,7 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, account, storageRequests, files, tickets, ticketReplies, ticketAttachments, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, takedownRequests, session as sessionTable, warnings, webhooks, bannedDomains } from '@/lib/db/schema'
+import { user, account, storageRequests, files, tickets, ticketReplies, ticketAttachments, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, takedownRequests, session as sessionTable, warnings, webhooks, bannedDomains, broadcasts } from '@/lib/db/schema'
 import { eq, desc, ilike, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
@@ -1192,6 +1192,60 @@ export async function testWebhook(webhookId: string) {
   await logAuditEventWithHeaders(adminId, 'admin.webhook_tested', JSON.stringify({ webhookId, url: webhook.url }))
 
   return { ok: true }
+}
+
+// ─── Broadcasts ──────────────────────────────────────────────
+
+export async function getBroadcasts() {
+  const adminId = await assertAdmin()
+  return db.select().from(broadcasts).orderBy(desc(broadcasts.createdAt))
+}
+
+export async function sendBroadcast(subject: string, body: string) {
+  const adminId = await assertAdmin()
+  if (!subject?.trim()) throw new Error('Subject is required')
+  if (!body?.trim()) throw new Error('Body is required')
+
+  const allUsers = await db
+    .select({ id: user.id, name: user.name, email: user.email })
+    .from(user)
+    .where(eq(user.banned, false))
+
+  const broadcastId = uuidv4()
+  await db.insert(broadcasts).values({
+    id: broadcastId,
+    subject,
+    body,
+    sentBy: adminId,
+    recipientCount: allUsers.length,
+  })
+
+  let sent = 0
+  for (const u of allUsers) {
+    try {
+      const { renderToString } = await import('react-dom/server')
+      const { BroadcastEmail } = await import('@/components/emails/broadcast')
+      const html = renderToString(BroadcastEmail({ name: u.name ?? u.email, subject, body }))
+      await sendMail({ to: u.email, subject, html })
+      sent++
+    } catch (err: any) {
+      console.error(`[admin] Failed to send broadcast to ${u.email}:`, err?.message ?? err)
+    }
+  }
+
+  await db
+    .update(broadcasts)
+    .set({ recipientCount: sent })
+    .where(eq(broadcasts.id, broadcastId))
+
+  await logAuditEventWithHeaders(adminId, 'admin.broadcast_sent', JSON.stringify({
+    broadcastId,
+    intendedRecipients: allUsers.length,
+    sent,
+    subject,
+  }))
+
+  return { ok: true, sent, total: allUsers.length }
 }
 
 // ─── Banned Domains ──────────────────────────────────────────

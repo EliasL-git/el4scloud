@@ -346,6 +346,15 @@ const statements = [
     "bannedBy"      TEXT NOT NULL,
     "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
+
+  `CREATE TABLE IF NOT EXISTS "broadcasts" (
+    "id"               TEXT PRIMARY KEY,
+    "subject"          TEXT NOT NULL,
+    "body"             TEXT NOT NULL,
+    "sentBy"           TEXT NOT NULL,
+    "recipientCount"   INTEGER NOT NULL DEFAULT 0,
+    "createdAt"        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
 ]
 
 async function migrate() {

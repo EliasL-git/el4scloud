@@ -9,7 +9,7 @@ import {
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { RotateCcw, Ban, Unlock, Lock, Trash2, Eye, Mail, CheckCircle2, Terminal, ShieldCheck, Shield, X } from 'lucide-react'
+import { RotateCcw, Ban, Unlock, Lock, Trash2, Eye, Mail, CheckCircle2, Terminal, ShieldCheck, Shield, X, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatBytes, SUSPENSION_REASONS, formatVerificationMeta } from '../_lib/utils'
 
@@ -141,6 +141,7 @@ export default function AdminUsersPage() {
                     )}
                     <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { setResetOptions({ storage: false, verification: false, introduction: false }); setResetModal({ userId: u.id, userName: u.name ?? u.email }) }}><RotateCcw className="size-3" /> Reset</Button>
                     <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" onClick={() => { try { setMetaModal({ userId: u.id, userName: u.name ?? u.email, meta: JSON.parse(u.verificationMeta ?? '{}') }) } catch { setMetaModal({ userId: u.id, userName: u.name ?? u.email, meta: { raw: u.verificationMeta ?? '(empty)' } }) }}}><Eye className="size-3" /> Meta</Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" asChild><a href={`/api/admin/users/${u.id}/export`}><Download className="size-3" /> Export</a></Button>
                     <Button size="sm" variant="ghost" className="h-7 text-xs gap-1" disabled={processing[`delete-${u.id}`]} onClick={() => { if (confirm(`Delete user ${u.name ?? u.email}?`)) handleAction(u.id, 'delete', () => deleteUser(u.id), 'User deleted') }}><Trash2 className="size-3" /> Delete</Button>
                   </div>
                 </td>
