@@ -3,7 +3,12 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users, Webhook, ShieldCheck, Ban, Megaphone, Fingerprint, ChevronRight } from 'lucide-react'
+import {
+  LayoutDashboard, HardDrive, Key, Webhook, MessageSquare, Settings,
+  Menu, X as XIcon, Cloud, ChevronRight, Search, Bell, Terminal,
+  HelpCircle, FileText, Plus, MoreHorizontal, Database, FolderOpen, Activity,
+  LogOut,
+} from 'lucide-react'
 import { BroadcastPopup } from '@/components/broadcast-popup'
 import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
@@ -20,11 +25,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-const serviceNavItems = [
+const sidebarNav = [
+  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard },
   { href: '/dashboard/storage', label: 'Storage', icon: HardDrive },
-]
-
-const accountNavItems = [
   { href: '/dashboard/keys', label: 'API Keys', icon: Key },
   { href: '/dashboard/webhooks', label: 'Webhooks', icon: Webhook },
   { href: '/dashboard/support', label: 'Support', icon: MessageSquare },
@@ -32,23 +35,12 @@ const accountNavItems = [
 ]
 
 const adminNavItems = [
-  { href: '/dashboard/admin', label: 'Admin', icon: Shield },
-]
-
-const adminSidebarTabs = [
-  { id: 'overview', label: 'Overview', href: '/dashboard/admin/overview', icon: LayoutDashboard },
-  { id: 'requests', label: 'Storage Requests', href: '/dashboard/admin/requests', icon: HardDrive },
-  { id: 'users', label: 'Users', href: '/dashboard/admin/users', icon: Users },
-  { id: 'tickets', label: 'Tickets', href: '/dashboard/admin/tickets', icon: MessageSquare },
-  { id: 'appeals', label: 'Appeals', href: '/dashboard/admin/appeals', icon: Scale },
-  { id: 'files', label: 'Files', href: '/dashboard/admin/files', icon: FileText },
-  { id: 'deletions', label: 'Deletion Requests', href: '/dashboard/admin/deletions', icon: Trash2 },
-  { id: 'audit', label: 'Audit Log', href: '/dashboard/admin/audit', icon: ClipboardList },
-  { id: 'verifications', label: 'Verifications', href: '/dashboard/admin/verifications', icon: ShieldCheck },
-  { id: 'fraud', label: 'Fraud Detection', href: '/dashboard/admin/fraud', icon: Fingerprint },
-  { id: 'broadcasts', label: 'Broadcasts', href: '/dashboard/admin/broadcasts', icon: Megaphone },
-  { id: 'domains', label: 'Banned Domains', href: '/dashboard/admin/domains', icon: Ban },
-  { id: 'takedown', label: 'Takedown', href: '/dashboard/admin/takedown', icon: ShieldAlert },
+  { href: '/dashboard/admin', label: 'Admin Overview', icon: LayoutDashboard },
+  { href: '/dashboard/admin/requests', label: 'Storage Requests', icon: HardDrive },
+  { href: '/dashboard/admin/users', label: 'Users', icon: HardDrive },
+  { href: '/dashboard/admin/tickets', label: 'Tickets', icon: MessageSquare },
+  { href: '/dashboard/admin/broadcasts', label: 'Broadcasts', icon: MessageSquare },
+  { href: '/dashboard/admin/verifications', label: 'Verifications', icon: Settings },
 ]
 
 interface User {
@@ -56,35 +48,6 @@ interface User {
   name: string
   email: string
   image?: string | null
-}
-
-function NavLink({ href, icon: Icon, label, active, onClick }: { href: string; icon: React.ElementType; label: string; active: boolean; onClick: () => void }) {
-  return (
-    <Link
-      href={href}
-      onClick={onClick}
-      className={cn(
-        'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
-        active
-          ? 'bg-primary/10 text-primary font-medium'
-          : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-      )}
-    >
-      <Icon className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
-      <span>{label}</span>
-    </Link>
-  )
-}
-
-function NavSection({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="mb-1">
-      <div className="px-3 py-1.5">
-        <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-widest">{label}</span>
-      </div>
-      <div className="space-y-0.5">{children}</div>
-    </div>
-  )
 }
 
 export function DashboardShell({
@@ -109,12 +72,7 @@ export function DashboardShell({
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const suspendedAllowedRoutes = ['/dashboard', '/dashboard/support', '/dashboard/settings']
-  const visibleServiceItems = suspended
-    ? serviceNavItems.filter((item) => suspendedAllowedRoutes.includes(item.href))
-    : serviceNavItems
-  const visibleAccountItems = suspended
-    ? accountNavItems.filter((item) => suspendedAllowedRoutes.includes(item.href))
-    : accountNavItems
+  const isAdminRoute = pathname.startsWith('/dashboard/admin')
 
   const handleSignOut = async () => {
     await authClient.signOut()
@@ -136,122 +94,167 @@ export function DashboardShell({
     return pathname.startsWith(href)
   }
 
-  const isAdminRoute = pathname.startsWith('/dashboard/admin')
+  const navItems = isAdminRoute ? adminNavItems : sidebarNav
 
   return (
-    <div className="min-h-svh bg-background flex flex-col">
-      <div className="flex flex-1">
-        {/* Mobile sidebar overlay */}
-        {sidebarOpen && (
-          <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={closeSidebar} />
+    <div className="min-h-svh bg-background font-sans overflow-hidden">
+
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={closeSidebar} />
+      )}
+
+      {/* Sidebar */}
+      <aside className={cn(
+        "fixed left-0 top-0 h-full w-[280px] bg-surface-container border-r border-outline-variant/30 flex flex-col py-6 z-50 transition-transform duration-300 lg:translate-x-0",
+        sidebarOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
+        {/* Logo */}
+        <div className="px-6 mb-10 flex items-center gap-3">
+          <div className="size-10 bg-primary rounded-xl flex items-center justify-center">
+            <Cloud className="size-5 text-on-primary" fill="currentColor" />
+          </div>
+          <div>
+            <h1 className="text-xl font-heading font-extrabold text-primary tracking-tight">Hobbycloud</h1>
+            <p className="font-mono text-[10px] text-on-surface-variant uppercase tracking-widest opacity-70">Enterprise Tier</p>
+          </div>
+        </div>
+
+        {/* Navigation */}
+        <nav className="flex-1 space-y-1 px-3">
+          {navItems.map(({ href, label, icon: Icon }) => {
+            const active = isActive(href)
+            return (
+              <Link
+                key={href}
+                href={href}
+                onClick={closeSidebar}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all text-sm",
+                  active
+                    ? "text-primary bg-primary/10 font-bold"
+                    : "text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface font-medium"
+                )}
+              >
+                <Icon className={cn("size-[22px] shrink-0", active && "fill-primary/10")} />
+                <span>{label}</span>
+              </Link>
+            )
+          })}
+        </nav>
+
+        {/* Bottom area */}
+        <div className="px-6 py-4 mt-auto border-t border-outline-variant/20">
+          <button className="w-full bg-primary text-on-primary py-3 rounded-2xl font-bold text-sm active:scale-95 transition-all shadow-lg shadow-primary/10 flex items-center justify-center gap-2">
+            <Plus className="size-4" />
+            Deploy Instance
+          </button>
+          <div className="mt-6 flex flex-col gap-3">
+            <Link href="/dashboard/support" className="flex items-center gap-3 text-on-surface-variant text-sm hover:text-primary transition-colors" onClick={closeSidebar}>
+              <HelpCircle className="size-[18px]" />
+              <span>Support</span>
+            </Link>
+            <a href="/docs" className="flex items-center gap-3 text-on-surface-variant text-sm hover:text-primary transition-colors">
+              <FileText className="size-[18px]" />
+              <span>Documentation</span>
+            </a>
+          </div>
+        </div>
+      </aside>
+
+      {/* Header */}
+      <header className="fixed top-0 right-0 w-[calc(100%-280px)] h-16 bg-surface-glass backdrop-blur-md border-b border-outline-variant/30 flex items-center justify-between px-10 z-40">
+        <div className="flex items-center gap-6">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-on-surface-variant hover:text-on-surface mr-2">
+            <Menu className="size-5" />
+          </button>
+          <div className="flex items-center gap-2 text-on-surface-variant font-mono text-xs">
+            <span className="opacity-70">Projects</span>
+            <ChevronRight className="size-3.5 opacity-50" />
+            <span className="text-on-surface font-bold">Default Project</span>
+          </div>
+          <div className="h-4 w-px bg-outline-variant/30" />
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant size-[20px] opacity-60" />
+            <input
+              className="bg-surface-container-highest/50 border border-outline-variant/30 rounded-2xl pl-11 pr-4 py-2 text-sm w-80 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none text-on-surface placeholder:text-on-surface-variant/40"
+              placeholder="Search resources..."
+              type="text"
+            />
+          </div>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1">
+            <button className="p-2.5 text-on-surface-variant hover:text-primary hover:bg-surface-container-highest rounded-full transition-all">
+              <Bell className="size-5" />
+            </button>
+            <button className="p-2.5 text-on-surface-variant hover:text-primary hover:bg-surface-container-highest rounded-full transition-all">
+              <Terminal className="size-5" />
+            </button>
+          </div>
+          <div className="h-6 w-px bg-outline-variant/30" />
+          <DropdownMenu>
+            <DropdownMenuTrigger render={
+              <div className="flex items-center gap-3 pl-2 cursor-pointer">
+                <Avatar className="size-9 ring-2 ring-primary/20 p-0.5">
+                  <AvatarFallback className="text-xs font-semibold">{initials}</AvatarFallback>
+                </Avatar>
+                <div className="hidden lg:block">
+                  <p className="text-sm font-bold leading-none text-on-surface">{user.name}</p>
+                  <p className="text-[10px] text-on-surface-variant mt-1 font-medium opacity-60">Console Root</p>
+                </div>
+              </div>
+            } />
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuGroup>
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium">{user.name}</span>
+                  <span className="text-xs text-muted-foreground truncate">{user.email}</span>
+                </div>
+              </DropdownMenuLabel>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive gap-2 cursor-pointer">
+                <LogOut className="size-3.5" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="ml-[280px] mt-16 p-10 h-[calc(100vh-64px)] overflow-y-auto">
+        {suspended && !suspendedAllowedRoutes.includes(pathname) && !isAdminRoute ? (
+          <SuspensionBanner reason={suspensionReason ?? 'Account suspended'} appealable={appealable} suspensionType={suspensionType ?? undefined} />
+        ) : (
+          children
         )}
 
-        {/* Sidebar */}
-        <aside className={cn(
-          "fixed lg:sticky top-0 z-50 h-svh w-60 shrink-0 border-r border-border bg-sidebar transition-transform duration-300 lg:translate-x-0",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        )}>
-          <div className="flex flex-col h-full">
-            <div className="flex items-center justify-between px-4 h-14 border-b border-sidebar-border">
-              <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0" onClick={closeSidebar}>
-                <div className="size-7 rounded-md bg-primary flex items-center justify-center">
-                  <HardDrive className="size-3.5 text-primary-foreground" />
-                </div>
-                <span className="text-sm font-semibold text-sidebar-foreground">Hobbycloud</span>
-              </Link>
-              <button onClick={closeSidebar} className="text-muted-foreground hover:text-foreground lg:hidden">
-                <XIcon className="size-4" />
-              </button>
-            </div>
+        {/* Atmosphere blobs */}
+        <div className="fixed top-1/4 left-1/4 w-[500px] h-[500px] bg-primary/5 blur-[140px] rounded-full pointer-events-none -z-10 animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="fixed bottom-1/4 right-1/4 w-[600px] h-[600px] bg-success-primary/5 blur-[180px] rounded-full pointer-events-none -z-10 animate-pulse" style={{ animationDuration: '12s', animationDelay: '2s' }} />
+      </main>
 
-            {/* Navigation */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-1">
-              <NavLink href="/dashboard" icon={LayoutDashboard} label="Dashboard" active={pathname === '/dashboard'} onClick={closeSidebar} />
-
-              {isAdminRoute ? (
-                <NavSection label="Admin">
-                  {adminSidebarTabs.map(({ id, label, href, icon: Icon }) => (
-                    <NavLink key={id} href={href} icon={Icon} label={label} active={pathname === href} onClick={closeSidebar} />
-                  ))}
-                </NavSection>
-              ) : (
-                <>
-                  {visibleServiceItems.length > 0 && (
-                    <NavSection label="Services">
-                      {visibleServiceItems.map(({ href, label, icon: Icon }) => (
-                        <NavLink key={href} href={href} icon={Icon} label={label} active={isActive(href)} onClick={closeSidebar} />
-                      ))}
-                    </NavSection>
-                  )}
-                  <NavSection label="Account">
-                    {visibleAccountItems.map(({ href, label, icon: Icon }) => (
-                      <NavLink key={href} href={href} icon={Icon} label={label} active={isActive(href)} onClick={closeSidebar} />
-                    ))}
-                  </NavSection>
-                  {isAdmin && (
-                    <NavSection label="Admin">
-                      {adminNavItems.map(({ href, label, icon: Icon }) => (
-                        <NavLink key={href} href={href} icon={Icon} label={label} active={isActive(href)} onClick={closeSidebar} />
-                      ))}
-                    </NavSection>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div className="border-t border-sidebar-border p-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger render={
-                  <Button variant="ghost" size="sm" className="w-full gap-2 px-2 justify-start h-9">
-                    <Avatar className="size-6">
-                      <AvatarFallback className="text-xs">{initials}</AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm truncate max-w-32">{user.name}</span>
-                  </Button>
-                } />
-                <DropdownMenuContent align="start" className="w-48">
-                  <DropdownMenuGroup>
-                  <DropdownMenuLabel className="font-normal">
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-sm font-medium">{user.name}</span>
-                      <span className="text-xs text-muted-foreground truncate">{user.email}</span>
-                    </div>
-                  </DropdownMenuLabel>
-                  </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive gap-2 cursor-pointer">
-                    <LogOut className="size-3.5" />
-                    Sign out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+      {/* Footer status bar */}
+      <footer className="fixed bottom-0 right-0 w-[calc(100%-280px)] h-8 bg-surface-container-lowest border-t border-outline-variant/20 flex items-center justify-between px-10 z-30">
+        <div className="flex items-center gap-4 text-[10px] font-mono text-on-surface-variant">
+          <div className="flex items-center gap-2">
+            <span className="size-1.5 rounded-full bg-success-primary glow-status animate-pulse" />
+            <span className="font-bold tracking-widest">SYSTEM STATUS: OPERATIONAL</span>
           </div>
-        </aside>
-
-        {/* Page content */}
-        <main className="flex-1 min-w-0 relative bg-background">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className={cn(
-              "fixed top-3.5 left-3.5 z-30 lg:hidden size-8 rounded-lg flex items-center justify-center",
-              "text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-            )}
-          >
-            <Menu className="size-4" />
-          </button>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-            {suspended && !suspendedAllowedRoutes.includes(pathname) && !isAdminRoute ? (
-              <SuspensionBanner reason={suspensionReason ?? 'Account suspended'} appealable={appealable} suspensionType={suspensionType ?? undefined} />
-            ) : (
-              children
-            )}
-          </div>
-        </main>
-      </div>
+          <div className="h-3 w-px bg-outline-variant/30" />
+          <span className="opacity-60">&copy; 2024 Hobbycloud Infrastructure</span>
+        </div>
+        <div className="flex items-center gap-6 text-[10px] font-mono text-on-surface-variant">
+          <a className="hover:text-primary transition-colors opacity-70" href="#">Privacy Policy</a>
+          <a className="hover:text-primary transition-colors opacity-70" href="#">Terms of Service</a>
+          <a className="hover:text-primary transition-colors opacity-70" href="#">API Status</a>
+        </div>
+      </footer>
 
       <BroadcastPopup />
-
     </div>
   )
 }

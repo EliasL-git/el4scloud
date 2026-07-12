@@ -1,20 +1,29 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Plus_Jakarta_Sans, Inter, JetBrains_Mono } from 'next/font/google'
 import { Toaster } from '@/components/ui/sonner'
 import './globals.css'
 // Trigger one-time recovery of pending scans at server startup
 import '@/lib/scan-recovery-init'
 
-const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
+const headingFont = Plus_Jakarta_Sans({
+  variable: '--font-heading',
+  subsets: ['latin'],
+})
+
+const bodyFont = Inter({
+  variable: '--font-sans',
+  subsets: ['latin'],
+})
+
+const monoFont = JetBrains_Mono({
+  variable: '--font-mono',
   subsets: ['latin'],
 })
 
 export const metadata: Metadata = {
-  title: 'Hobbycloud — Fast, Simple Cloud Storage',
-  description: 'Upload, manage, and deliver files at the edge. Fast cloud storage with a clean dashboard and developer API.',
+  title: 'Hobbycloud Console — Project Resources',
+  description: 'Orchestrate your high-performance infrastructure from a single unified command center.',
   generator: 'v0.app',
   icons: {
     icon: [
@@ -36,11 +45,8 @@ export const metadata: Metadata = {
 }
 
 export const viewport: Viewport = {
-  colorScheme: 'light dark',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: 'white' },
-    { media: '(prefers-color-scheme: dark)', color: 'black' },
-  ],
+  colorScheme: 'dark',
+  themeColor: 'black',
 }
 
 export default function RootLayout({
@@ -49,7 +55,10 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} bg-background`}>
+    <html lang="en" className={`dark ${headingFont.variable} ${bodyFont.variable} ${monoFont.variable}`} suppressHydrationWarning>
+      <head>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" />
+      </head>
       <body className="font-sans antialiased">
         {children}
         <Toaster richColors />
