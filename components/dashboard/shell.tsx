@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users, Sparkles, Webhook, ShieldCheck, Ban, Megaphone, Fingerprint } from 'lucide-react'
+import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users, Webhook, ShieldCheck, Ban, Megaphone, Fingerprint } from 'lucide-react'
 import { BroadcastPopup } from '@/components/broadcast-popup'
 import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
@@ -22,7 +22,6 @@ import {
 
 const serviceNavItems = [
   { href: '/dashboard/storage', label: 'Storage', icon: HardDrive },
-  { href: '/dashboard/ai', label: 'AI Chat', icon: Sparkles },
 ]
 
 const accountNavItems = [
@@ -38,7 +37,6 @@ const adminNavItems = [
 
 const adminSidebarTabs = [
   { id: 'overview', label: 'Overview', href: '/dashboard/admin/overview', icon: LayoutDashboard },
-  { id: 'ai', label: 'AI Usage', href: '/dashboard/admin/ai', icon: Sparkles },
   { id: 'requests', label: 'Storage Requests', href: '/dashboard/admin/requests', icon: HardDrive },
   { id: 'users', label: 'Users', href: '/dashboard/admin/users', icon: Users },
   { id: 'tickets', label: 'Tickets', href: '/dashboard/admin/tickets', icon: MessageSquare },

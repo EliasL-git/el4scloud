@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { getFileStats, getStorageLimit } from '@/app/actions/files'
-import { HardDrive, ArrowRight, Sparkles } from 'lucide-react'
+import { HardDrive, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const services = [
@@ -13,14 +13,6 @@ const services = [
     description: 'Store, manage, and serve your files with our simple API.',
     href: '/dashboard/storage',
     icon: HardDrive,
-    status: 'active' as const,
-  },
-  {
-    id: 'ai',
-    title: 'AI Chat',
-    description: 'Free AI access for Hack Club students.',
-    href: '/dashboard/ai',
-    icon: Sparkles,
     status: 'active' as const,
   },
 ]
