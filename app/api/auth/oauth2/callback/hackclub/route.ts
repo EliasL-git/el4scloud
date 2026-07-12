@@ -20,16 +20,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/dashboard/settings?error=no_code', request.url))
   }
 
-  const origin = (() => {
-    if (process.env.HOST_URL) {
-      let hostUrl = process.env.HOST_URL
-      if (!hostUrl.startsWith('http://') && !hostUrl.startsWith('https://')) {
-        hostUrl = `https://${hostUrl}`
-      }
-      return hostUrl
-    }
-    return new URL(request.url).origin
-  })()
+  const origin = new URL(request.url).origin
 
   const tokenResponse = await fetch('https://auth.hackclub.com/oauth/token', {
     method: 'POST',

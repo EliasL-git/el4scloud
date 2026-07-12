@@ -6,6 +6,13 @@ import { cookies } from 'next/headers'
 import crypto from 'crypto'
 
 function getBaseUrl(hdrs: Headers): string {
+  // Prefer the actual request host so OAuth cookies match the redirect domain.
+  // HOST_URL is used only as a fallback when headers are unavailable.
+  const host = hdrs.get('host')
+  if (host) {
+    const proto = hdrs.get('x-forwarded-proto') || (process.env.NODE_ENV === 'production' ? 'https' : 'http')
+    return `${proto}://${host}`
+  }
   if (process.env.HOST_URL) {
     let hostUrl = process.env.HOST_URL
     if (!hostUrl.startsWith('http://') && !hostUrl.startsWith('https://')) {
@@ -13,9 +20,7 @@ function getBaseUrl(hdrs: Headers): string {
     }
     return hostUrl
   }
-  const host = hdrs.get('host') || 'localhost:3000'
-  const proto = hdrs.get('x-forwarded-proto') || (process.env.NODE_ENV === 'production' ? 'https' : 'http')
-  return `${proto}://${host}`
+  return 'http://localhost:3000'
 }
 
 export async function getHackClubAuthUrl() {
