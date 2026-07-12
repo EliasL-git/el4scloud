@@ -25,7 +25,13 @@ const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
 type Stats = Awaited<ReturnType<typeof getFileStats>>
 
 export default function StoragePage() {
-  const [tab, setTab] = useState<Tab>('overview')
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search).get('tab')
+      if (p === 'upload' || p === 'files' || p === 'overview') return p
+    }
+    return 'overview'
+  })
   const [stats, setStats] = useState<Stats>({
     totalFiles: 0,
     totalSize: 0,

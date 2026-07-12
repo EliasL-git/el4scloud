@@ -41,71 +41,87 @@ export default function AdminOverviewPage() {
   return (
     <section className="flex flex-col gap-6">
       <h1 className="text-xl font-semibold tracking-tight">Admin Overview</h1>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Card className="border-blue-500/20">
-          <CardContent className="p-3 flex items-center gap-3 text-sm">
-            <RefreshCw className="size-4 shrink-0 text-blue-500" />
-            <span className="text-muted-foreground">
-              Scan stats:{' '}
-              {scanStats ? (
-                <span className="text-foreground font-medium">
-                  {scanStats.totalScans} total &middot; {scanStats.past24hScans} in 24h
-                  {scanStats.avgDuration != null && (
-                    <> &middot; avg {(scanStats.avgDuration / 1000).toFixed(1)}s</>
-                  )}
-                </span>
-              ) : (
-                <span className="text-muted-foreground italic">Loading...</span>
-              )}
-            </span>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-xl bg-blue-500/10 flex items-center justify-center shrink-0">
+                <RefreshCw className="size-5 text-blue-500" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Scans</p>
+                <p className="text-lg font-semibold leading-tight">
+                  {scanStats ? `${scanStats.totalScans}` : '...'}
+                </p>
+                {scanStats && (
+                  <p className="text-[11px] text-muted-foreground/70">{scanStats.past24hScans} in 24h</p>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
-        <Card className="border-green-500/20">
-          <CardContent className="p-3 flex items-center gap-3 text-sm">
-            <CheckCircle2 className="size-4 shrink-0 text-green-500" />
-            <span className="text-muted-foreground">
-              Last cleanup run:{' '}
-              {lastCronRun ? (
-                <span className="text-foreground font-medium">
-                  {formatDate(lastCronRun.createdAt)}
-                  {' — '}
-                  {(() => { try { const d = JSON.parse(lastCronRun.details ?? '{}'); return `${d.deleted} user${d.deleted === 1 ? '' : 's'} deleted` } catch { return 'unknown' } })()}
-                </span>
-              ) : (
-                <span className="text-muted-foreground italic">Never run</span>
-              )}
-            </span>
+        <Card className="border-0 shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="size-10 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <CheckCircle2 className="size-5 text-emerald-500" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Cleanup</p>
+                {lastCronRun ? (
+                  <>
+                    <p className="text-lg font-semibold leading-tight">{formatDate(lastCronRun.createdAt)}</p>
+                    <p className="text-[11px] text-muted-foreground/70">
+                      {(() => { try { const d = JSON.parse(lastCronRun.details ?? '{}'); return `${d.deleted} user${d.deleted === 1 ? '' : 's'} deleted` } catch { return 'unknown' } })()}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">Never run</p>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
         {ticketStats && (
           <>
-            <Card className="border-amber-500/20">
-              <CardContent className="p-3 flex items-center gap-3 text-sm">
-                <MessageSquare className="size-4 shrink-0 text-amber-500" />
-                <span className="text-muted-foreground">
-                  Tickets:{' '}
-                  <span className="text-foreground font-medium">{ticketStats.total} total</span>
-                  {' · '}
-                  <span className="text-foreground font-medium">{ticketStats.byStatus['open'] ?? 0} open</span>
-                  {' · '}
-                  <span className="text-foreground font-medium">{ticketStats.byStatus['in_progress'] ?? 0} in progress</span>
-                </span>
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
+                    <MessageSquare className="size-5 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Tickets</p>
+                    <p className="text-lg font-semibold leading-tight">{ticketStats.total}</p>
+                    <p className="text-[11px] text-muted-foreground/70">
+                      {ticketStats.byStatus['open'] ?? 0} open &middot; {ticketStats.byStatus['in_progress'] ?? 0} in progress
+                    </p>
+                  </div>
+                </div>
               </CardContent>
             </Card>
-            <Card className="border-red-500/20">
-              <CardContent className="p-3 flex items-center gap-3 text-sm">
-                <AlertTriangle className="size-4 shrink-0 text-red-500" />
-                <span className="text-muted-foreground">
-                  Alerts:{' '}
-                  {ticketStats.overdue > 0 && <span className="text-red-500 font-medium">{ticketStats.overdue} overdue SLA</span>}
-                  {ticketStats.overdue > 0 && ticketStats.unassigned > 0 && <span> · </span>}
-                  {ticketStats.unassigned > 0 && (
-                    <span className="text-amber-500 font-medium">{ticketStats.unassigned} unassigned</span>
-                  )}
-                  {ticketStats.overdue === 0 && ticketStats.unassigned === 0 && (
-                    <span className="text-muted-foreground italic">All clear</span>
-                  )}
-                </span>
+            <Card className="border-0 shadow-sm">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-3">
+                  <div className={cn('size-10 rounded-xl flex items-center justify-center shrink-0', ticketStats.overdue > 0 ? 'bg-red-500/10' : 'bg-secondary')}>
+                    <AlertTriangle className={cn('size-5', ticketStats.overdue > 0 ? 'text-red-500' : 'text-muted-foreground')} />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Alerts</p>
+                    {ticketStats.overdue > 0 || ticketStats.unassigned > 0 ? (
+                      <>
+                        <p className="text-lg font-semibold leading-tight">
+                          {ticketStats.overdue > 0 && <span className="text-red-500">{ticketStats.overdue} overdue</span>}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground/70">
+                          {ticketStats.unassigned > 0 && `${ticketStats.unassigned} unassigned`}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">All clear</p>
+                    )}
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </>
@@ -113,13 +129,27 @@ export default function AdminOverviewPage() {
       </div>
       {userStats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Users</span><p className="text-lg font-semibold">{userStats.totalUsers}</p></CardContent></Card>
-          <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Files/user</span><p className="text-lg font-semibold">{userStats.avgFilesPerUser}</p></CardContent></Card>
-          <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">API keys/user</span><p className="text-lg font-semibold">{userStats.avgApiKeysPerUser}</p></CardContent></Card>
-          <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Tickets/user</span><p className="text-lg font-semibold">{userStats.avgTicketsPerUser}</p></CardContent></Card>
-          <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Storage reqs/user</span><p className="text-lg font-semibold">{userStats.avgStorageRequestsPerUser}</p></CardContent></Card>
-          <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Appeals/user</span><p className="text-lg font-semibold">{userStats.avgAppealsPerUser}</p></CardContent></Card>
-          <Card><CardContent className="p-3 text-sm"><span className="text-muted-foreground">Warnings/user</span><p className="text-lg font-semibold">{userStats.avgWarningsPerUser}</p></CardContent></Card>
+          {[
+            { label: 'Users', value: userStats.totalUsers, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+            { label: 'Files / user', value: userStats.avgFilesPerUser, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+            { label: 'API keys / user', value: userStats.avgApiKeysPerUser, color: 'text-purple-500', bg: 'bg-purple-500/10' },
+            { label: 'Tickets / user', value: userStats.avgTicketsPerUser, color: 'text-amber-500', bg: 'bg-amber-500/10' },
+            { label: 'Storage reqs / user', value: userStats.avgStorageRequestsPerUser, color: 'text-rose-500', bg: 'bg-rose-500/10' },
+            { label: 'Appeals / user', value: userStats.avgAppealsPerUser, color: 'text-cyan-500', bg: 'bg-cyan-500/10' },
+            { label: 'Warnings / user', value: userStats.avgWarningsPerUser, color: 'text-orange-500', bg: 'bg-orange-500/10' },
+          ].map(({ label, value, color, bg }) => (
+            <Card key={label} className="border-0 shadow-sm">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className={cn('size-10 rounded-xl flex items-center justify-center shrink-0', bg)}>
+                  <span className={cn('text-sm font-bold', color)}>{typeof value === 'number' ? Math.round(value * 10) / 10 : value}</span>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">{label}</p>
+                  <p className="text-lg font-semibold leading-tight">{typeof value === 'number' ? Number.isInteger(value) ? value : value.toFixed(1) : value}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
     </section>

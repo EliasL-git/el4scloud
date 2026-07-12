@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users, Webhook, ShieldCheck, Ban, Megaphone, Fingerprint } from 'lucide-react'
+import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users, Webhook, ShieldCheck, Ban, Megaphone, Fingerprint, ChevronRight } from 'lucide-react'
 import { BroadcastPopup } from '@/components/broadcast-popup'
 import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
@@ -58,6 +58,36 @@ interface User {
   image?: string | null
 }
 
+function NavLink({ href, icon: Icon, label, active, onClick }: { href: string; icon: React.ElementType; label: string; active: boolean; onClick: () => void }) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className={cn(
+        'group relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all',
+        active
+          ? 'bg-primary/10 text-primary font-medium'
+          : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+      )}
+    >
+      {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-primary" />}
+      <Icon className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground transition-colors')} />
+      <span>{label}</span>
+    </Link>
+  )
+}
+
+function NavSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-1">
+      <div className="px-3 py-1.5">
+        <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-widest">{label}</span>
+      </div>
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  )
+}
+
 export function DashboardShell({
   children,
   user,
@@ -78,8 +108,6 @@ export function DashboardShell({
   const pathname = usePathname()
   const router = useRouter()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const isSupportRoute = pathname.startsWith('/dashboard/support')
-  const isAdminRoute = pathname.startsWith('/dashboard/admin')
 
   const suspendedAllowedRoutes = ['/dashboard', '/dashboard/support', '/dashboard/settings']
   const visibleServiceItems = suspended
@@ -102,177 +130,96 @@ export function DashboardShell({
     .toUpperCase()
     .slice(0, 2)
 
+  const closeSidebar = () => setSidebarOpen(false)
+
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
     return pathname.startsWith(href)
   }
+
+  const isAdminRoute = pathname.startsWith('/dashboard/admin')
 
   return (
     <div className="min-h-svh bg-background flex flex-col">
       <div className="flex flex-1">
         {/* Mobile sidebar overlay */}
         {sidebarOpen && (
-          <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
+          <div className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden" onClick={closeSidebar} />
         )}
 
         {/* Sidebar */}
         <aside className={cn(
-          "fixed lg:sticky top-0 z-50 h-svh w-56 shrink-0 border-r border-border bg-background transition-transform duration-200 lg:translate-x-0",
+          "fixed lg:sticky top-0 z-50 h-svh w-60 shrink-0 border-r border-border bg-sidebar transition-transform duration-300 lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}>
           <div className="flex flex-col h-full">
             {/* Sidebar header */}
-            <div className="flex items-center justify-between p-3 border-b border-border">
-              <Link href="/dashboard" className="flex items-center gap-2 shrink-0" onClick={() => setSidebarOpen(false)}>
-                <div
-                  className="size-7 rounded-md flex items-center justify-center"
-                  style={{ backgroundColor: 'var(--brand)' }}
-                >
-                  <HardDrive className="size-3.5" style={{ color: 'var(--brand-foreground)' }} />
+            <div className="flex items-center justify-between px-4 h-14 border-b border-sidebar-border">
+              <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0" onClick={closeSidebar}>
+                <div className="size-8 rounded-xl bg-primary flex items-center justify-center shadow-sm">
+                  <HardDrive className="size-4 text-primary-foreground" />
                 </div>
-                <span className="text-sm font-semibold tracking-tight">Hobbycloud</span>
+                <div>
+                  <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">Hobbycloud</span>
+                  <p className="text-[10px] text-muted-foreground/60 leading-none">Dashboard</p>
+                </div>
               </Link>
-              <button onClick={() => setSidebarOpen(false)} className="text-muted-foreground hover:text-foreground lg:hidden">
+              <button onClick={closeSidebar} className="text-muted-foreground hover:text-foreground lg:hidden">
                 <XIcon className="size-4" />
               </button>
             </div>
 
             {/* Navigation */}
-            <div className="flex-1 overflow-y-auto p-3">
-            <Link
-              href="/dashboard"
-              onClick={() => setSidebarOpen(false)}
-              className={cn(
-                'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors mb-1',
-                pathname === '/dashboard'
-                  ? 'bg-secondary text-foreground font-medium'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
+            <div className="flex-1 overflow-y-auto p-3 space-y-1">
+              <NavLink href="/dashboard" icon={LayoutDashboard} label="Dashboard" active={pathname === '/dashboard'} onClick={closeSidebar} />
+
+              {isAdminRoute ? (
+                <NavSection label="Admin">
+                  {adminSidebarTabs.map(({ id, label, href, icon: Icon }) => (
+                    <NavLink key={id} href={href} icon={Icon} label={label} active={pathname === href} onClick={closeSidebar} />
+                  ))}
+                </NavSection>
+              ) : (
+                <>
+                  {visibleServiceItems.length > 0 && (
+                    <NavSection label="Services">
+                      {visibleServiceItems.map(({ href, label, icon: Icon }) => (
+                        <NavLink key={href} href={href} icon={Icon} label={label} active={isActive(href)} onClick={closeSidebar} />
+                      ))}
+                    </NavSection>
+                  )}
+                  <NavSection label="Account">
+                    {visibleAccountItems.map(({ href, label, icon: Icon }) => (
+                      <NavLink key={href} href={href} icon={Icon} label={label} active={isActive(href)} onClick={closeSidebar} />
+                    ))}
+                  </NavSection>
+                  {isAdmin && (
+                    <NavSection label="Admin">
+                      {adminNavItems.map(({ href, label, icon: Icon }) => (
+                        <NavLink key={href} href={href} icon={Icon} label={label} active={isActive(href)} onClick={closeSidebar} />
+                      ))}
+                    </NavSection>
+                  )}
+                </>
               )}
-            >
-              <LayoutDashboard className="size-4 shrink-0" />
-              <span>Dashboard</span>
-            </Link>
-            {isAdminRoute ? (
-              <>
-                <div className="text-xs font-medium text-muted-foreground px-3 py-1.5 uppercase tracking-wider">
-                  Admin
-                </div>
-                {adminSidebarTabs.map(({ id, label, href, icon: Icon }) => {
-                  const active = pathname === href
-                  return (
-                    <Link
-                      key={id}
-                      href={href}
-                      onClick={() => setSidebarOpen(false)}
-                      className={cn(
-                        'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
-                        active
-                          ? 'bg-secondary text-foreground font-medium'
-                          : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-                      )}
-                    >
-                      <Icon className="size-4 shrink-0" />
-                      <span>{label}</span>
-                    </Link>
-                  )
-                })}
-              </>
-            ) : (
-              <>
-                {visibleServiceItems.length > 0 && (
-                  <>
-                    <div className="text-xs font-medium text-muted-foreground px-3 py-1.5 uppercase tracking-wider">
-                      Services
-                    </div>
-                    {visibleServiceItems.map(({ href, label, icon: Icon }) => {
-                      const active = isActive(href)
-                      return (
-                        <Link
-                          key={href}
-                          href={href}
-                          onClick={() => setSidebarOpen(false)}
-                          className={cn(
-                            'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
-                            active
-                              ? 'bg-secondary text-foreground font-medium'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-                          )}
-                        >
-                          <Icon className="size-4 shrink-0" />
-                          <span>{label}</span>
-                        </Link>
-                      )
-                    })}
-                  </>
-                )}
-                {visibleAccountItems.length > 0 && (
-                  <>
-                    <div className="text-xs font-medium text-muted-foreground px-3 py-1.5 uppercase tracking-wider mt-2">
-                      Account
-                    </div>
-                    {visibleAccountItems.map(({ href, label, icon: Icon }) => {
-                      const active = isActive(href)
-                      return (
-                        <Link
-                          key={href}
-                          href={href}
-                          onClick={() => setSidebarOpen(false)}
-                          className={cn(
-                            'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
-                            active
-                              ? 'bg-secondary text-foreground font-medium'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-                          )}
-                        >
-                          <Icon className="size-4 shrink-0" />
-                          <span>{label}</span>
-                        </Link>
-                      )
-                    })}
-                  </>
-                )}
-                {isAdmin && (
-                  <>
-                    <div className="text-xs font-medium text-muted-foreground px-3 py-1.5 uppercase tracking-wider mt-2">
-                      Admin
-                    </div>
-                    {adminNavItems.map(({ href, label, icon: Icon }) => {
-                      const active = isActive(href)
-                      return (
-                        <Link
-                          key={href}
-                          href={href}
-                          onClick={() => setSidebarOpen(false)}
-                          className={cn(
-                            'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
-                            active
-                              ? 'bg-secondary text-foreground font-medium'
-                              : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
-                          )}
-                        >
-                          <Icon className="size-4 shrink-0" />
-                          <span>{label}</span>
-                        </Link>
-                      )
-                    })}
-                  </>
-                )}
-              </>
-            )}
-          </div>
+            </div>
 
             {/* User section */}
-            <div className="border-t border-border p-3">
+            <div className="border-t border-sidebar-border p-3">
               <DropdownMenu>
                 <DropdownMenuTrigger render={
-                  <Button variant="ghost" size="sm" className="w-full gap-2 px-2 justify-start">
-                    <Avatar className="size-6">
-                      <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+                  <Button variant="ghost" size="sm" className="w-full gap-2.5 px-2.5 justify-start h-10 rounded-lg hover:bg-sidebar-accent">
+                    <Avatar className="size-7">
+                      <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">{initials}</AvatarFallback>
                     </Avatar>
-                    <span className="text-sm truncate max-w-32">{user.name}</span>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-sm font-medium truncate text-sidebar-foreground">{user.name}</p>
+                      <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
+                    </div>
+                    <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
                   </Button>
                 } />
-                <DropdownMenuContent align="start" className="w-48">
+                <DropdownMenuContent align="start" className="w-56">
                   <DropdownMenuGroup>
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col gap-0.5">
@@ -293,15 +240,18 @@ export function DashboardShell({
         </aside>
 
         {/* Page content */}
-        <main className="flex-1 min-w-0 relative">
+        <main className="flex-1 min-w-0 relative bg-background">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="fixed top-3 left-3 z-50 lg:hidden text-muted-foreground hover:text-foreground"
+            className={cn(
+              "fixed top-3.5 left-3.5 z-30 lg:hidden size-8 rounded-lg flex items-center justify-center",
+              "text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+            )}
           >
-            <Menu className="size-5" />
+            <Menu className="size-4" />
           </button>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {suspended && !suspendedAllowedRoutes.includes(pathname) && !pathname.startsWith('/dashboard/admin') ? (
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+            {suspended && !suspendedAllowedRoutes.includes(pathname) && !isAdminRoute ? (
               <SuspensionBanner reason={suspensionReason ?? 'Account suspended'} appealable={appealable} suspensionType={suspensionType ?? undefined} />
             ) : (
               children
