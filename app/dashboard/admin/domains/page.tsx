@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Ban, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDate, sectionTitle } from '../_lib/utils'
+import { Input } from '@/components/ui/input'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 
 type BannedDomain = Awaited<ReturnType<typeof getBannedDomains>>[0]
 
@@ -51,13 +53,12 @@ export default function AdminDomainsPage() {
     <section className="flex flex-col gap-4">
       {sectionTitle('Banned Domains')}
       <div className="flex gap-2">
-        <input
-          type="text"
+        <Input
           placeholder="e.g. tempmail.com"
           value={domainInput}
           onChange={(e) => setDomainInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleBan()}
-          className="h-8 flex-1 max-w-md rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex-1 max-w-md"
         />
         <Button size="sm" className="gap-1.5" onClick={handleBan} disabled={banning}>
           <Ban className="size-3.5" /> Ban domain
@@ -68,32 +69,30 @@ export default function AdminDomainsPage() {
       ) : domains.length === 0 ? (
         <Card><CardContent className="p-6 text-center text-sm text-muted-foreground">No banned domains yet.</CardContent></Card>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wider">
-                <th className="text-left py-2 px-3 font-medium">Domain</th>
-                <th className="text-left py-2 px-3 font-medium">Status</th>
-                <th className="text-left py-2 px-3 font-medium">Banned at</th>
-                <th className="text-left py-2 px-3 font-medium w-20">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {domains.map((d) => (
-                <tr key={d.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
-                  <td className="py-2 px-3 font-medium">{d.domain}</td>
-                  <td className="py-2 px-3"><Badge variant="destructive" className="text-xs">banned</Badge></td>
-                  <td className="py-2 px-3 text-muted-foreground text-xs">{formatDate(d.createdAt)}</td>
-                  <td className="py-2 px-3">
-                    <Button size="icon" variant="ghost" className="size-7 text-muted-foreground hover:text-destructive" onClick={() => handleUnban(d.id)} title="Unban domain">
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Domain</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Banned at</TableHead>
+              <TableHead className="w-20">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {domains.map((d) => (
+              <TableRow key={d.id}>
+                <TableCell className="font-medium">{d.domain}</TableCell>
+                <TableCell><Badge variant="destructive" className="text-xs">banned</Badge></TableCell>
+                <TableCell className="text-muted-foreground text-xs">{formatDate(d.createdAt)}</TableCell>
+                <TableCell>
+                  <Button size="icon" variant="ghost" className="size-7 text-muted-foreground hover:text-destructive" onClick={() => handleUnban(d.id)} title="Unban domain">
+                    <Trash2 className="size-3.5" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </section>
   )

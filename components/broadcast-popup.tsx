@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { getRecentBroadcasts } from '@/app/actions/broadcasts'
+import { useEffect, useRef, useState } from 'react'
+import { getUnseenBroadcasts, acknowledgeBroadcast, acknowledgeAllBroadcasts } from '@/app/actions/broadcasts'
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -14,37 +13,18 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Megaphone } from 'lucide-react'
 
-type Broadcast = Awaited<ReturnType<typeof getRecentBroadcasts>>[number]
-
-const DISMISSED_KEY = 'broadcasts_dismissed'
-
-function getDismissed(): Set<string> {
-  if (typeof window === 'undefined') return new Set()
-  try {
-    const raw = localStorage.getItem(DISMISSED_KEY)
-    return new Set(raw ? JSON.parse(raw) : [])
-  } catch {
-    return new Set()
-  }
-}
-
-function markDismissed(id: string) {
-  try {
-    const set = getDismissed()
-    set.add(id)
-    localStorage.setItem(DISMISSED_KEY, JSON.stringify([...set]))
-  } catch {}
-}
+type Broadcast = Awaited<ReturnType<typeof getUnseenBroadcasts>>[number]
 
 export function BroadcastPopup() {
   const [broadcasts, setBroadcasts] = useState<Broadcast[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [open, setOpen] = useState(false)
+  const done = useRef(false)
 
   useEffect(() => {
-    getRecentBroadcasts().then((all) => {
-      const dismissed = getDismissed()
-      const unseen = all.filter((b) => !dismissed.has(b.id))
+    if (done.current) return
+    done.current = true
+    getUnseenBroadcasts().then((unseen) => {
       if (unseen.length > 0) {
         setBroadcasts(unseen)
         setCurrentIndex(0)
@@ -56,8 +36,8 @@ export function BroadcastPopup() {
   const current = broadcasts[currentIndex]
   if (broadcasts.length === 0) return null
 
-  const handleNext = () => {
-    markDismissed(current.id)
+  const handleDismiss = async () => {
+    await acknowledgeBroadcast(current.id)
     if (currentIndex + 1 < broadcasts.length) {
       setCurrentIndex(currentIndex + 1)
     } else {
@@ -65,13 +45,13 @@ export function BroadcastPopup() {
     }
   }
 
-  const handleClose = () => {
-    for (const b of broadcasts) markDismissed(b.id)
+  const handleCloseAll = async () => {
+    await acknowledgeAllBroadcasts()
     setOpen(false)
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
+    <AlertDialog open={open} onOpenChange={(v) => { if (!v) handleCloseAll() }}>
       <AlertDialogContent className="max-w-lg">
         <AlertDialogHeader>
           <div className="flex items-center gap-2 mb-1">
@@ -88,10 +68,12 @@ export function BroadcastPopup() {
           ))}
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>Close all</AlertDialogCancel>
-          <AlertDialogAction onClick={handleNext}>
-            {currentIndex + 1 < broadcasts.length ? 'Next' : 'Got it'}
-          </AlertDialogAction>
+          <AlertDialogCancel onClick={handleCloseAll}>Close all</AlertDialogCancel>
+          {currentIndex + 1 < broadcasts.length ? (
+            <AlertDialogCancel onClick={handleDismiss}>Next</AlertDialogCancel>
+          ) : (
+            <AlertDialogCancel onClick={handleDismiss}>Got it</AlertDialogCancel>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

@@ -3,7 +3,7 @@
 import { auth } from '@/lib/auth'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
-import { user, account, storageRequests, files, tickets, ticketReplies, ticketAttachments, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, takedownRequests, session as sessionTable, warnings, webhooks, bannedDomains, broadcasts } from '@/lib/db/schema'
+import { user, account, storageRequests, files, tickets, ticketReplies, ticketAttachments, appeals, flaggedHashes, deletionRequests, apiKeys, auditLog, takedownRequests, session as sessionTable, warnings, webhooks, bannedDomains, broadcasts, broadcastAcknowledgements } from '@/lib/db/schema'
 import { eq, desc, ilike, and, sql } from 'drizzle-orm'
 import { v4 as uuidv4 } from 'uuid'
 import { logAuditEventWithHeaders } from '@/lib/audit'
@@ -1199,7 +1199,19 @@ export async function testWebhook(webhookId: string) {
 
 export async function getBroadcasts() {
   const adminId = await assertAdmin()
-  return db.select().from(broadcasts).orderBy(desc(broadcasts.createdAt))
+  const rows = await db
+    .select({
+      id: broadcasts.id,
+      subject: broadcasts.subject,
+      body: broadcasts.body,
+      sentBy: broadcasts.sentBy,
+      recipientCount: broadcasts.recipientCount,
+      createdAt: broadcasts.createdAt,
+      acknowledgedCount: sql<number>`COALESCE((SELECT COUNT(*) FROM ${broadcastAcknowledgements} WHERE ${broadcastAcknowledgements.broadcastId} = ${broadcasts.id}), 0)`,
+    })
+    .from(broadcasts)
+    .orderBy(desc(broadcasts.createdAt))
+  return rows
 }
 
 export async function fixBroadcastSpelling(subject: string, body: string) {

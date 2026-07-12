@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge'
 import { Send, SpellCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDate, sectionTitle } from '../_lib/utils'
+import { Input } from '@/components/ui/input'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 
 type Broadcast = Awaited<ReturnType<typeof getBroadcasts>>[0]
 
@@ -60,13 +62,7 @@ export default function AdminBroadcastsPage() {
       {sectionTitle('Broadcasts')}
       <Card>
         <CardContent className="p-4 flex flex-col gap-3">
-          <input
-            type="text"
-            placeholder="Subject"
-            value={subject}
-            onChange={(e) => setSubject(e.target.value)}
-            className="h-8 rounded-md border border-input bg-transparent px-2.5 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
+          <Input placeholder="Subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
           <textarea
             placeholder="Message body..."
             value={body}
@@ -89,26 +85,26 @@ export default function AdminBroadcastsPage() {
       ) : list.length === 0 ? (
         <Card><CardContent className="p-6 text-center text-sm text-muted-foreground">No broadcasts sent yet.</CardContent></Card>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border text-muted-foreground text-xs uppercase tracking-wider">
-                <th className="text-left py-2 px-3 font-medium">Subject</th>
-                <th className="text-left py-2 px-3 font-medium">Recipients</th>
-                <th className="text-left py-2 px-3 font-medium">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((b) => (
-                <tr key={b.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
-                  <td className="py-2 px-3 font-medium">{b.subject}</td>
-                  <td className="py-2 px-3"><Badge variant="secondary" className="text-xs">{b.recipientCount}</Badge></td>
-                  <td className="py-2 px-3 text-muted-foreground text-xs">{formatDate(b.createdAt)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Subject</TableHead>
+              <TableHead>Sent</TableHead>
+              <TableHead>Accepted</TableHead>
+              <TableHead>Date</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {list.map((b) => (
+              <TableRow key={b.id}>
+                <TableCell className="font-medium">{b.subject}</TableCell>
+                <TableCell><Badge variant="secondary" className="text-xs">{b.recipientCount}</Badge></TableCell>
+                <TableCell className="text-muted-foreground">{b.acknowledgedCount} / {b.recipientCount}</TableCell>
+                <TableCell className="text-muted-foreground text-xs">{formatDate(b.createdAt)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </section>
   )
