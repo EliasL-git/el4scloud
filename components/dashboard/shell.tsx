@@ -64,14 +64,13 @@ function NavLink({ href, icon: Icon, label, active, onClick }: { href: string; i
       href={href}
       onClick={onClick}
       className={cn(
-        'group relative flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all',
+        'flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors',
         active
           ? 'bg-primary/10 text-primary font-medium'
           : 'text-muted-foreground hover:text-foreground hover:bg-secondary/60'
       )}
     >
-      {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-primary" />}
-      <Icon className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground group-hover:text-foreground transition-colors')} />
+      <Icon className={cn('size-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground')} />
       <span>{label}</span>
     </Link>
   )
@@ -153,16 +152,12 @@ export function DashboardShell({
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}>
           <div className="flex flex-col h-full">
-            {/* Sidebar header */}
             <div className="flex items-center justify-between px-4 h-14 border-b border-sidebar-border">
               <Link href="/dashboard" className="flex items-center gap-2.5 shrink-0" onClick={closeSidebar}>
-                <div className="size-8 rounded-xl bg-primary flex items-center justify-center shadow-sm">
-                  <HardDrive className="size-4 text-primary-foreground" />
+                <div className="size-7 rounded-md bg-primary flex items-center justify-center">
+                  <HardDrive className="size-3.5 text-primary-foreground" />
                 </div>
-                <div>
-                  <span className="text-sm font-semibold tracking-tight text-sidebar-foreground">Hobbycloud</span>
-                  <p className="text-[10px] text-muted-foreground/60 leading-none">Dashboard</p>
-                </div>
+                <span className="text-sm font-semibold text-sidebar-foreground">Hobbycloud</span>
               </Link>
               <button onClick={closeSidebar} className="text-muted-foreground hover:text-foreground lg:hidden">
                 <XIcon className="size-4" />
@@ -204,22 +199,17 @@ export function DashboardShell({
               )}
             </div>
 
-            {/* User section */}
             <div className="border-t border-sidebar-border p-3">
               <DropdownMenu>
                 <DropdownMenuTrigger render={
-                  <Button variant="ghost" size="sm" className="w-full gap-2.5 px-2.5 justify-start h-10 rounded-lg hover:bg-sidebar-accent">
-                    <Avatar className="size-7">
-                      <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">{initials}</AvatarFallback>
+                  <Button variant="ghost" size="sm" className="w-full gap-2 px-2 justify-start h-9">
+                    <Avatar className="size-6">
+                      <AvatarFallback className="text-xs">{initials}</AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 min-w-0 text-left">
-                      <p className="text-sm font-medium truncate text-sidebar-foreground">{user.name}</p>
-                      <p className="text-[11px] text-muted-foreground truncate">{user.email}</p>
-                    </div>
-                    <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-sm truncate max-w-32">{user.name}</span>
                   </Button>
                 } />
-                <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuContent align="start" className="w-48">
                   <DropdownMenuGroup>
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col gap-0.5">

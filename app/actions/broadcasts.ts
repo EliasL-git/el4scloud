@@ -17,12 +17,17 @@ export async function getUnseenBroadcasts() {
     .orderBy(desc(broadcasts.createdAt))
     .limit(10)
 
-  const ackRows = await db
-    .select({ broadcastId: broadcastAcknowledgements.broadcastId })
-    .from(broadcastAcknowledgements)
-    .where(eq(broadcastAcknowledgements.userId, session.user.id))
+  let ackedIds = new Set<string>()
+  try {
+    const ackRows = await db
+      .select({ broadcastId: broadcastAcknowledgements.broadcastId })
+      .from(broadcastAcknowledgements)
+      .where(eq(broadcastAcknowledgements.userId, session.user.id))
+    ackedIds = new Set(ackRows.map((r) => r.broadcastId))
+  } catch {
+    // table doesn't exist yet
+  }
 
-  const ackedIds = new Set(ackRows.map((r) => r.broadcastId))
   return all.filter((b) => !ackedIds.has(b.id))
 }
 
@@ -30,28 +35,32 @@ export async function acknowledgeBroadcast(broadcastId: string) {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) return
 
-  await db.insert(broadcastAcknowledgements).values({
-    id: uuidv4(),
-    broadcastId,
-    userId: session.user.id,
-  })
+  try {
+    await db.insert(broadcastAcknowledgements).values({
+      id: uuidv4(),
+      broadcastId,
+      userId: session.user.id,
+    })
+  } catch {
+    // table doesn't exist yet
+  }
 }
 
 export async function acknowledgeAllBroadcasts() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session?.user) return
 
-  const all = await db
-    .select({ id: broadcasts.id })
-    .from(broadcasts)
-
-  const values = all.map((b) => ({
-    id: uuidv4(),
-    broadcastId: b.id,
-    userId: session.user.id,
-  }))
-
-  if (values.length > 0) {
-    await db.insert(broadcastAcknowledgements).values(values)
+  try {
+    const all = await db.select({ id: broadcasts.id }).from(broadcasts)
+    const values = all.map((b) => ({
+      id: uuidv4(),
+      broadcastId: b.id,
+      userId: session.user.id,
+    }))
+    if (values.length > 0) {
+      await db.insert(broadcastAcknowledgements).values(values)
+    }
+  } catch {
+    // table doesn't exist yet
   }
 }
