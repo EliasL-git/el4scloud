@@ -13,6 +13,7 @@ import { deliver } from '@/lib/webhooks/delivery'
 import { s3, S3_BUCKET } from '@/lib/s3'
 import { DeleteObjectCommand, DeleteObjectsCommand } from '@aws-sdk/client-s3'
 import { sendMail } from '@/lib/mail'
+import { fixSpelling } from '@/lib/fix-spelling'
 import { parseStorageAmount, NO_VERIFICATION_LIMIT } from '@/lib/storage'
 import crypto from 'crypto'
 
@@ -1199,6 +1200,12 @@ export async function testWebhook(webhookId: string) {
 export async function getBroadcasts() {
   const adminId = await assertAdmin()
   return db.select().from(broadcasts).orderBy(desc(broadcasts.createdAt))
+}
+
+export async function fixBroadcastSpelling(subject: string, body: string) {
+  const adminId = await assertAdmin()
+  const [fixedSubject, fixedBody] = await Promise.all([fixSpelling(subject), fixSpelling(body)])
+  return { subject: fixedSubject, body: fixedBody }
 }
 
 export async function sendBroadcast(subject: string, body: string) {

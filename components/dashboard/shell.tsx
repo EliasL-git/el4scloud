@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Key, LogOut, HardDrive, Shield, MessageSquare, Settings, Menu, X as XIcon, LayoutDashboard, FileText, Scale, ShieldAlert, Trash2, ClipboardList, Users, Sparkles, Webhook, ShieldCheck, Ban, Megaphone, Fingerprint } from 'lucide-react'
+import { BroadcastPopup } from '@/components/broadcast-popup'
 import { authClient } from '@/lib/auth-client'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -311,6 +312,7 @@ export function DashboardShell({
         </main>
       </div>
 
+      <BroadcastPopup />
 
     </div>
   )

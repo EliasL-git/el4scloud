@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getBroadcasts, sendBroadcast } from '@/app/actions/admin'
+import { getBroadcasts, sendBroadcast, fixBroadcastSpelling } from '@/app/actions/admin'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Send, Megaphone } from 'lucide-react'
+import { Send, SpellCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatDate, sectionTitle } from '../_lib/utils'
 
@@ -17,10 +17,26 @@ export default function AdminBroadcastsPage() {
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [sending, setSending] = useState(false)
+  const [fixing, setFixing] = useState(false)
 
   useEffect(() => {
     getBroadcasts().then(setList).finally(() => setLoading(false))
   }, [])
+
+  const handleFixSpelling = async () => {
+    if (!subject.trim() && !body.trim()) return
+    setFixing(true)
+    try {
+      const result = await fixBroadcastSpelling(subject, body)
+      setSubject(result.subject)
+      setBody(result.body)
+      toast.success('Spelling fixed')
+    } catch {
+      toast.error('Failed to fix spelling')
+    } finally {
+      setFixing(false)
+    }
+  }
 
   const handleSend = async () => {
     if (!subject.trim() || !body.trim()) return
@@ -58,7 +74,10 @@ export default function AdminBroadcastsPage() {
             rows={5}
             className="rounded-md border border-input bg-transparent px-2.5 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y min-h-[100px]"
           />
-          <div className="flex justify-end">
+          <div className="flex justify-between">
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={handleFixSpelling} disabled={fixing || (!subject.trim() && !body.trim())}>
+              <SpellCheck className="size-3.5" /> {fixing ? 'Fixing...' : 'Fix spelling'}
+            </Button>
             <Button size="sm" className="gap-1.5" onClick={handleSend} disabled={sending}>
               <Send className="size-3.5" /> {sending ? 'Sending...' : 'Send to all users'}
             </Button>
