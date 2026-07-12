@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { getLastCronRun, getScanStats, getUserStats, adminGetTicketStats } from '@/app/actions/admin'
-import { getAdminAiUsage } from '@/app/actions/ai'
 import { Card, CardContent } from '@/components/ui/card'
-import { RefreshCw, CheckCircle2, MessageSquare, AlertTriangle, Sparkles, Cpu } from 'lucide-react'
+import { RefreshCw, CheckCircle2, MessageSquare, AlertTriangle } from 'lucide-react'
 import { formatDate } from '../_lib/utils'
 
 type AuditEntry = Awaited<ReturnType<typeof getAuditLogs>>[number]
@@ -15,18 +14,17 @@ export default function AdminOverviewPage() {
   const [scanStats, setScanStats] = useState<{ avgDuration: number | null; totalScans: number; past24hScans: number } | null>(null)
   const [userStats, setUserStats] = useState<any>(null)
   const [ticketStats, setTicketStats] = useState<Awaited<ReturnType<typeof adminGetTicketStats>> | null>(null)
-  const [adminAiUsage, setAdminAiUsage] = useState<Awaited<ReturnType<typeof getAdminAiUsage>>>([])
+
 
   const refresh = useCallback(async () => {
     setLoading(true)
-    const [cron, ss, us, ts, ai] = await Promise.all([
-      getLastCronRun(), getScanStats(), getUserStats(), adminGetTicketStats(), getAdminAiUsage(),
+    const [cron, ss, us, ts] = await Promise.all([
+      getLastCronRun(), getScanStats(), getUserStats(), adminGetTicketStats(),
     ])
     setLastCronRun(cron)
     setScanStats(ss)
     setUserStats(us)
     setTicketStats(ts)
-    setAdminAiUsage(ai)
     setLoading(false)
   }, [])
 
@@ -39,11 +37,6 @@ export default function AdminOverviewPage() {
       </div>
     )
   }
-
-  const aiTokensToday = adminAiUsage.reduce((acc, row) => acc + row.tokens, 0)
-  const aiMostUsedModel = adminAiUsage[0]?.globalMostUsedModel
-    ? [adminAiUsage[0].globalMostUsedModel, adminAiUsage[0].globalMostUsedModelRequests] as const
-    : undefined
 
   return (
     <section className="flex flex-col gap-6">
@@ -117,27 +110,6 @@ export default function AdminOverviewPage() {
             </Card>
           </>
         )}
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Card className="border-purple-500/20">
-          <CardContent className="p-3 flex items-center gap-3 text-sm">
-            <Sparkles className="size-4 shrink-0 text-purple-500" />
-            <span className="text-muted-foreground">
-              AI tokens today: <span className="text-foreground font-medium">{aiTokensToday.toLocaleString()}</span>
-            </span>
-          </CardContent>
-        </Card>
-        <Card className="border-purple-500/20">
-          <CardContent className="p-3 flex items-center gap-3 text-sm">
-            <Cpu className="size-4 shrink-0 text-purple-500" />
-            <span className="text-muted-foreground">
-              Most used model:{' '}
-              <span className="text-foreground font-medium">
-                {aiMostUsedModel ? `${aiMostUsedModel[0]} (${aiMostUsedModel[1]})` : '—'}
-              </span>
-            </span>
-          </CardContent>
-        </Card>
       </div>
       {userStats && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

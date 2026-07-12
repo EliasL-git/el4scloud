@@ -50,63 +50,7 @@ export async function submitIntroduction(text: string) {
     return { error: 'Introduction must be under 2000 characters.' }
   }
 
-  const apiKey = process.env.DIGITALOCEAN_AI_API_KEY
-  if (!apiKey) return { error: 'AI service not configured.' }
+  await db.update(user).set({ introductionText: trimmed, suspensionType: 'pending_intro', suspensionReason: 'Awaiting admin review.' }).where(eq(user.id, session.user.id))
 
-  try {
-    const res = await fetch('https://inference.do-ai.run/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'deepseek-4-flash',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You evaluate user introductions for a cloud service. A valid introduction is at least 50 characters, written in good faith, explains who the person is and what they plan to use the service for. Reject spam, gibberish, copy-paste, offensive content, or obvious AI-generated text. Respond with valid JSON only: {"valid":true} or {"valid":false,"reason":"short explanation"}.',
-          },
-          { role: 'user', content: trimmed },
-        ],
-        max_tokens: 256,
-        temperature: 0.1,
-        stream: false,
-      }),
-    })
-
-    if (!res.ok) {
-      const errText = await res.text()
-      console.error('[introduction] AI API error:', errText)
-      return { error: 'Failed to verify introduction. Try again.' }
-    }
-
-    const data = await res.json()
-    const content = data.choices?.[0]?.message?.content ?? ''
-    const parsed = JSON.parse(content)
-
-    // Store the intro text regardless of outcome
-    await db.update(user).set({ introductionText: trimmed }).where(eq(user.id, session.user.id))
-
-    if (parsed.valid === true) {
-      await db
-        .update(user)
-        .set({ emailVerified: true, banned: false, suspensionType: null, suspensionReason: null })
-        .where(eq(user.id, session.user.id))
-      return { ok: true }
-    }
-
-    // Lock to pending review — admin must approve or reject
-    const aiReason = parsed.reason ?? 'Introduction was not approved.'
-    await db
-      .update(user)
-      .set({
-        suspensionType: 'pending_intro',
-        suspensionReason: `AI rejected: ${aiReason}`,
-      })
-      .where(eq(user.id, session.user.id))
-
-    return { locked: true, reason: aiReason }
-  } catch (err: any) {
-    console.error('[introduction] Error:', err?.message ?? err)
-    return { error: 'Something went wrong. Try again.' }
-  }
+  return { locked: true, reason: 'Your introduction will be reviewed by an admin.' }
 }

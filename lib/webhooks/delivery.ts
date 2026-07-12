@@ -92,7 +92,6 @@ function embedColor(event: string): number {
   if (event.startsWith('storage.')) return 0x22c55e
   if (event.startsWith('deletion.')) return 0xef4444
   if (event.startsWith('share_link.')) return 0x8b5cf6
-  if (event.startsWith('ai.')) return 0x06b6d4
   if (event.startsWith('api.')) return 0x6366f1
   if (event.startsWith('admin.')) return 0xf97316
   if (event === 'webhook.test') return 0x10b981
@@ -160,10 +159,6 @@ function buildEmbed(event: string, data: Record<string, any>): {
       return { ...base, title: 'Hash Flagged', description: 'A file hash was flagged' }
     case 'admin.takedown_approved':
       return { ...base, title: 'Takedown Approved', description: 'A takedown request was approved' }
-    case 'ai.daily_limit_warning':
-      return { ...base, title: 'AI Daily Limit Warning', description: `$${(data.usedToday ?? 0).toFixed(4)} used today`, fields: data.limit ? [{ name: 'Limit', value: `$${Number(data.limit).toFixed(2)}`, inline: true }] : undefined }
-    case 'ai.daily_limit_exceeded':
-      return { ...base, title: 'AI Daily Limit Exceeded', description: `$${(data.usedToday ?? 0).toFixed(4)} used today`, fields: data.limit ? [{ name: 'Limit', value: `$${Number(data.limit).toFixed(2)}`, inline: true }] : undefined }
     case 'api.key.created':
       return { ...base, title: 'API Key Created', description: 'An API key was created' }
     case 'api.key.deleted':

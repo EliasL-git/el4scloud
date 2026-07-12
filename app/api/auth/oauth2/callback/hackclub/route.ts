@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
     })
     .where(eq(user.id, session.user.id))
 
-  const response = NextResponse.redirect(new URL('/dashboard/settings?hc=linked', request.url))
+  const response = NextResponse.redirect(new URL('/dashboard/settings?hc=linked', origin))
   response.cookies.delete('hc_oauth_state')
   return response
 }

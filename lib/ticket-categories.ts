@@ -29,7 +29,6 @@ export const CATEGORY_SUBCATEGORIES: Record<string, { label: string; subcategori
     subcategories: [
       { value: 'upload', label: 'Upload issues', defaultPriority: 'normal' },
       { value: 'download', label: 'Download issues', defaultPriority: 'normal' },
-      { value: 'ai_chat', label: 'AI Chat issues', defaultPriority: 'normal' },
       { value: 'api', label: 'API issues', defaultPriority: 'normal' },
       { value: 'webhook', label: 'Webhook issues', defaultPriority: 'normal' },
       { value: 'performance', label: 'Performance', defaultPriority: 'normal' },

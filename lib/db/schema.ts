@@ -230,14 +230,6 @@ export const ticketAttachments = pgTable('ticket_attachments', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 
-export const aiUsage = pgTable('ai_usage', {
-  id: text('id').primaryKey(),
-  userId: text('userId').notNull(),
-  model: text('model').notNull(),
-  cost: real('cost').notNull().default(0),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-})
-
 export const warnings = pgTable('warnings', {
   id: text('id').primaryKey(),
   userId: text('userId').notNull(),
@@ -269,14 +261,6 @@ export const webhookDeliveries = pgTable('webhook_deliveries', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 
-export const aiConversations = pgTable('ai_conversations', {
-  id: text('id').primaryKey(),
-  userId: text('userId').notNull().references(() => user.id, { onDelete: 'cascade' }),
-  title: text('title').notNull().default('New chat'),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
-})
-
 export const bannedDomains = pgTable('banned_domains', {
   id: text('id').primaryKey(),
   domain: text('domain').notNull().unique(),
@@ -302,13 +286,4 @@ export const fraudFlags = pgTable('fraud_flags', {
   createdAt: timestamp('createdAt').notNull().defaultNow(),
 })
 
-export const aiMessages = pgTable('ai_messages', {
-  id: text('id').primaryKey(),
-  conversationId: text('conversationId').notNull().references(() => aiConversations.id, { onDelete: 'cascade' }),
-  role: text('role').notNull(),
-  content: text('content').notNull(),
-  model: text('model'),
-  tokensIn: integer('tokensIn'),
-  tokensOut: integer('tokensOut'),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-})
+
